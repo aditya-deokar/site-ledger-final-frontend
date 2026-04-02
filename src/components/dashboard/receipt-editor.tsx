@@ -79,7 +79,13 @@ interface ReceiptData {
 }
 
 interface ReceiptEditorProps {
-  customer: Customer & { siteName?: string | null }
+  customer: Customer & {
+    siteName?: string | null
+    address?: string | null
+    panNumber?: string | null
+    carpetArea?: string | null
+    ratePerSqft?: string | null
+  }
   siteAddress?: string
   payments: Array<{
     id: string
@@ -101,7 +107,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
       customerPan: customer.panNumber || '',
       projectName: customer.siteName || '',
       siteAddress: siteAddress || '',
-      flatNumber: customer.flatNumber,
+      flatNumber: customer.customFlatId || String(customer.flatNumber),
       floorNumber: customer.floorName || `Floor ${customer.floorNumber}`,
       area: customer.carpetArea || '',
       rate: customer.ratePerSqft || '',

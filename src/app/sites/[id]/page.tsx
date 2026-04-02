@@ -71,7 +71,7 @@ function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => voi
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-border/50">
                 <span className="text-xs text-muted-foreground">Current Site Fund</span>
-                <span className="text-sm font-bold">{formatINR(siteFunds?.total_fund || 0)}</span>
+                <span className="text-sm font-bold">{formatINR(siteFunds?.allocatedFund || 0)}</span>
               </div>
             </div>
           </div>

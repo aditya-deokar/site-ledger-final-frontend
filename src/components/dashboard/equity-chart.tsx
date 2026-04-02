@@ -29,11 +29,12 @@ export function EquityChart({ partners, onPartnersUpdate }: EquityChartProps) {
 
   const data = [
     ...partners.map((p, i) => ({
+      key: p.id,
       name: p.name.toUpperCase(),
       value: p.stakePercentage,
       color: COLORS[i % COLORS.length],
     })),
-    { name: "AVAILABLE EQUITY", value: available, color: "var(--muted)" },
+    { key: "available-equity", name: "AVAILABLE EQUITY", value: available, color: "var(--muted)" },
   ]
 
   return (
@@ -52,8 +53,8 @@ export function EquityChart({ partners, onPartnersUpdate }: EquityChartProps) {
               animationBegin={0}
               animationDuration={1500}
             >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+              {data.map((entry) => (
+                <Cell key={`cell-${entry.key}`} fill={entry.color} />
               ))}
             </Pie>
             <Tooltip
@@ -89,7 +90,7 @@ export function EquityChart({ partners, onPartnersUpdate }: EquityChartProps) {
 
       <div className="flex flex-col gap-3 px-4">
         {data.map((item) => (
-          <div key={item.name} className="flex items-center justify-between group">
+          <div key={item.key} className="flex items-center justify-between group">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 shrink-0" style={{ backgroundColor: item.color }} />
               <span className={cn(
