@@ -42,6 +42,6 @@ export const investorService = {
   payInterest: (investorId: string, data: TransactionInput) =>
     api.post(`/investors/${investorId}/interest`, data),
 
-  updateTransactionPayment: (investorId: string, transactionId: string, data: { amount: number; paymentDate?: string; note?: string }) =>
+  updateTransactionPayment: (investorId: string, transactionId: string, data: { amount: number; note?: string }) =>
     api.patch(`/investors/${investorId}/transactions/${transactionId}/payment`, data),
 };

@@ -119,7 +119,7 @@ export default function DashboardPage() {
     {
       title: "Total Funds",
       value: `₹${total_fund.toLocaleString('en-IN')}`,
-      description: "Combined partner & investor capital",
+      description: "Ledger-derived partner and investor capital",
       icon: Wallet,
       color: "text-blue-600",
       bg: "bg-blue-50"
@@ -127,7 +127,7 @@ export default function DashboardPage() {
     {
       title: "Available Funds",
       value: `₹${available_fund.toLocaleString('en-IN')}`,
-      description: "Unallocated capital ready for sites",
+      description: "Company wallet balance available for sites",
       icon: TrendingUp,
       color: "text-emerald-600",
       bg: "bg-emerald-50"
@@ -135,7 +135,7 @@ export default function DashboardPage() {
     {
       title: "Partner Capital",
       value: `₹${partner_fund.toLocaleString('en-IN')}`,
-      description: "Direct equity from partners",
+      description: "Ledger-backed partner capital",
       icon: Users,
       color: "text-violet-600",
       bg: "bg-violet-50"
@@ -143,7 +143,7 @@ export default function DashboardPage() {
     {
       title: "Investor Capital",
       value: `₹${investor_fund.toLocaleString('en-IN')}`,
-      description: "Fixed-rate investor contributions",
+      description: "Ledger-backed fixed-rate capital",
       icon: Landmark,
       color: "text-amber-600",
       bg: "bg-amber-50"
@@ -251,7 +251,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-lg font-sans font-bold text-primary">{formatINR(site.remainingFund)}</p>
-                        <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Remaining</p>
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Site Balance</p>
                       </div>
                     </Link>
                   ))}

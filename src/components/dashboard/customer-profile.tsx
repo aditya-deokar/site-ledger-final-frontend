@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Customer, updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, RecordPaymentInput } from "@/schemas/customer.schema"
+import { Customer, updateCustomerSchema, UpdateCustomerInput } from "@/schemas/customer.schema"
 import { useUpdateCustomer, useCancelBooking, useCustomerPayments, useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
 import { useSite } from "@/hooks/api/site.hooks"
 import { Button } from "@/components/ui/button"
@@ -17,13 +17,6 @@ import { ReceiptEditor } from "./receipt-editor"
 function formatINR(n: number) { return "₹" + n.toLocaleString("en-IN") }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()
-}
-
-function toDateInputValue(iso?: string) {
-  if (!iso) return new Date().toISOString().slice(0, 10)
-  const parsed = new Date(iso)
-  if (Number.isNaN(parsed.getTime())) return new Date().toISOString().slice(0, 10)
-  return parsed.toISOString().slice(0, 10)
 }
 
 function escapeHtml(value: string) {
@@ -281,7 +274,7 @@ export function CustomerProfile({
             currentlyPaid={customer.amountPaid}
             entityType="customer-booking"
             entityId={customer.id}
-            onSubmit={(amount, _date, note) => recordPayment({ customerId: customer.id, data: { amount, note } })}
+            onSubmit={(amount, note) => recordPayment({ customerId: customer.id, data: { amount, note } })}
             onClose={() => setIsPaymentModalOpen(false)}
             isPending={isPaying}
           />

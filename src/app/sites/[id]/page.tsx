@@ -49,9 +49,9 @@ function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => voi
           <DialogTitle className="text-2xl font-serif tracking-tight">Add Fund to Site</DialogTitle>
         </DialogHeader>
         <div className="px-8 py-6 flex flex-col gap-4">
-          {/* Company Fund Information */}
+          {/* Company wallet information */}
           <div className="bg-muted/30 border border-border p-4 rounded-lg">
-            <h4 className="text-sm font-bold text-foreground mb-3">Company Fund Overview</h4>
+            <h4 className="text-sm font-bold text-foreground mb-3">Company Wallet Overview</h4>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground">Total Fund</span>
@@ -70,8 +70,8 @@ function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => voi
                 <span className="text-sm font-bold text-primary">{formatINR(maxAvailableAmount)}</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                <span className="text-xs text-muted-foreground">Current Site Fund</span>
-                <span className="text-sm font-bold">{formatINR(siteFunds?.allocatedFund || 0)}</span>
+                <span className="text-xs text-muted-foreground">Current Site Balance</span>
+                <span className="text-sm font-bold">{formatINR(siteFunds?.remainingFund || 0)}</span>
               </div>
             </div>
           </div>
@@ -107,7 +107,7 @@ function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => voi
             )}
             {amount && Number(amount) > 0 && canAddFullAmount && (
               <p className="text-[10px] text-emerald-600 font-medium">
-                ✓ Sufficient funds available
+                ✓ This will transfer money from company to site
               </p>
             )}
           </div>
@@ -130,7 +130,7 @@ function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => voi
             disabled={isPending || !amount || Number(amount) <= 0 || !canAddFullAmount}
             className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest gap-2"
           >
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Allocate Fund'}
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Transfer Fund'}
           </Button>
         </div>
       </DialogContent>
@@ -152,10 +152,10 @@ function PullFundDialog({ siteId, remainingFund, onClose }: { siteId: string; re
         </DialogHeader>
         <div className="px-8 py-6 flex flex-col gap-4">
           <p className="text-[10px] text-muted-foreground">
-            Withdraw unspent funds back to company available fund.
+            Move unspent money from this site back into the company wallet.
           </p>
           <div className="flex justify-between text-[10px]">
-            <span className="font-bold tracking-widest uppercase text-muted-foreground/50">Site Remaining Fund</span>
+            <span className="font-bold tracking-widest uppercase text-muted-foreground/50">Site Balance</span>
             <span className="font-bold text-primary">{formatINR(remainingFund)}</span>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -224,7 +224,7 @@ function FundHistoryDialog({ siteId, onClose }: { siteId: string; onClose: () =>
         <DialogHeader className="px-8 pt-8 pb-4 border-b border-border">
           <DialogTitle className="text-2xl font-serif tracking-tight flex items-center gap-3">
             <History className="w-6 h-6 text-primary" />
-            Fund Allocation History
+            Site Fund Ledger
           </DialogTitle>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto">
@@ -252,7 +252,7 @@ function FundHistoryDialog({ siteId, onClose }: { siteId: string; onClose: () =>
                         <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
                           {new Date(record.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <span className="text-sm font-medium text-foreground">{record.note || (isAllocation ? 'Fund Allocated' : 'Fund Withdrawn')}</span>
+                        <span className="text-sm font-medium text-foreground">{record.note || (isAllocation ? 'Company to site transfer' : 'Site to company transfer')}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -262,6 +262,11 @@ function FundHistoryDialog({ siteId, onClose }: { siteId: string; onClose: () =>
                       )}>
                         {isAllocation ? '+' : '-'}{formatINR(record.amount)}
                       </span>
+                      {typeof record.runningBalance === 'number' && (
+                        <span className="text-[10px] text-muted-foreground/50">
+                          Balance {formatINR(record.runningBalance)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );

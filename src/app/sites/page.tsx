@@ -223,7 +223,7 @@ function SiteCard({ site }: { site: Site }) {
           <div className="px-6 py-4 flex flex-col gap-1">
             <div className="flex items-center gap-1.5 text-muted-foreground/50">
               <Wallet className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Remaining</span>
+              <span className="text-xs font-bold tracking-widest uppercase">Site Balance</span>
             </div>
             <p className="text-2xl font-sans font-bold tracking-tight text-primary">{formatINR(site.remainingFund)}</p>
           </div>
