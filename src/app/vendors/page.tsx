@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { VendorProfile } from '@/components/dashboard/vendor-profile';
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor } from '@/hooks/api/vendor.hooks';
-import { createVendorSchema, CreateVendorInput, UpdateVendorInput, Vendor, VENDOR_TYPES } from '@/schemas/vendor.schema';
+import { createVendorSchema, CreateVendorInput, Vendor } from '@/schemas/vendor.schema';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,48 +40,17 @@ function VendorsListSkeleton() {
   );
 }
 
-function VendorsSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-48 sm:h-12 sm:w-64" />
-          <Skeleton className="h-4 w-96 mt-2" />
-        </div>
-        <Skeleton className="h-10 w-40 shrink-0" />
-      </div>
-      <div className="flex gap-1 border-b border-border pb-px overflow-x-auto">
-        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-10 w-20 shrink-0" />)}
-      </div>
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-4 w-4" />
-        <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-8 w-8" />
-      </div>
-      <VendorsListSkeleton />
-    </div>
-  );
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  ELECTRICIAN: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-  PLUMBER: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  SUPPLIER: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-  PAINTER: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
-  ARCHITECT: 'bg-primary/10 text-primary border-primary/20',
-};
+const TYPE_BADGE_CLASS = 'bg-muted text-muted-foreground border-border';
 
 // ── Vendor Form (shared by add & edit) ──────────────
 function VendorForm({
   defaultValues,
   onSubmit,
-  onCancel,
   isPending,
   submitLabel,
 }: {
   defaultValues?: Partial<CreateVendorInput>;
   onSubmit: (data: CreateVendorInput) => void;
-  onCancel: () => void;
   isPending: boolean;
   submitLabel: string;
 }) {
@@ -89,7 +58,7 @@ function VendorForm({
     resolver: zodResolver(createVendorSchema),
     defaultValues: {
       name: '',
-      type: 'ELECTRICIAN',
+      type: '',
       phone: '',
       email: '',
       ...defaultValues,
@@ -107,15 +76,14 @@ function VendorForm({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Type</Label>
-            <select
+            <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Vendor Type</Label>
+            <Input
+              placeholder="e.g. Electrician, Carpenter, Mason"
+              className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
               {...register('type')}
-              className="h-12 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest"
-            >
-              {VENDOR_TYPES.map((t) => (
-                <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
-              ))}
-            </select>
+            />
+            <p className="text-[10px] text-muted-foreground/60">Enter any vendor type for your business</p>
+            {errors.type && <p className="text-[10px] text-destructive">{errors.type.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -220,6 +188,7 @@ function DeleteConfirm({
 export default function VendorsPage() {
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
   const { data, isLoading } = useVendors(typeFilter);
+  const { data: allVendorsData } = useVendors();
   const [addOpen, setAddOpen] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
@@ -231,19 +200,23 @@ export default function VendorsPage() {
   const handleEdit = useCallback((v: Vendor) => setEditVendor(v), []);
   const handleCloseEdit = useCallback(() => setEditVendor(null), []);
   const handleDelete = useCallback((v: Vendor) => setDeleteVendor(v), []);
-  const handleCloseDelete = useCallback(() => setDeleteVendor(null), []);
-  const handleOpenProfile = useCallback((id: string) => setProfileVendorId(id), []);
-  const handleCloseProfile = useCallback(() => setProfileVendorId(null), []);
 
   const { mutate: create, isPending: creating } = useCreateVendor({ onSuccess: handleCloseAdd });
   const { mutate: update, isPending: updating } = useUpdateVendor({ onSuccess: handleCloseEdit });
 
   const vendors = useMemo(() => data?.data?.vendors ?? [], [data]);
+  const allVendors = useMemo(() => allVendorsData?.data?.vendors ?? vendors, [allVendorsData, vendors]);
 
-  const tabs = useMemo(() => [
-    { key: undefined, label: 'All' },
-    ...VENDOR_TYPES.map((t) => ({ key: t, label: t.charAt(0) + t.slice(1).toLowerCase() })),
-  ], []);
+  const tabs = useMemo(() => {
+    const uniqueTypes = Array.from(
+      new Set(allVendors.map((vendor) => vendor.type).filter((type) => type.trim().length > 0))
+    ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+
+    return [
+      { key: undefined, label: 'All' },
+      ...uniqueTypes.map((type) => ({ key: type, label: type })),
+    ];
+  }, [allVendors]);
 
   return (
     <DashboardShell>
@@ -269,7 +242,7 @@ export default function VendorsPage() {
         <div className="flex gap-1 border-b border-border overflow-x-auto pb-px scrollbar-hide">
           {tabs.map((t) => (
             <button
-              key={t.label}
+              key={t.key ?? 'all'}
               onClick={() => handleSetType(t.key)}
               className={cn(
                 'px-5 py-3 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap',
@@ -335,10 +308,10 @@ export default function VendorsPage() {
                 {/* Type Badge */}
                 <div className="lg:col-span-2">
                   <span className={cn(
-                    'inline-block px-3 py-1.5 text-[11px] font-bold tracking-widest uppercase border whitespace-nowrap',
-                    TYPE_COLORS[vendor.type] ?? 'bg-muted text-muted-foreground border-border'
+                    'inline-block px-3 py-1.5 text-[11px] font-bold tracking-widest border whitespace-nowrap',
+                    TYPE_BADGE_CLASS
                   )}>
-                    {vendor.type.toLowerCase()}
+                    {vendor.type}
                   </span>
                 </div>
 
@@ -405,7 +378,6 @@ export default function VendorsPage() {
             </SheetHeader>
             <VendorForm
               onSubmit={(data) => create({ ...data, email: data.email || undefined })}
-              onCancel={() => setAddOpen(false)}
               isPending={creating}
               submitLabel="Add Vendor"
             />
@@ -428,7 +400,6 @@ export default function VendorsPage() {
                 email: editVendor.email ?? '',
               }}
               onSubmit={(data) => update({ id: editVendor.id, data: { ...data, email: data.email || undefined } })}
-              onCancel={() => setEditVendor(null)}
               isPending={updating}
               submitLabel="Update Vendor"
             />

@@ -141,9 +141,9 @@ function AddExpensePanel({
                 >
                   <option value="">Choose a vendor...</option>
                   {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name} ({v.type.charAt(0) + v.type.slice(1).toLowerCase()})
-                    </option>
+                  <option key={v.id} value={v.id}>
+                      {v.name} ({v.type})
+                  </option>
                   ))}
                 </select>
                 {errors.vendorId && <p className="text-[10px] text-destructive">{errors.vendorId.message}</p>}
@@ -354,8 +354,8 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                   {exp.vendorName ? (
                     <div>
                       <button onClick={() => exp.vendorId && setProfileVendorId(exp.vendorId)} className="text-sm text-primary hover:underline text-left">{exp.vendorName}</button>
-                      <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
-                        {exp.vendorType?.toLowerCase()}
+                      <p className="text-[9px] font-bold tracking-widest text-muted-foreground/40">
+                        {exp.vendorType}
                       </p>
                     </div>
                   ) : (

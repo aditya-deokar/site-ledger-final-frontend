@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-export const VENDOR_TYPES = ['ELECTRICIAN', 'PLUMBER', 'SUPPLIER', 'PAINTER', 'ARCHITECT'] as const;
+const vendorTypeSchema = z.string().trim().min(1, 'Vendor type is required');
 
 export const createVendorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(VENDOR_TYPES),
+  type: vendorTypeSchema,
   phone: z.string().optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
 });
@@ -16,7 +16,7 @@ export type UpdateVendorInput = z.infer<typeof updateVendorSchema>;
 export interface Vendor {
   id: string;
   name: string;
-  type: (typeof VENDOR_TYPES)[number];
+  type: string;
   phone: string | null;
   email: string | null;
   createdAt: string;
