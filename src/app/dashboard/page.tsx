@@ -13,6 +13,9 @@ import { Loader2, TrendingUp, Wallet, Users, Landmark, ArrowUpRight, Building2, 
 import { cn } from '@/lib/utils';
 
 function formatINR(n: number) { return '₹' + Math.abs(n).toLocaleString('en-IN'); }
+function formatSignedINR(n: number) {
+  return `${n < 0 ? '-' : '+'}${formatINR(n)}`;
+}
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase();
 }
@@ -252,6 +255,15 @@ export default function DashboardPage() {
                       <div className="text-right shrink-0">
                         <p className="text-lg font-sans font-bold text-primary">{formatINR(site.remainingFund)}</p>
                         <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Site Balance</p>
+                        <p
+                          className={cn(
+                            'mt-2 text-sm font-sans font-bold',
+                            site.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-500'
+                          )}
+                        >
+                          {formatSignedINR(site.totalProfit)}
+                        </p>
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Total Profit</p>
                       </div>
                     </Link>
                   ))}
