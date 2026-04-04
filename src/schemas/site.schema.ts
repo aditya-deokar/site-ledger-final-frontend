@@ -4,7 +4,7 @@ export const bookFlatSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   phone: z.string().min(1, 'Phone is required'),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  sellingPrice: z.number().min(1, 'Required'),
+  sellingPrice: z.number().min(0, 'Required'),
   bookingAmount: z.number().min(0),
 });
 export type BookFlatInput = z.infer<typeof bookFlatSchema>;

@@ -41,20 +41,25 @@ function ResetPasswordForm() {
   }, [urlToken, setValue]);
 
   useEffect(() => {
-    if (isSuccess) {
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            router.push('/login');
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [isSuccess, router]);
+    if (!isSuccess) return;
+
+    setCountdown(3);
+    const timer = window.setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isSuccess]);
+
+  useEffect(() => {
+    if (!isSuccess || countdown !== 0) return;
+
+    const redirectTimer = window.setTimeout(() => {
+      router.replace('/login');
+    }, 0);
+
+    return () => window.clearTimeout(redirectTimer);
+  }, [countdown, isSuccess, router]);
 
   const onSubmit = (data: ResetPasswordInput) => {
     resetPassword(data, {

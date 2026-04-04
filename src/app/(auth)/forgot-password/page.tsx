@@ -14,7 +14,7 @@ import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const { mutate: forgotPassword, isPending, error } = useForgotPassword();
+  const { mutate: forgotPassword, isPending, error, reset } = useForgotPassword();
   const [successData, setSuccessData] = useState<{ message: string; resetToken: string } | null>(null);
   const [countdown, setCountdown] = useState(3);
 
@@ -27,6 +27,9 @@ export default function ForgotPasswordPage() {
   });
 
   const onSubmit = (formData: ForgotPasswordInput) => {
+    reset();
+    setSuccessData(null);
+    setCountdown(3);
     forgotPassword(formData, {
       onSuccess: (response: any) => {
         const data = response.data?.data || response.data || null;
@@ -36,20 +39,25 @@ export default function ForgotPasswordPage() {
   };
 
   useEffect(() => {
-    if (successData) {
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            router.push(`/reset-password?token=${successData.resetToken}`);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [successData, router]);
+    if (!successData) return;
+
+    setCountdown(3);
+    const timer = window.setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [successData]);
+
+  useEffect(() => {
+    if (!successData || countdown !== 0) return;
+
+    const redirectTimer = window.setTimeout(() => {
+      router.replace(`/reset-password?token=${successData.resetToken}`);
+    }, 0);
+
+    return () => window.clearTimeout(redirectTimer);
+  }, [countdown, successData, router]);
 
   return (
     <div className="flex flex-col gap-8">

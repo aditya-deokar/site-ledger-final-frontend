@@ -10,8 +10,13 @@ import {
 } from '@/schemas/investor.schema';
 
 export const investorService = {
-  getInvestors: (type?: string): Promise<InvestorsResponse> =>
-    api.get('/investors', { params: type ? { type } : {} }),
+  getInvestors: (type?: string, search?: string): Promise<InvestorsResponse> =>
+    api.get('/investors', {
+      params: {
+        ...(type ? { type } : {}),
+        ...(search ? { search } : {}),
+      },
+    }),
 
   getInvestor: (id: string): Promise<InvestorDetailResponse> =>
     api.get(`/investors/${id}`),

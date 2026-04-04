@@ -25,6 +25,8 @@ export const useCreateSite = (options?: { onSuccess?: (data: any) => void }) => 
     mutationFn: (data: CreateSiteInput) => siteService.createSite(data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.(data);
     },
   });
@@ -36,6 +38,8 @@ export const useToggleSite = () => {
     mutationFn: (id: string) => siteService.toggleSite(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['site'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
     },
   });
 };
@@ -47,6 +51,10 @@ export const useDeleteSite = (options?: { onSuccess?: () => void }) => {
       siteService.deleteSite(id, keepCustomers),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['site'] });
+      queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });
+      queryClient.invalidateQueries({ queryKey: ['allCustomers'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -68,6 +76,7 @@ export const useCreateFloor = (siteId: string, options?: { onSuccess?: () => voi
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
       options?.onSuccess?.();
     },
   });
@@ -81,6 +90,7 @@ export const useCreateFlat = (siteId: string, options?: { onSuccess?: () => void
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
       options?.onSuccess?.();
     },
   });
@@ -94,6 +104,10 @@ export const useBookFlat = (siteId: string, options?: { onSuccess?: () => void }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['siteCustomers', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['allCustomers'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -124,6 +138,14 @@ export const useAddExpense = (siteId: string, options?: { onSuccess?: () => void
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses', siteId] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -138,6 +160,7 @@ export const useAddFund = (siteId: string, options?: { onSuccess?: () => void })
       queryClient.invalidateQueries({ queryKey: ['fund-history', siteId] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -152,6 +175,7 @@ export const useWithdrawFund = (siteId: string, options?: { onSuccess?: () => vo
       queryClient.invalidateQueries({ queryKey: ['fund-history', siteId] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -165,11 +189,17 @@ export const useUpdateExpensePayment = (siteId: string, options?: { onSuccess?: 
       return res;
     },
     onSuccess: () => {
-      // Use setQueriesData or invalidate. For critical UI we use removeQueries but invalidate is fine if we return correctly
       queryClient.removeQueries({ queryKey: ['expenses', siteId] });
       queryClient.invalidateQueries({ queryKey: ['expenses', siteId] });
-      queryClient.invalidateQueries({ queryKey: ['vendors'] }); // Since vendor transactions might update
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorStatement'] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
