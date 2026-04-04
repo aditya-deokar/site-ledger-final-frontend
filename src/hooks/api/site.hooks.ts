@@ -135,6 +135,8 @@ export const useAddFund = (siteId: string, options?: { onSuccess?: () => void })
     mutationFn: (data: { amount: number; note?: string }) => siteService.addFund(siteId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['fund-history', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
       options?.onSuccess?.();
     },
@@ -147,6 +149,8 @@ export const useWithdrawFund = (siteId: string, options?: { onSuccess?: () => vo
     mutationFn: (data: { amount: number; note?: string }) => siteService.withdrawFund(siteId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['fund-history', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
       options?.onSuccess?.();
     },
@@ -156,7 +160,7 @@ export const useWithdrawFund = (siteId: string, options?: { onSuccess?: () => vo
 export const useUpdateExpensePayment = (siteId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ expenseId, data }: { expenseId: string; data: { amount: number; paymentDate?: string; note?: string } }) => {
+    mutationFn: async ({ expenseId, data }: { expenseId: string; data: { amount: number; note?: string } }) => {
       const res = await siteService.updateExpensePayment(siteId, expenseId, data);
       return res;
     },
@@ -165,6 +169,7 @@ export const useUpdateExpensePayment = (siteId: string, options?: { onSuccess?: 
       queryClient.removeQueries({ queryKey: ['expenses', siteId] });
       queryClient.invalidateQueries({ queryKey: ['expenses', siteId] });
       queryClient.invalidateQueries({ queryKey: ['vendors'] }); // Since vendor transactions might update
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
       options?.onSuccess?.();
     },
   });

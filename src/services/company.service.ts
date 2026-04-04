@@ -1,5 +1,14 @@
 import api from '@/lib/axios';
-import { CreateCompanyInput, UpdateCompanyInput, CompanyResponse, CreateCompanyResponse, PartnerInput } from '@/schemas/company.schema';
+import {
+  CompanyResponse,
+  CompanyWithdrawalPaymentsResponse,
+  CompanyWithdrawalResponse,
+  CompanyWithdrawalsResponse,
+  CreateCompanyInput,
+  CreateCompanyResponse,
+  PartnerInput,
+  UpdateCompanyInput,
+} from '@/schemas/company.schema';
 
 export const companyService = {
   createCompany: async (data: CreateCompanyInput): Promise<CreateCompanyResponse> => {
@@ -32,6 +41,22 @@ export const companyService = {
 
   withdrawFund: async (data: { amount: number; note?: string }) => {
     return api.post('/company/withdraw', data);
+  },
+
+  getWithdrawals: async (): Promise<CompanyWithdrawalsResponse> => {
+    return api.get('/company/withdrawals');
+  },
+
+  getWithdrawal: async (id: string): Promise<CompanyWithdrawalResponse> => {
+    return api.get(`/company/withdrawals/${id}`);
+  },
+
+  recordWithdrawalPayment: async (id: string, data: { amount: number; note?: string }): Promise<CompanyWithdrawalResponse> => {
+    return api.patch(`/company/withdrawals/${id}/payment`, data);
+  },
+
+  getWithdrawalPayments: async (id: string): Promise<CompanyWithdrawalPaymentsResponse> => {
+    return api.get(`/company/withdrawals/${id}/payments`);
   },
 
   getActivity: async (cursor?: string) => {

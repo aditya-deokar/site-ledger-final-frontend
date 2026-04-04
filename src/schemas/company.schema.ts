@@ -59,3 +59,43 @@ export interface CreateCompanyResponse {
     };
   };
 }
+
+export interface CompanyWithdrawal {
+  id: string;
+  amount: number;
+  note: string | null;
+  amountPaid: number;
+  remaining: number;
+  paymentDate: string | null;
+  paymentStatus: 'PENDING' | 'PARTIAL' | 'COMPLETED';
+  createdAt: string;
+}
+
+export interface CompanyWithdrawalsResponse {
+  ok: boolean;
+  data: {
+    withdrawals: CompanyWithdrawal[];
+  };
+}
+
+export interface CompanyWithdrawalResponse {
+  ok: boolean;
+  data: {
+    withdrawal: CompanyWithdrawal;
+  };
+}
+
+export interface LedgerPaymentRecord {
+  id: string;
+  amount: number;
+  paymentDate?: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CompanyWithdrawalPaymentsResponse {
+  ok: boolean;
+  data: {
+    payments: LedgerPaymentRecord[];
+  };
+}

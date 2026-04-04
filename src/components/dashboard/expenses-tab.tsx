@@ -69,7 +69,7 @@ function AddExpensePanel({
         {/* Header */}
         <div className="px-8 pt-8 pb-5 border-b border-border">
           <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-2">
-            Transaction Entry
+            Bill Entry
           </p>
           <div className="flex items-start justify-between">
             <h2 className="text-2xl font-serif tracking-tight text-foreground">Add Expense</h2>
@@ -174,11 +174,11 @@ function AddExpensePanel({
               />
             </div>
 
-            {/* Amount and Amount Paid Row */}
+            {/* Bill and initial payment row */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                  Total Amount (₹)
+                  Bill Amount (₹)
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
@@ -194,7 +194,7 @@ function AddExpensePanel({
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                  Amount Paid (₹)
+                  Initial Payment (₹)
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
@@ -209,10 +209,10 @@ function AddExpensePanel({
               </div>
             </div>
 
-            {/* Payment Date */}
+            {/* Initial payment date */}
             <div className="flex flex-col gap-1.5">
               <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                Payment Date
+                Initial Payment Date
               </Label>
               <Input
                 type="datetime-local"
@@ -220,6 +220,9 @@ function AddExpensePanel({
                 {...register("paymentDate")}
               />
               {errors.paymentDate && <p className="text-[10px] text-destructive">{errors.paymentDate.message}</p>}
+              <p className="text-[10px] text-muted-foreground/50">
+                Leave blank if you are recording the bill now and paying later.
+              </p>
             </div>
 
             {/* Remaining Fund */}
@@ -238,7 +241,7 @@ function AddExpensePanel({
               disabled={isPending}
               className="w-full h-14 bg-primary text-black font-bold text-[11px] tracking-[0.2em] uppercase rounded-none gap-2"
             >
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Expense"}
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Record Bill"}
             </Button>
           </div>
         </form>
@@ -265,9 +268,9 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
 
   const expenses: Expense[] = data?.data?.expenses ?? []
 
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
-  const generalExpenses = expenses.filter(e => e.type === "GENERAL").reduce((s, e) => s + e.amount, 0)
-  const vendorExpenses = expenses.filter(e => e.type === "VENDOR").reduce((s, e) => s + e.amount, 0)
+  const totalBilled = expenses.reduce((s, e) => s + e.amount, 0)
+  const totalPaid = expenses.reduce((s, e) => s + e.amountPaid, 0)
+  const totalOutstanding = expenses.reduce((s, e) => s + e.remaining, 0)
 
   return (
     <>
@@ -277,22 +280,22 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
         <div className="flex items-end justify-between">
           <div>
             <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1">
-              Net Aggregate Expenditure
+              Bills Recorded
             </p>
-            <p className="text-3xl font-serif text-red-500 tracking-tight">{formatINR(totalExpenses)}</p>
+            <p className="text-3xl font-serif text-foreground tracking-tight">{formatINR(totalBilled)}</p>
           </div>
           <div className="flex gap-6">
             <div className="border border-border px-5 py-3">
               <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-0.5">
-                General Expenses
+                Paid
               </p>
-              <p className="text-lg font-serif text-foreground tracking-tight">{formatINR(generalExpenses)}</p>
+              <p className="text-lg font-serif text-emerald-600 tracking-tight">{formatINR(totalPaid)}</p>
             </div>
             <div className="border border-border px-5 py-3">
               <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-0.5">
-                Vendor Expenses
+                Outstanding
               </p>
-              <p className="text-lg font-serif text-foreground tracking-tight">{formatINR(vendorExpenses)}</p>
+              <p className="text-lg font-serif text-red-500 tracking-tight">{formatINR(totalOutstanding)}</p>
             </div>
           </div>
         </div>
@@ -317,10 +320,12 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
             {/* Header */}
             <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30">
               <div className="col-span-2 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Type</div>
-              <div className="col-span-3 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Reason / Description</div>
+              <div className="col-span-3 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Bill</div>
               <div className="col-span-2 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Vendor</div>
-              <div className="col-span-2 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</div>
-              <div className="col-span-3 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Payment Status</div>
+              <div className="col-span-2 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Recorded</div>
+              <div className="col-span-1 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Paid</div>
+              <div className="col-span-1 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Due</div>
+              <div className="col-span-1 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Status</div>
             </div>
 
             {/* Rows */}
@@ -339,7 +344,7 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                   </span>
                 </div>
 
-                {/* Reason / Description */}
+                {/* Bill */}
                 <div className="col-span-3">
                   <p className="text-sm font-serif text-foreground tracking-tight truncate">
                     {exp.reason || exp.description || "—"}
@@ -347,6 +352,7 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                   {exp.reason && exp.description && (
                     <p className="text-[10px] text-muted-foreground truncate mt-0.5">{exp.description}</p>
                   )}
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-red-500 mt-1">{formatINR(exp.amount)}</p>
                 </div>
 
                 {/* Vendor */}
@@ -368,20 +374,29 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                   <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
                     {formatDate(exp.createdAt)}
                   </span>
+                  {exp.paymentDate && (
+                    <p className="text-[9px] text-muted-foreground/50 mt-1">
+                      Last paid {formatDate(exp.paymentDate)}
+                    </p>
+                  )}
                 </div>
 
-                {/* Amount / Status */}
-                <div className="col-span-3 flex flex-col items-end gap-1 text-right">
-                  <span className="text-sm font-serif text-red-500 tracking-tight">{formatINR(exp.amount)}</span>
-                  <div className="flex items-center gap-2">
-                    {exp.paymentStatus === 'COMPLETED' ? (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
-                    ) : exp.paymentStatus === 'PARTIAL' ? (
-                      <button onClick={() => setPayExpense(exp)} className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL ({formatINR(exp.amountPaid)}) — Pay</button>
-                    ) : (
-                      <button onClick={() => setPayExpense(exp)} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING — Pay</button>
-                    )}
-                  </div>
+                <div className="col-span-1 text-right">
+                  <span className="text-sm font-serif text-emerald-600 tracking-tight">{formatINR(exp.amountPaid)}</span>
+                </div>
+
+                <div className="col-span-1 text-right">
+                  <span className="text-sm font-serif text-red-500 tracking-tight">{formatINR(exp.remaining)}</span>
+                </div>
+
+                <div className="col-span-1 flex flex-col items-end gap-1 text-right">
+                  {exp.paymentStatus === 'COMPLETED' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
+                  ) : exp.paymentStatus === 'PARTIAL' ? (
+                    <button onClick={() => setPayExpense(exp)} className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL</button>
+                  ) : (
+                    <button onClick={() => setPayExpense(exp)} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -411,8 +426,8 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
           siteId={siteId}
           isPending={updatingPayment}
           onClose={() => setPayExpense(null)}
-          onSubmit={(amount, paymentDate, note) => {
-            updatePayment({ expenseId: payExpense.id, data: { amount, paymentDate, note } })
+          onSubmit={(amount, note) => {
+            updatePayment({ expenseId: payExpense.id, data: { amount, note } })
           }}
         />
       )}

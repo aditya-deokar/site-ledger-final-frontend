@@ -27,7 +27,7 @@ interface RecordPaymentModalProps {
   entityId: string
   siteId?: string // Required for some API calls
   investorId?: string // Required for investor-transaction
-  onSubmit: (deltaAmount: number, paymentDate: string, note: string) => void
+  onSubmit: (deltaAmount: number, note: string) => void
   onClose: () => void
   isPending: boolean
 }
@@ -53,7 +53,6 @@ export function RecordPaymentModal({
 }: RecordPaymentModalProps) {
   const remaining = totalAmount - currentlyPaid
   const [paymentAmount, setPaymentAmount] = useState(remaining)
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 16))
   const [note, setNote] = useState("")
   const [history, setHistory] = useState<PaymentRecord[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -69,6 +68,8 @@ export function RecordPaymentModal({
           url = `/sites/${siteId}/expenses/${entityId}/payments`
         } else if (entityType === 'investor-transaction' && investorId) {
           url = `/investors/${investorId}/transactions/${entityId}/payments`
+        } else if (entityType === 'company-withdrawal') {
+          url = `/company/withdrawals/${entityId}/payments`
         } else if (entityType === 'customer-booking') {
           url = `/customers/${entityId}/payments`
         }
@@ -99,8 +100,7 @@ export function RecordPaymentModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (paymentAmount <= 0) return
-    // Send the DELTA amount to the backend
-    onSubmit(paymentAmount, new Date(paymentDate).toISOString(), note)
+    onSubmit(paymentAmount, note)
   }
 
   return (
@@ -164,25 +164,14 @@ export function RecordPaymentModal({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold">Payment Date</Label>
-                <Input
-                  type="datetime-local"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  className="h-12 bg-muted border-none rounded-none text-[11px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20 text-foreground uppercase"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold">Note / Reference</Label>
-                <Input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="e.g. Chq #123, NEFT..."
-                  className="h-12 bg-muted border-none rounded-none text-[11px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
-                />
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold">Note / Reference</Label>
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. Chq #123, NEFT..."
+                className="h-12 bg-muted border-none rounded-none text-[11px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
+              />
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-border">

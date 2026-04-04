@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const INVESTOR_TYPES = ['EQUITY', 'FIXED_RATE'] as const;
+export const INVESTOR_TRANSACTION_KINDS = ['PRINCIPAL_IN', 'PRINCIPAL_OUT', 'INTEREST'] as const;
 
 export const createInvestorSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -39,15 +40,19 @@ export interface Investor {
   fixedRate: number | null;
   totalInvested: number;
   totalReturned: number;
+  interestPaid: number;
+  outstandingPrincipal: number;
   isClosed: boolean;
   createdAt: string;
 }
 
 export interface Transaction {
   id: string;
+  kind: (typeof INVESTOR_TRANSACTION_KINDS)[number];
   amount: number;
   note: string | null;
   amountPaid: number;
+  remaining: number;
   paymentDate: string | null;
   paymentStatus: 'PENDING' | 'PARTIAL' | 'COMPLETED';
   createdAt: string;
@@ -70,5 +75,11 @@ export interface SiteInvestorsResponse {
 
 export interface TransactionsResponse {
   ok: boolean;
-  data: { transactions: Transaction[]; totalInvested: number; totalReturned: number };
+  data: {
+    transactions: Transaction[];
+    totalInvested: number;
+    totalReturned: number;
+    interestPaid: number;
+    outstandingPrincipal: number;
+  };
 }

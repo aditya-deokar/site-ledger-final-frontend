@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import {
   useInvestors, useCreateInvestor, useUpdateInvestor, useDeleteInvestor,
-  useTransactions, useAddTransaction, useReturnInvestment, usePayInterest,
+  useTransactions, useAddTransaction, useReturnInvestment, usePayInterest, useUpdateInvestorPayment,
 } from '@/hooks/api/investor.hooks';
 import { useSites } from '@/hooks/api/site.hooks';
 import {
@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RecordPaymentModal } from '@/components/dashboard/record-payment-modal';
 import { cn } from '@/lib/utils';
 import {
   Loader2, Plus, Phone, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Eye, ArrowRight, X
@@ -30,6 +31,30 @@ function formatDate(iso: string) {
 const AVATAR_COLORS = ['bg-teal-600','bg-blue-600','bg-amber-500','bg-rose-600','bg-violet-600','bg-emerald-600'];
 function avatarColor(name: string) { return AVATAR_COLORS[(name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length]; }
 function initials(name: string) { const p = name.trim().split(' '); return (p[0][0] + (p[1]?.[0] || '')).toUpperCase(); }
+function formatTransactionKind(kind: Transaction['kind']) {
+  switch (kind) {
+    case 'PRINCIPAL_IN':
+      return 'Principal In';
+    case 'PRINCIPAL_OUT':
+      return 'Principal Out';
+    case 'INTEREST':
+      return 'Interest';
+    default:
+      return kind;
+  }
+}
+
+function transactionKindClasses(kind: Transaction['kind']) {
+  switch (kind) {
+    case 'PRINCIPAL_IN':
+      return 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20';
+    case 'INTEREST':
+      return 'text-amber-600 bg-amber-500/10 border-amber-500/20';
+    case 'PRINCIPAL_OUT':
+    default:
+      return 'text-red-500 bg-red-500/10 border-red-500/20';
+  }
+}
 
 // ── Add Investor Form ───────────────────────────────
 function AddInvestorForm({ onClose }: { onClose: () => void }) {
@@ -194,19 +219,24 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
   const { mutate: addTx, isPending: addingTx } = useAddTransaction({ onSuccess: () => setAddMode(null) });
   const { mutate: returnTx, isPending: returningTx } = useReturnInvestment({ onSuccess: () => setAddMode(null) });
   const { mutate: payInterest, isPending: payingInterest } = usePayInterest({ onSuccess: () => setAddMode(null) });
+  const { mutate: updatePayment, isPending: updatingPayment } = useUpdateInvestorPayment(investor.id, { onSuccess: () => setPayTx(null) });
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<TransactionInput>({
     resolver: zodResolver(transactionSchema),
   });
   const [calcResult, setCalcResult] = useState<{ annual: number; monthly: number; daily: number } | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [payTx, setPayTx] = useState<Transaction | null>(null);
 
   const transactions: Transaction[] = data?.data?.transactions ?? [];
   const totalInvested = data?.data?.totalInvested ?? investor.totalInvested;
+  const totalReturned = data?.data?.totalReturned ?? investor.totalReturned;
+  const interestPaid = data?.data?.interestPaid ?? investor.interestPaid;
+  const outstandingPrincipal = data?.data?.outstandingPrincipal ?? investor.outstandingPrincipal;
   const isPending = addingTx || returningTx || payingInterest;
 
   const calculateInterest = () => {
     const rate = investor.fixedRate ?? 0;
-    const principal = totalInvested;
+    const principal = Math.max(outstandingPrincipal, 0);
     const annual = Math.round((rate / 100) * principal);
     const monthly = Math.round(annual / 12);
     const daily = Math.round(annual / 365);
@@ -222,6 +252,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-background border border-border max-w-lg w-full max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
@@ -243,17 +274,39 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
             <p className="text-sm text-muted-foreground italic text-center py-8">No transactions yet.</p>
           ) : (
             <div className="border border-border divide-y divide-border">
-              <div className="grid grid-cols-3 gap-4 px-4 py-3 bg-muted/30">
+              <div className="grid grid-cols-6 gap-4 px-4 py-3 bg-muted/30">
                 <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</span>
+                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Kind</span>
                 <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</span>
+                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid / Due</span>
+                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</span>
                 <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</span>
               </div>
               {transactions.map((t) => (
-                <div key={t.id} className="grid grid-cols-3 gap-4 px-4 py-4">
+                <div key={t.id} className="grid grid-cols-6 gap-4 px-4 py-4 items-center">
                   <span className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(t.createdAt)}</span>
-                  <span className={cn('text-base font-sans font-bold', t.amount >= 0 ? 'text-emerald-600' : 'text-red-500')}>
-                    {t.amount >= 0 ? '+' : ''}{formatINR(t.amount)}
+                  <span className={cn('inline-flex w-fit px-2 py-1 text-[9px] font-bold tracking-widest uppercase border', transactionKindClasses(t.kind))}>
+                    {formatTransactionKind(t.kind)}
                   </span>
+                  <span className={cn(
+                    'text-base font-sans font-bold',
+                    t.kind === 'PRINCIPAL_IN' ? 'text-emerald-600' : t.kind === 'INTEREST' ? 'text-amber-600' : 'text-red-500',
+                  )}>
+                    {formatINR(Math.abs(t.amount))}
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
+                    <span className="text-[10px] text-red-500/80">Due {formatINR(t.remaining)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {t.paymentStatus === 'COMPLETED' ? (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
+                    ) : t.paymentStatus === 'PARTIAL' ? (
+                      <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL</button>
+                    ) : (
+                      <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING</button>
+                    )}
+                  </div>
                   <span className="text-xs text-muted-foreground truncate font-medium">{t.note || '—'}</span>
                 </div>
               ))}
@@ -278,7 +331,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
                 <div className="border border-amber-500/20 bg-amber-500/5 p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[9px] font-bold tracking-widest uppercase text-amber-600">
-                      Interest Calculator — {investor.fixedRate}% p.a. on {formatINR(totalInvested)}
+                      Interest Calculator — {investor.fixedRate}% p.a. on {formatINR(outstandingPrincipal)}
                     </p>
                     <Button type="button" size="sm" variant="outline" onClick={calculateInterest}
                       className="h-7 rounded-none text-[9px] font-bold tracking-widest uppercase px-3 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
@@ -337,16 +390,26 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
 
         {/* Footer */}
         <div className="px-8 py-4 border-t border-border flex items-center justify-between">
-          <div className="flex gap-8">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1">Total Invested</p>
               <p className="text-xl font-sans font-bold text-primary">{formatINR(totalInvested)}</p>
             </div>
-            {investor.totalReturned > 0 && (
-              <div>
-                <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Total Returned</p>
-                <p className="text-xl font-sans font-bold text-red-500">{formatINR(investor.totalReturned)}</p>
-              </div>
+            <div>
+              <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Total Returned</p>
+              <p className="text-xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
+            </div>
+            {investor.type === 'FIXED_RATE' && (
+              <>
+                <div>
+                  <p className="text-[11px] font-bold tracking-widest uppercase text-amber-600/70 mb-1">Interest Paid</p>
+                  <p className="text-xl font-sans font-bold text-amber-600">{formatINR(interestPaid)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Outstanding Principal</p>
+                  <p className="text-xl font-sans font-bold text-foreground">{formatINR(outstandingPrincipal)}</p>
+                </div>
+              </>
             )}
             {investor.isClosed && (
               <div className="flex items-center">
@@ -381,6 +444,23 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
         </div>
       </div>
     </div>
+
+      {payTx && (
+        <RecordPaymentModal
+          title={`${investor.name} — ${formatTransactionKind(payTx.kind)}`}
+          totalAmount={Math.abs(payTx.amount)}
+          currentlyPaid={payTx.amountPaid}
+          entityType="investor-transaction"
+          entityId={payTx.id}
+          investorId={investor.id}
+          isPending={updatingPayment}
+          onClose={() => setPayTx(null)}
+          onSubmit={(amount, note) => {
+            updatePayment({ transactionId: payTx.id, data: { amount, note } })
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -427,6 +507,9 @@ export default function InvestorsPage() {
   }
 
   const totalInvested = investors.reduce((s, i) => s + i.totalInvested, 0);
+  const totalReturned = investors.reduce((s, i) => s + i.totalReturned, 0);
+  const totalInterestPaid = investors.reduce((s, i) => s + i.interestPaid, 0);
+  const totalOutstanding = investors.reduce((s, i) => s + i.outstandingPrincipal, 0);
 
   const tabs = [
     { key: undefined, label: 'All' },
@@ -464,14 +547,22 @@ export default function InvestorsPage() {
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-10">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           <div>
             <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1.5">Total Capital Committed</p>
             <p className="text-3xl sm:text-4xl font-sans font-bold text-foreground tracking-tight">{formatINR(totalInvested)}</p>
           </div>
-          <div className="border-l border-border pl-10">
-            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Investors</p>
-            <p className="text-2xl sm:text-3xl font-sans font-bold text-foreground">{investors.length}</p>
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Principal Returned</p>
+            <p className="text-2xl sm:text-3xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Interest Paid</p>
+            <p className="text-2xl sm:text-3xl font-sans font-bold text-amber-600">{formatINR(totalInterestPaid)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Outstanding Principal</p>
+            <p className="text-2xl sm:text-3xl font-sans font-bold text-primary">{formatINR(totalOutstanding)}</p>
           </div>
         </div>
 
@@ -487,7 +578,7 @@ export default function InvestorsPage() {
               <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Investor Detail</div>
               <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Type / Rate</div>
               <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Site</div>
-              <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Total Invested</div>
+              <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Totals</div>
               <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Actions</div>
             </div>
 
@@ -532,6 +623,12 @@ export default function InvestorsPage() {
                   <p className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-widest mt-0.5">Invested</p>
                   {inv.totalReturned > 0 && (
                     <p className="text-[11px] font-bold text-red-500 uppercase tracking-widest mt-1">Returned: {formatINR(inv.totalReturned)}</p>
+                  )}
+                  {inv.type === 'FIXED_RATE' && (
+                    <p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest mt-1">Interest: {formatINR(inv.interestPaid)}</p>
+                  )}
+                  {inv.outstandingPrincipal > 0 && (
+                    <p className="text-[11px] font-bold text-primary uppercase tracking-widest mt-1">Outstanding: {formatINR(inv.outstandingPrincipal)}</p>
                   )}
                 </div>
 

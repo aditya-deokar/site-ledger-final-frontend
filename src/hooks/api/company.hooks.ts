@@ -104,8 +104,52 @@ export const useWithdrawFund = (options?: { onSuccess?: () => void }) => {
     mutationFn: (data: { amount: number; note?: string }) => companyService.withdrawFund(data),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['company'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
+  });
+};
+
+export const useWithdrawals = () => {
+  return useQuery({
+    queryKey: ['company-withdrawals'],
+    queryFn: () => companyService.getWithdrawals(),
+    retry: false,
+  });
+};
+
+export const useWithdrawal = (id: string) => {
+  return useQuery({
+    queryKey: ['company-withdrawal', id],
+    queryFn: () => companyService.getWithdrawal(id),
+    retry: false,
+    enabled: !!id,
+  });
+};
+
+export const useRecordWithdrawalPayment = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { amount: number; note?: string } }) =>
+      companyService.recordWithdrawalPayment(id, data),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['company'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawal', variables.id] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawal-payments', variables.id] });
+      await queryClient.invalidateQueries({ queryKey: ['activity'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useWithdrawalPayments = (id: string) => {
+  return useQuery({
+    queryKey: ['company-withdrawal-payments', id],
+    queryFn: () => companyService.getWithdrawalPayments(id),
+    retry: false,
+    enabled: !!id,
   });
 };
 

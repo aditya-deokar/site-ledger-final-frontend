@@ -24,12 +24,15 @@ export interface Vendor {
 
 export interface VendorProfile extends Vendor {
   totalExpenses: number;
+  totalBilled: number;
   expenseCount: number;
+  billCount: number;
   totalPaid: number;
+  totalOutstanding: number;
   remainingBalance: number;
 }
 
-export interface VendorTransaction {
+export interface VendorBill {
   id: string;
   siteId: string;
   amount: number;
@@ -37,9 +40,42 @@ export interface VendorTransaction {
   reason: string | null;
   siteName: string | null;
   amountPaid: number;
+  remaining: number;
   paymentDate: string | null;
   paymentStatus: 'PENDING' | 'PARTIAL' | 'COMPLETED';
+  billDate: string;
   createdAt: string;
+}
+
+export type VendorTransaction = VendorBill;
+
+export interface VendorPayment {
+  id: string;
+  expenseId: string;
+  expenseAmount: number;
+  amount: number;
+  note: string | null;
+  siteId: string | null;
+  siteName: string | null;
+  description: string | null;
+  reason: string | null;
+  createdAt: string;
+  paymentDate: string;
+}
+
+export interface VendorStatementEntry {
+  entryType: 'BILL' | 'PAYMENT';
+  referenceId: string;
+  expenseId: string;
+  date: string;
+  billAmount: number;
+  paymentAmount: number;
+  balance: number;
+  description: string | null;
+  reason: string | null;
+  note: string | null;
+  siteId: string | null;
+  siteName: string | null;
 }
 
 export interface VendorsResponse {
@@ -54,5 +90,30 @@ export interface VendorProfileResponse {
 
 export interface VendorTransactionsResponse {
   ok: boolean;
-  data: { transactions: VendorTransaction[]; totalPaid: number; totalBilled: number };
+  data: {
+    transactions: VendorTransaction[];
+    totalPaid: number;
+    totalBilled: number;
+    totalOutstanding: number;
+    billCount: number;
+  };
+}
+
+export interface VendorPaymentsResponse {
+  ok: boolean;
+  data: {
+    payments: VendorPayment[];
+    totalPaid: number;
+    paymentCount: number;
+  };
+}
+
+export interface VendorStatementResponse {
+  ok: boolean;
+  data: {
+    statement: VendorStatementEntry[];
+    totalBilled: number;
+    totalPaid: number;
+    closingBalance: number;
+  };
 }
