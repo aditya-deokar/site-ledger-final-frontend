@@ -11,7 +11,8 @@ export const useSignIn = () => {
   return useMutation({
     mutationFn: (data: LoginInput) => authService.login(data),
     onSuccess: (response) => {
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('accessToken', response.data.accessToken);
+      localStorage.setItem('refreshToken', response.data.refreshToken);
       queryClient.invalidateQueries({ queryKey: ['me'] });
       router.push('/');
     },
@@ -24,11 +25,13 @@ export const useSignUp = () => {
   return useMutation({
     mutationFn: (data: SignUpInput) => authService.signUp(data),
     onSuccess: (response) => {
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('accessToken', response.data.accessToken);
+      localStorage.setItem('refreshToken', response.data.refreshToken);
       router.push('/setup-company');
     },
   });
 };
+
 
 export const useMe = () => {
   return useQuery({

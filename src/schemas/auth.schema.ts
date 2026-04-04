@@ -18,9 +18,17 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 export interface AuthResponse {
   ok: boolean;
   data: {
-    token: string;
+    accessToken: string;
+    refreshToken: string;
+    user: {
+      id: string;
+      email: string;
+      firstName?: string;
+      lastName?: string;
+    };
   };
 }
+
 
 export interface UserResponse {
   ok: boolean;
