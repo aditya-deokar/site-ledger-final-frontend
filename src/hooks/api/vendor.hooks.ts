@@ -20,6 +20,24 @@ export const useVendorTransactions = (id: string) => {
   });
 };
 
+export const useVendorPayments = (id: string) => {
+  return useQuery({
+    queryKey: ['vendorPayments', id],
+    queryFn: () => vendorService.getVendorPayments(id),
+    retry: false,
+    enabled: !!id,
+  });
+};
+
+export const useVendorStatement = (id: string) => {
+  return useQuery({
+    queryKey: ['vendorStatement', id],
+    queryFn: () => vendorService.getVendorStatement(id),
+    retry: false,
+    enabled: !!id,
+  });
+};
+
 export const useVendors = (type?: string) => {
   return useQuery({
     queryKey: ['vendors', type],

@@ -663,7 +663,7 @@ export function FloorsFlatsTab({
             sellingPrice: customerView.flat.customer.sellingPrice,
             bookingAmount: customerView.flat.customer.bookingAmount,
             amountPaid: customerView.flat.customer.amountPaid,
-            remaining: customerView.flat.customer.sellingPrice - customerView.flat.customer.amountPaid,
+            remaining: customerView.flat.customer.remaining,
             flatId: customerView.flat.id,
             flatNumber: customerView.flat.flatNumber || 0,
             customFlatId: customerView.flat.customFlatId || undefined,

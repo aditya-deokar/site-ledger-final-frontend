@@ -1,5 +1,5 @@
 import api from '@/lib/axios';
-import { CreateSiteInput, SitesResponse, SiteDetailResponse } from '@/schemas/site.schema';
+import { CreateSiteInput, SiteDetailResponse, SiteTransferDirection, SiteTransferResponse, SitesResponse, SiteFundHistoryResponse } from '@/schemas/site.schema';
 
 export const siteService = {
   getSites: (showArchived?: 'true' | 'only'): Promise<SitesResponse> =>
@@ -17,11 +17,14 @@ export const siteService = {
   deleteSite: (id: string, keepCustomers = false) =>
     api.delete(`/sites/${id}`, { params: { keepCustomers: String(keepCustomers) } }),
 
+  transfer: (id: string, data: { amount: number; direction: SiteTransferDirection; note?: string }) : Promise<SiteTransferResponse> =>
+    api.post(`/sites/${id}/transfer`, data),
+
   addFund: (id: string, data: { amount: number; note?: string }) =>
-    api.post(`/sites/${id}/fund`, data),
+    siteService.transfer(id, { ...data, direction: 'COMPANY_TO_SITE' }),
 
   withdrawFund: (id: string, data: { amount: number; note?: string }) =>
-    api.post(`/sites/${id}/withdraw`, data),
+    siteService.transfer(id, { ...data, direction: 'SITE_TO_COMPANY' }),
 
   getFloors: (siteId: string) =>
     api.get(`/sites/${siteId}/floors`),
@@ -38,12 +41,12 @@ export const siteService = {
   getExpenses: (siteId: string) =>
     api.get(`/sites/${siteId}/expenses`),
 
-  getFundHistory: (siteId: string) =>
+  getFundHistory: (siteId: string): Promise<SiteFundHistoryResponse> =>
     api.get(`/sites/${siteId}/fund-history`),
 
   addExpense: (siteId: string, data: import('@/schemas/site.schema').CreateExpenseInput) =>
     api.post(`/sites/${siteId}/expenses`, data),
 
-  updateExpensePayment: (siteId: string, expenseId: string, data: { amount: number; paymentDate?: string; note?: string }) =>
+  updateExpensePayment: (siteId: string, expenseId: string, data: { amount: number; note?: string }) =>
     api.patch(`/sites/${siteId}/expenses/${expenseId}/payment`, data),
 };

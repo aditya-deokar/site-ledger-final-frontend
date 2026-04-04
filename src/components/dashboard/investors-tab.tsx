@@ -19,6 +19,18 @@ function formatDate(iso: string) { return new Date(iso).toLocaleDateString("en-I
 const COLORS = ["bg-teal-600","bg-blue-600","bg-amber-500","bg-rose-600","bg-violet-600","bg-emerald-600"]
 function ac(n: string) { return COLORS[(n.charCodeAt(0) + (n.charCodeAt(1) || 0)) % COLORS.length] }
 function ini(n: string) { const p = n.trim().split(" "); return (p[0][0] + (p[1]?.[0] || "")).toUpperCase() }
+function formatTransactionKind(kind: Transaction["kind"]) {
+  switch (kind) {
+    case "PRINCIPAL_IN":
+      return "Principal In"
+    case "PRINCIPAL_OUT":
+      return "Principal Out"
+    case "INTEREST":
+      return "Interest"
+    default:
+      return kind
+  }
+}
 
 type SiteInvestor = { id: string; name: string; phone: string | null; equityPercentage: number | null; totalInvested: number; totalReturned: number; isClosed: boolean; createdAt: string }
 
@@ -36,6 +48,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
   const txs: Transaction[] = data?.data?.transactions ?? []
   const total = data?.data?.totalInvested ?? investor.totalInvested
   const totalReturned = data?.data?.totalReturned ?? investor.totalReturned ?? 0
+  const outstandingPrincipal = data?.data?.outstandingPrincipal ?? Math.max(total - totalReturned, 0)
 
   // Auto-calculate equity return: equityPercentage% of totalProfit (sum of customers' sellingPrice)
   const equityPct = investor.equityPercentage ?? 0
@@ -65,25 +78,39 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
             <p className="text-sm text-muted-foreground italic text-center py-8">No transactions yet.</p>
           ) : (
             <div className="border border-border divide-y divide-border">
-              <div className="grid grid-cols-4 gap-4 px-4 py-2 bg-muted/30">
+              <div className="grid grid-cols-6 gap-4 px-4 py-2 bg-muted/30">
                 <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</span>
+                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Kind</span>
                 <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</span>
+                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid / Due</span>
                 <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Status</span>
                 <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</span>
               </div>
               {txs.map(t => (
-                <div key={t.id} className="grid grid-cols-4 gap-4 px-4 py-3 items-center">
+                <div key={t.id} className="grid grid-cols-6 gap-4 px-4 py-3 items-center">
                   <span className="text-[10px] font-bold tracking-widest text-muted-foreground">{formatDate(t.createdAt)}</span>
+                  <span className={cn(
+                    "inline-flex w-fit px-2 py-1 text-[8px] font-bold tracking-widest uppercase border",
+                    t.kind === "PRINCIPAL_IN"
+                      ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
+                      : "text-red-500 bg-red-500/10 border-red-500/20"
+                  )}>
+                    {formatTransactionKind(t.kind)}
+                  </span>
                   <div className="flex flex-col">
-                    <span className={cn("text-sm font-sans font-bold", t.amount >= 0 ? "text-emerald-600" : "text-red-500")}>{t.amount >= 0 ? "+" : ""}{formatINR(t.amount)}</span>
+                    <span className={cn("text-sm font-sans font-bold", t.kind === "PRINCIPAL_IN" ? "text-emerald-600" : "text-red-500")}>{formatINR(Math.abs(t.amount))}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
+                    <span className="text-[10px] text-red-500/80">Due {formatINR(t.remaining)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {t.paymentStatus === 'COMPLETED' ? (
                       <span className="text-[8px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
                     ) : t.paymentStatus === 'PARTIAL' ? (
-                      <button onClick={() => setPayTx(t)} className="text-[8px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL ({formatINR(t.amountPaid)}) — Pay</button>
+                      <button onClick={() => setPayTx(t)} className="text-[8px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL</button>
                     ) : (
-                      <button onClick={() => setPayTx(t)} className="text-[8px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING — Pay</button>
+                      <button onClick={() => setPayTx(t)} className="text-[8px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING</button>
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground truncate">{t.note || "—"}</span>
@@ -123,7 +150,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Total Amount</Label>
+                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Transaction Amount</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                     <Input type="number" min={0} placeholder="Total" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register("amount", { valueAsNumber: true })} />
@@ -131,7 +158,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                   {errors.amount && <p className="text-[10px] text-destructive mt-1">{errors.amount.message}</p>}
                 </div>
                 <div>
-                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Amount Paid</Label>
+                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Initial Payment</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                     <Input type="number" min={0} placeholder="Paid" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register("amountPaid", { valueAsNumber: true })} />
@@ -141,7 +168,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Payment Date</Label>
+                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Initial Payment Date</Label>
                   <Input type="datetime-local" className="h-10 bg-muted border-none rounded-none text-sm uppercase tracking-widest" {...register("paymentDate")} />
                 </div>
                 <div>
@@ -170,6 +197,12 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 <p className="text-lg font-serif text-red-500">{formatINR(totalReturned)}</p>
               </div>
             )}
+            {outstandingPrincipal > 0 && (
+              <div>
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Outstanding</p>
+                <p className="text-lg font-serif text-foreground">{formatINR(outstandingPrincipal)}</p>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             {!mode && !investor.isClosed && (
@@ -189,7 +222,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
       {payTx && (
         <RecordPaymentModal
-          title={`${investor.name} — ${payTx.note || 'Transaction'}`}
+          title={`${investor.name} — ${formatTransactionKind(payTx.kind)}`}
           totalAmount={Math.abs(payTx.amount)}
           currentlyPaid={payTx.amountPaid}
           entityType="investor-transaction"
@@ -197,8 +230,8 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           investorId={investor.id}
           isPending={updatingPay}
           onClose={() => setPayTx(null)}
-          onSubmit={(amount, paymentDate, note) => {
-            updatePayment({ transactionId: payTx.id, data: { amount, paymentDate, note } })
+          onSubmit={(amount, note) => {
+            updatePayment({ transactionId: payTx.id, data: { amount, note } })
           }}
         />
       )}

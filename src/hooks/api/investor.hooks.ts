@@ -127,7 +127,7 @@ export const useReturnInvestment = (options?: { onSuccess?: () => void }) => {
 export const useUpdateInvestorPayment = (investorId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ transactionId, data }: { transactionId: string; data: { amount: number; paymentDate?: string; note?: string } }) =>
+    mutationFn: ({ transactionId, data }: { transactionId: string; data: { amount: number; note?: string } }) =>
       investorService.updateTransactionPayment(investorId, transactionId, data),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ['transactions', investorId] });

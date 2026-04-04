@@ -4,18 +4,19 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCompany, useUpdateCompany, useWithdrawFund } from '@/hooks/api/company.hooks';
+import { useCompany, useUpdateCompany, useWithdrawFund, useWithdrawals, useRecordWithdrawalPayment } from '@/hooks/api/company.hooks';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { AddPartnerDrawer } from '@/components/dashboard/add-partner-drawer';
 import { EditPartnerDrawer } from '@/components/dashboard/edit-partner-drawer';
 import { EquityChart } from '@/components/dashboard/equity-chart';
+import { RecordPaymentModal } from '@/components/dashboard/record-payment-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Plus, Mail, Phone, ArrowUpRight, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Partner } from '@/schemas/company.schema';
+import { CompanyWithdrawal, Partner } from '@/schemas/company.schema';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const AVATAR_COLORS = [
@@ -35,6 +36,15 @@ function getInitials(name: string) {
 
 function formatINR(amount: number) {
   return '₹' + amount.toLocaleString('en-IN');
+}
+
+function formatDate(iso?: string | null) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).toUpperCase();
 }
 
 // ── Edit Company Dialog ────────────────────────────
@@ -190,8 +200,110 @@ function CompanySkeleton() {
   );
 }
 
+function WithdrawalLedger({ withdrawals }: { withdrawals: CompanyWithdrawal[] }) {
+  const [selectedWithdrawal, setSelectedWithdrawal] = useState<CompanyWithdrawal | null>(null);
+  const { mutate: recordPayment, isPending } = useRecordWithdrawalPayment({
+    onSuccess: () => setSelectedWithdrawal(null),
+  });
+
+  return (
+    <>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Withdrawal Ledger</p>
+            <h2 className="text-3xl font-serif text-foreground tracking-tight mt-1">Company Withdrawals</h2>
+          </div>
+          <span className="px-2 py-0.5 bg-muted text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
+            {String(withdrawals.length).padStart(2, '0')}
+          </span>
+        </div>
+
+        {withdrawals.length === 0 ? (
+          <div className="border border-dashed border-border flex items-center justify-center py-16">
+            <p className="text-sm text-muted-foreground italic">No withdrawals recorded yet.</p>
+          </div>
+        ) : (
+          <div className="border border-border divide-y divide-border">
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30">
+              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</div>
+              <div className="col-span-3 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</div>
+              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Amount</div>
+              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Paid / Due</div>
+              <div className="col-span-1 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Status</div>
+              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Action</div>
+            </div>
+            {withdrawals.map((withdrawal) => (
+              <div key={withdrawal.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/20 transition-colors">
+                <div className="col-span-2">
+                  <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(withdrawal.createdAt)}</p>
+                  <p className="text-[10px] text-muted-foreground/50 mt-1">
+                    {withdrawal.paymentDate ? `Last paid ${formatDate(withdrawal.paymentDate)}` : 'No payments yet'}
+                  </p>
+                </div>
+                <div className="col-span-3">
+                  <p className="text-sm font-serif text-foreground">{withdrawal.note || 'Owner / company withdrawal'}</p>
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-base font-sans font-bold text-red-500">{formatINR(withdrawal.amount)}</span>
+                </div>
+                <div className="col-span-2 text-right">
+                  <p className="text-sm font-sans font-bold text-emerald-600">{formatINR(withdrawal.amountPaid)}</p>
+                  <p className="text-[10px] text-red-500/80 mt-1">Due {formatINR(withdrawal.remaining)}</p>
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <span className={cn(
+                    'text-[9px] font-bold px-1.5 py-0.5 border',
+                    withdrawal.paymentStatus === 'COMPLETED'
+                      ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                      : withdrawal.paymentStatus === 'PARTIAL'
+                        ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                        : 'bg-red-500/10 text-red-600 border-red-500/20'
+                  )}>
+                    {withdrawal.paymentStatus}
+                  </span>
+                </div>
+                <div className="col-span-2 flex justify-end">
+                  {withdrawal.paymentStatus === 'COMPLETED' ? (
+                    <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Settled</span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedWithdrawal(withdrawal)}
+                      className="h-8 rounded-none text-[9px] font-bold tracking-widest uppercase"
+                    >
+                      Record Payment
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selectedWithdrawal && (
+        <RecordPaymentModal
+          title={`Company Withdrawal — ${selectedWithdrawal.note || 'Owner payout'}`}
+          totalAmount={selectedWithdrawal.amount}
+          currentlyPaid={selectedWithdrawal.amountPaid}
+          entityType="company-withdrawal"
+          entityId={selectedWithdrawal.id}
+          isPending={isPending}
+          onClose={() => setSelectedWithdrawal(null)}
+          onSubmit={(amount, note) => {
+            recordPayment({ id: selectedWithdrawal.id, data: { amount, note } });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export default function CompanyPage() {
   const { data: companyData, isLoading } = useCompany();
+  const { data: withdrawalsData, isLoading: withdrawalsLoading } = useWithdrawals();
   const [addOpen, setAddOpen] = useState(false);
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [editCompanyOpen, setEditCompanyOpen] = useState(false);
@@ -258,6 +370,7 @@ export default function CompanyPage() {
   if (!companyInfo) return null;
 
   const { company, partners, partner_fund, estDateString, stats, totalStake, available_fund } = companyInfo;
+  const withdrawals = withdrawalsData?.data?.withdrawals ?? [];
 
   return (
     <DashboardShell>
@@ -304,6 +417,12 @@ export default function CompanyPage() {
             ))}
           </div>
         </div>
+
+        {withdrawalsLoading ? (
+          <Skeleton className="h-64 w-full" />
+        ) : (
+          <WithdrawalLedger withdrawals={withdrawals} />
+        )}
 
         {/* Partners + Equity Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

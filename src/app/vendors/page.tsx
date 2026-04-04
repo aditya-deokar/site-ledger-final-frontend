@@ -342,7 +342,7 @@ export default function VendorsPage() {
                     className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary hover:text-primary mr-1"
                     onClick={() => setProfileVendorId(vendor.id)}
                   >
-                    Transactions
+                    Ledger
                   </Button>
                   <Button
                     variant="ghost"

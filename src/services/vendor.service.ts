@@ -1,5 +1,13 @@
 import api from '@/lib/axios';
-import { CreateVendorInput, UpdateVendorInput, VendorsResponse, VendorProfileResponse, VendorTransactionsResponse } from '@/schemas/vendor.schema';
+import {
+  CreateVendorInput,
+  UpdateVendorInput,
+  VendorPaymentsResponse,
+  VendorProfileResponse,
+  VendorStatementResponse,
+  VendorTransactionsResponse,
+  VendorsResponse,
+} from '@/schemas/vendor.schema';
 
 export const vendorService = {
   getVendors: (type?: string): Promise<VendorsResponse> =>
@@ -10,6 +18,12 @@ export const vendorService = {
 
   getVendorTransactions: (id: string): Promise<VendorTransactionsResponse> =>
     api.get(`/vendors/${id}/transactions`),
+
+  getVendorPayments: (id: string): Promise<VendorPaymentsResponse> =>
+    api.get(`/vendors/${id}/payments`),
+
+  getVendorStatement: (id: string): Promise<VendorStatementResponse> =>
+    api.get(`/vendors/${id}/statement`),
 
   createVendor: (data: CreateVendorInput) =>
     api.post('/vendors', data),

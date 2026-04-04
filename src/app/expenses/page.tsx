@@ -87,7 +87,7 @@ export default function ExpensesPage() {
           <div>
             <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Expenses</h1>
             <p className="mt-2 text-base text-muted-foreground italic">
-              All expenses across every site in your company.
+              Company-wide bill registry across every site. Paid and outstanding details remain ledger-rich inside site and vendor views.
             </p>
           </div>
         </div>
@@ -95,11 +95,11 @@ export default function ExpensesPage() {
         {/* Stats */}
         <div className="flex items-center gap-10">
           <div>
-            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1.5">Total Expenses</p>
+            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1.5">Total Bills</p>
             <p className="text-3xl sm:text-4xl font-sans font-bold text-foreground tracking-tight">{total}</p>
           </div>
           <div className="border-l border-border pl-10">
-            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Page Total</p>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Page Bill Total</p>
             <p className="text-2xl sm:text-3xl font-sans font-bold text-red-500">{formatINR(totalAmount)}</p>
           </div>
         </div>

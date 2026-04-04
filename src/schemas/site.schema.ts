@@ -76,6 +76,7 @@ export interface Expense {
   description: string | null;
   amount: number;
   amountPaid: number;
+  remaining: number;
   paymentDate: string | null;
   paymentStatus: 'PENDING' | 'PARTIAL' | 'COMPLETED';
   createdAt: string;
@@ -135,4 +136,36 @@ export interface SitesResponse {
 export interface SiteDetailResponse {
   ok: boolean;
   data: { site: SiteDetail };
+}
+
+export type SiteTransferDirection = 'COMPANY_TO_SITE' | 'SITE_TO_COMPANY';
+
+export interface SiteTransferResponse {
+  ok: boolean;
+  data: {
+    transfer: {
+      entryGroupId: string;
+      direction: SiteTransferDirection;
+      amount: number;
+      companyEntryId: string;
+      siteEntryId: string;
+    };
+    companyAvailableFund: number;
+    siteBalance: number;
+    siteAllocatedFund: number;
+  };
+}
+
+export interface SiteFundHistoryEntry {
+  id: string;
+  type: 'ALLOCATION' | 'WITHDRAWAL';
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  runningBalance?: number;
+}
+
+export interface SiteFundHistoryResponse {
+  ok: boolean;
+  data: { history: SiteFundHistoryEntry[] };
 }
