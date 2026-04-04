@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
 import { Customer } from "@/schemas/customer.schema"
 import { Download, X, Plus, Trash2, IndianRupee } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { RecordPaymentModal } from "./record-payment-modal"
 
 // Simple Indian number to words converter
 const convertToIndianWords = (num: number): string => {
@@ -44,6 +46,20 @@ const convertToIndianWords = (num: number): string => {
   result += ' Only'
   
   return result
+}
+
+const buildReceiptNumber = (customerId: string, createdAt: string) => {
+  const dateToken = createdAt.slice(2, 10).replace(/-/g, '')
+  const customerToken = customerId.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()
+  return `RCP-${dateToken}-${customerToken}`
+}
+
+const createEditorRowId = (prefix: string) => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 interface ReceiptData {
@@ -97,9 +113,17 @@ interface ReceiptEditorProps {
 }
 
 export function ReceiptEditor({ customer, siteAddress, payments, onClose }: ReceiptEditorProps) {
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<ReceiptData>({
+  const stableReceiptNumber = buildReceiptNumber(customer.id, customer.createdAt)
+  const [isLedgerPaymentModalOpen, setIsLedgerPaymentModalOpen] = useState(false)
+  const {
+    mutate: recordPayment,
+    isPending: isRecordingPayment,
+    error: paymentError,
+    reset: resetPaymentState,
+  } = useRecordCustomerPayment()
+  const { register, handleSubmit, watch, setValue } = useForm<ReceiptData>({
     defaultValues: {
-      receiptNumber: `RCP-${Date.now().toString().slice(-6)}`,
+      receiptNumber: stableReceiptNumber,
       receiptDate: new Date().toISOString().slice(0, 10),
       customerName: customer.name,
       customerPhone: customer.phone || '',
@@ -128,45 +152,67 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   const watchedPayments = watch('payments')
   const watchedTotalAmount = watch('totalAmount')
   const watchedTaxes = watch('taxes')
+  const watchedCustomerName = watch('customerName')
+  const watchedProjectName = watch('projectName')
+  const watchedFlatNumber = watch('flatNumber')
+  const watchedSiteAddress = watch('siteAddress')
 
   // Calculate total tax amount
   const totalTaxAmount = watchedTaxes.reduce((sum, tax) => sum + tax.calculatedAmount, 0)
   const totalWithTax = watchedTotalAmount + totalTaxAmount
   const totalPaid = watchedPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
-  const balance = totalWithTax - totalPaid
+  const rawBalance = totalWithTax - totalPaid
+  const balance = Math.max(rawBalance, 0)
+  const overCollected = Math.max(totalPaid - totalWithTax, 0)
+  const ledgerRemaining = Math.max(customer.sellingPrice - totalPaid, 0)
 
   // Auto-update amount in words when total amount changes
   useEffect(() => {
-    if (totalWithTax && totalWithTax > 0) {
-      const amountInWords = convertToIndianWords(totalWithTax)
-      setValue('amountInWords', amountInWords)
-    }
+    setValue('amountInWords', convertToIndianWords(Math.max(totalWithTax, 0)))
   }, [totalWithTax, setValue, watchedTotalAmount, watchedTaxes])
 
-  const addPaymentRow = () => {
-    const newPayment = {
-      id: Date.now().toString(),
-      date: new Date().toISOString().slice(0, 10),
-      amount: 0,
+  useEffect(() => {
+    const syncedPayments = payments.map((payment) => ({
+      id: payment.id,
+      date: payment.createdAt.split('T')[0],
+      amount: payment.amount,
       mode: 'CASH',
-      note: ''
+      note: payment.note || '',
+    }))
+
+    const needsSync =
+      syncedPayments.length !== watchedPayments.length ||
+      syncedPayments.some((payment, index) => {
+        const current = watchedPayments[index]
+        return (
+          !current ||
+          current.id !== payment.id ||
+          current.date !== payment.date ||
+          current.amount !== payment.amount ||
+          current.note !== payment.note
+        )
+      })
+
+    if (needsSync) {
+      setValue('payments', syncedPayments)
     }
-    setValue('payments', [...watchedPayments, newPayment])
-  }
+  }, [payments, watchedPayments, setValue])
 
-  const removePaymentRow = (id: string) => {
-    setValue('payments', watchedPayments.filter(p => p.id !== id))
-  }
+  useEffect(() => {
+    if (siteAddress && !watchedSiteAddress) {
+      setValue('siteAddress', siteAddress)
+    }
+  }, [siteAddress, watchedSiteAddress, setValue])
 
-  const updatePayment = (id: string, field: string, value: any) => {
-    setValue('payments', watchedPayments.map(p => 
-      p.id === id ? { ...p, [field]: value } : p
+  const updatePaymentMode = (id: string, value: string) => {
+    setValue('payments', watchedPayments.map((payment) =>
+      payment.id === id ? { ...payment, mode: value } : payment,
     ))
   }
 
   const addTaxRow = () => {
     const newTax = {
-      id: Date.now().toString(),
+      id: createEditorRowId('tax'),
       name: '',
       type: 'percentage' as const,
       value: 0,
@@ -202,7 +248,25 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
 
   const formatINR = (n: number) => `₹${n.toLocaleString('en-IN')}`
 
+  const appendLedgerPaymentRow = (payment: { id: string; amount: number; createdAt: string; note?: string | null }) => {
+    setValue('payments', [
+      ...watchedPayments,
+      {
+        id: payment.id,
+        date: payment.createdAt.split('T')[0],
+        amount: payment.amount,
+        mode: 'CASH',
+        note: payment.note || '',
+      },
+    ])
+  }
+
   const generateReceiptHTML = (data: ReceiptData) => {
+    const receiptTotalTaxAmount = data.taxes.reduce((sum, tax) => sum + tax.calculatedAmount, 0)
+    const receiptTotalWithTax = data.totalAmount + receiptTotalTaxAmount
+    const receiptTotalPaid = data.payments.reduce((sum, payment) => sum + (payment.amount || 0), 0)
+    const receiptBalance = Math.max(receiptTotalWithTax - receiptTotalPaid, 0)
+    const receiptOverCollected = Math.max(receiptTotalPaid - receiptTotalWithTax, 0)
     const paymentsHTML = data.payments.map((payment, index) => `
       <tr>
         <td>${index + 1}</td>
@@ -304,14 +368,20 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
               ${paymentsHTML}
               <tr class="total-row">
                 <td colspan="2"><strong>Total Paid:</strong></td>
-                <td style="text-align: right;"><strong>${formatINR(totalPaid)}</strong></td>
+                <td style="text-align: right;"><strong>${formatINR(receiptTotalPaid)}</strong></td>
                 <td colspan="2"></td>
               </tr>
               <tr class="total-row">
                 <td colspan="2"><strong>Balance:</strong></td>
-                <td style="text-align: right;"><strong>${formatINR(balance)}</strong></td>
+                <td style="text-align: right;"><strong>${formatINR(receiptBalance)}</strong></td>
                 <td colspan="2"></td>
               </tr>
+              ${receiptOverCollected > 0 ? `
+              <tr class="total-row">
+                <td colspan="2"><strong>Over Collected:</strong></td>
+                <td style="text-align: right;"><strong>${formatINR(receiptOverCollected)}</strong></td>
+                <td colspan="2"></td>
+              </tr>` : ''}
             </tbody>
           </table>
         </div>
@@ -331,11 +401,11 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
               ${taxesHTML}
               <tr class="total-row">
                 <td colspan="2"><strong>Total Tax:</strong></td>
-                <td style="text-align: right;"><strong>${formatINR(totalTaxAmount)}</strong></td>
+                <td style="text-align: right;"><strong>${formatINR(receiptTotalTaxAmount)}</strong></td>
               </tr>
               <tr class="total-row">
                 <td colspan="2"><strong>Total with Tax:</strong></td>
-                <td style="text-align: right;"><strong>${formatINR(totalWithTax)}</strong></td>
+                <td style="text-align: right;"><strong>${formatINR(receiptTotalWithTax)}</strong></td>
               </tr>
             </tbody>
           </table>
@@ -369,30 +439,79 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border border-border w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+      <div className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden border border-border bg-background sm:h-auto sm:max-h-[92vh]">
         {/* Header */}
-        <div className="sticky top-0 bg-background border-b border-border p-6 flex items-center justify-between">
+        <div className="sticky top-0 z-10 border-b border-border bg-background/95 p-6 backdrop-blur flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-serif text-foreground">Receipt Editor</h2>
-            <p className="text-sm text-muted-foreground">Edit receipt details before downloading</p>
+            <h2 className="text-2xl font-serif text-foreground">Receipt Workspace</h2>
+            <p className="text-sm text-muted-foreground">Customer, project, and site details are prefilled from the current booking wherever available.</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit(handleDownload)} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(handleDownload)} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Receipt Snapshot</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50">Customer</p>
+                  <p className="mt-2 text-base font-serif text-foreground">{watchedCustomerName || 'Pending name'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50">Project</p>
+                  <p className="mt-2 text-base font-serif text-foreground">{watchedProjectName || 'Pending project'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50">Flat</p>
+                  <p className="mt-2 text-base font-serif text-foreground">{watchedFlatNumber || 'Pending flat'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50">Receipt Total</p>
+                  <p className="mt-2 text-base font-serif text-foreground">{formatINR(totalWithTax)}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Collection Status</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Total Paid</Label>
+                  <div className="mt-2 text-2xl font-bold text-emerald-600">{formatINR(totalPaid)}</div>
+                </div>
+                <div>
+                  <Label>Balance</Label>
+                  <div className={cn("mt-2 text-2xl font-bold", balance > 0 ? "text-red-500" : "text-emerald-600")}>
+                    {formatINR(balance)}
+                  </div>
+                  {overCollected > 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Payments exceed receipt total by {formatINR(overCollected)}.
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Basic Information */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Basic Information</CardTitle>
+              <CardTitle className="text-lg">Receipt Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="receiptNumber">Receipt Number</Label>
-                  <Input {...register('receiptNumber')} />
+                  <Input {...register('receiptNumber')} readOnly className="bg-muted cursor-not-allowed" />
                 </div>
                 <div>
                   <Label htmlFor="receiptDate">Receipt Date</Label>
@@ -440,7 +559,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
           {/* Property Details */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Property Details</CardTitle>
+              <CardTitle className="text-lg">Property & Project Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -478,6 +597,9 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                   />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                If the site name or address looks wrong, update the receipt fields here for download. A dedicated site settings save flow is not available in the current frontend API yet.
+              </p>
             </CardContent>
           </Card>
 
@@ -487,13 +609,13 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Tax Details</CardTitle>
                 <Button type="button" variant="outline" size="sm" onClick={addTaxRow}>
-                  <Plus className="w-4 h-4 mr-2" />Add Tax
+                  <Plus className="mr-2 w-4 h-4" />Add Tax
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {watchedTaxes.map((tax, index) => (
-                <div key={tax.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
+                <div key={tax.id} className="grid grid-cols-1 gap-2 border border-border/60 p-3 md:grid-cols-[auto_minmax(0,1.3fr)_180px_160px_auto_auto] md:items-center">
                   <div className="text-sm text-muted-foreground font-medium">#{index + 1}</div>
                   <Input 
                     value={tax.name} 
@@ -550,24 +672,54 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Payment Details</CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={addPaymentRow}>
-                  <Plus className="w-4 h-4 mr-2" />Add Payment
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    resetPaymentState()
+                    setIsLedgerPaymentModalOpen(true)
+                  }}
+                  disabled={ledgerRemaining <= 0}
+                >
+                  <IndianRupee className="mr-2 w-4 h-4" />
+                  {ledgerRemaining > 0 ? 'Record Ledger Payment' : 'Fully Paid'}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Receipt payment rows now mirror the customer ledger. Dates, amounts, and notes stay read-only here so the receipt always matches accounting. Use Record Ledger Payment to add a real payment first, then download the updated receipt.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Tax rows are still print-only in this version. Ledger payments continue to apply against the booking value only.
+              </p>
+              {paymentError && (
+                <div className="border border-red-500/20 bg-red-500/10 p-3 text-[11px] text-red-600">
+                  {typeof paymentError === 'string'
+                    ? paymentError
+                    : typeof paymentError === 'object' && paymentError !== null && 'error' in paymentError && typeof paymentError.error === 'string'
+                      ? paymentError.error
+                      : 'Payment could not be recorded from the receipt workspace.'}
+                </div>
+              )}
               {watchedPayments.map((payment, index) => (
-                <div key={payment.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-center">
+                <div key={payment.id} className="grid grid-cols-1 gap-2 border border-border/60 p-3 md:grid-cols-[auto_170px_140px_140px_minmax(0,1fr)_90px] md:items-center">
                   <div className="text-sm text-muted-foreground font-medium">#{index + 1}</div>
-                  <Input type="date" value={payment.date} onChange={(e) => updatePayment(payment.id, 'date', e.target.value)} />
-                  <Input type="number" value={payment.amount} onChange={(e) => updatePayment(payment.id, 'amount', Number(e.target.value) || 0)} placeholder="Amount" />
-                  <Input value={payment.mode} onChange={(e) => updatePayment(payment.id, 'mode', e.target.value)} placeholder="Mode" />
-                  <Input value={payment.note} onChange={(e) => updatePayment(payment.id, 'note', e.target.value)} placeholder="Note" />
-                  <Button type="button" variant="outline" size="sm" onClick={() => removePaymentRow(payment.id)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <Input type="date" value={payment.date} readOnly className="bg-muted/60 cursor-not-allowed" />
+                  <Input type="number" value={payment.amount} readOnly className="bg-muted/60 cursor-not-allowed" />
+                  <Input value={payment.mode} onChange={(e) => updatePaymentMode(payment.id, e.target.value)} placeholder="Mode" />
+                  <Input value={payment.note} readOnly className="bg-muted/60 cursor-not-allowed" />
+                  <div className="text-right text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                    Ledger
+                  </div>
                 </div>
               ))}
+              {watchedPayments.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                  No ledger payments recorded yet. Use Record Ledger Payment to add the first collection before downloading a receipt.
+                </div>
+              )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
                 <div>
@@ -579,13 +731,18 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                   <div className={cn("text-lg font-bold", balance > 0 ? "text-red-500" : "text-green-600")}>
                     {formatINR(balance)}
                   </div>
+                  {overCollected > 0 && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Over collected: {formatINR(overCollected)}
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Actions */}
-          <div className="flex justify-end gap-4 sticky bottom-0 bg-background p-4 border-t">
+          <div className="sticky bottom-0 flex justify-end gap-4 border-t bg-background/95 p-4 backdrop-blur">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
@@ -596,6 +753,41 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
           </div>
         </form>
       </div>
+
+      {isLedgerPaymentModalOpen && (
+        <RecordPaymentModal
+          title={`Customer: ${customer.name}`}
+          totalAmount={customer.sellingPrice}
+          currentlyPaid={totalPaid}
+          entityType="customer-booking"
+          entityId={customer.id}
+          isPending={isRecordingPayment}
+          onClose={() => {
+            setIsLedgerPaymentModalOpen(false)
+            resetPaymentState()
+          }}
+          onSubmit={(amount, note) => {
+            recordPayment(
+              { customerId: customer.id, data: { amount, note } },
+              {
+                onSuccess: (response: any) => {
+                  const payment = response?.data?.payment
+                  if (payment) {
+                    appendLedgerPaymentRow({
+                      id: payment.id,
+                      amount: payment.amount,
+                      createdAt: payment.createdAt,
+                      note: note || '',
+                    })
+                  }
+                  setIsLedgerPaymentModalOpen(false)
+                  resetPaymentState()
+                },
+              },
+            )
+          }}
+        />
+      )}
     </div>
   )
 }

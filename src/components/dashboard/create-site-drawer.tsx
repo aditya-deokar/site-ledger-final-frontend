@@ -58,6 +58,9 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                 className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
                 {...register('name')}
               />
+              <p className="text-[10px] text-muted-foreground/60">
+                This name is reused across site dashboards and prefilled receipt screens.
+              </p>
               {errors.name && <p className="text-[10px] text-destructive">{errors.name.message}</p>}
             </div>
 
@@ -68,6 +71,9 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                 className="bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 resize-none min-h-20 text-foreground"
                 {...register('address')}
               />
+              <p className="text-[10px] text-muted-foreground/60">
+                This address becomes the default site location shown in receipt downloads.
+              </p>
               {errors.address && <p className="text-[10px] text-destructive">{errors.address.message}</p>}
             </div>
 
@@ -103,6 +109,10 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                   <p className="text-[10px] font-bold tracking-widest uppercase">REDEVELOPMENT</p>
                 </button>
               </div>
+            </div>
+
+            <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">
+              Site settings beyond name, address, and project type are not exposed by the current frontend API yet. This pass keeps receipt defaults safe by clearly reusing the site information you enter here.
             </div>
           </form>
         </div>

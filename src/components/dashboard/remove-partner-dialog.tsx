@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,9 +32,22 @@ export function RemovePartnerDialog({
   stakePercentage,
   remainingCount,
 }: RemovePartnerDialogProps) {
-  const { mutate: deletePartner, isPending } = useDeletePartner({
+  const { mutate: deletePartner, isPending, error, reset } = useDeletePartner({
     onSuccess: onConfirm,
   })
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset()
+    }
+  }, [isOpen, reset])
+
+  const errorMessage =
+    typeof error === "string"
+      ? error
+      : typeof error === "object" && error !== null && "error" in error && typeof error.error === "string"
+        ? error.error
+        : null
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
@@ -70,6 +84,14 @@ export function RemovePartnerDialog({
               </div>
             </div>
           </div>
+          {errorMessage && (
+            <div className="mt-4 border border-red-500/20 bg-red-500/10 p-4 text-[11px] text-red-600">
+              <p className="font-bold">{errorMessage}</p>
+              <p className="mt-1 text-red-600/80">
+                Partners with posted ledger history stay locked so audit records remain intact.
+              </p>
+            </div>
+          )}
         </div>
 
         <AlertDialogFooter className="p-8 pt-0 flex gap-4 sm:space-x-4">
@@ -79,6 +101,7 @@ export function RemovePartnerDialog({
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault()
+              reset()
               deletePartner(partnerId)
             }}
             disabled={isPending}

@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { RecordPaymentModal } from '@/components/dashboard/record-payment-modal';
 import { cn } from '@/lib/utils';
 import {
-  Loader2, Plus, Phone, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Eye, ArrowRight, X
+  Loader2, Plus, Phone, Pencil, Trash2, ArrowDownLeft, ArrowUpRight, Eye, ArrowRight, X, Search
 } from 'lucide-react';
 
 function formatINR(n: number) { return '₹' + n.toLocaleString('en-IN'); }
@@ -96,6 +96,15 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
             </div>
           )} />
 
+          <div className={cn(
+            'border p-4 text-[11px] leading-relaxed',
+            investorType === 'EQUITY' ? 'border-primary/20 bg-primary/5 text-muted-foreground' : 'border-amber-500/20 bg-amber-500/5 text-muted-foreground'
+          )}>
+            {investorType === 'EQUITY'
+              ? 'Equity investors are attached to a site. Create the investor here, then use Ledger & Actions later to add capital or returns without creating a duplicate record.'
+              : 'Fixed-rate investors stay at company level. Create the investor once, then use Ledger & Actions to add capital, return principal, or record interest payments.'}
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Full Name</Label>
             <Input placeholder="Investor name" className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground" {...register('name')} />
@@ -127,11 +136,27 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
           )}
 
           {investorType === 'FIXED_RATE' && (
-            <div className="flex flex-col gap-2">
-              <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Fixed Rate (% per annum)</Label>
-              <div className="relative">
-                <Input type="number" step="0.01" min={0} className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest pr-8 focus-visible:bg-card focus-visible:ring-primary/20" {...register('fixedRate', { valueAsNumber: true })} />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">%</span>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Fixed Rate (% per annum)</Label>
+                <div className="relative">
+                  <Input type="number" step="0.01" min={0} className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest pr-8 focus-visible:bg-card focus-visible:ring-primary/20" {...register('fixedRate', { valueAsNumber: true })} />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">%</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Interest Cadence</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" className="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700">
+                    Yearly
+                    <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">Backend default</span>
+                  </button>
+                  <button type="button" disabled className="border border-dashed border-border px-4 py-3 text-left text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                    Monthly
+                    <span className="mt-1 block text-[9px] normal-case tracking-normal">UI placeholder until backend support is available</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -167,6 +192,15 @@ function UpdateInvestorForm({ investor, onClose }: { investor: Investor; onClose
     <>
       <div className="flex-1 overflow-y-auto px-10 pb-10 flex flex-col gap-10">
         <form id="update-investor-form" onSubmit={handleSubmit((data) => update({ id: investor.id, data }))} className="flex flex-col gap-8 mt-4">
+          <div className={cn(
+            'border p-4 text-[11px] leading-relaxed text-muted-foreground',
+            investor.type === 'EQUITY' ? 'border-primary/20 bg-primary/5' : 'border-amber-500/20 bg-amber-500/5'
+          )}>
+            {investor.type === 'EQUITY'
+              ? 'This investor stays attached to their current site. Use Ledger & Actions to add more capital or record returns.'
+              : 'Fixed-rate ledger actions remain available from Ledger & Actions. The cadence selector below is still informational only.'}
+          </div>
+
           <div className="flex flex-col gap-2">
             <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Full Name</Label>
             <Input placeholder="Enter investor name" className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground" {...register('name')} />
@@ -189,11 +223,27 @@ function UpdateInvestorForm({ investor, onClose }: { investor: Investor; onClose
           )}
 
           {investor.type === 'FIXED_RATE' && (
-            <div className="flex flex-col gap-2">
-              <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Fixed Rate</Label>
-              <div className="relative">
-                <Input type="number" step="0.01" min={0} placeholder="0" className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest pr-8 placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground" {...register('fixedRate', { valueAsNumber: true })} />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">%</span>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Fixed Rate</Label>
+                <div className="relative">
+                  <Input type="number" step="0.01" min={0} placeholder="0" className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest pr-8 placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground" {...register('fixedRate', { valueAsNumber: true })} />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-bold">%</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Interest Cadence</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" className="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700">
+                    Yearly
+                    <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">Backend default</span>
+                  </button>
+                  <button type="button" disabled className="border border-dashed border-border px-4 py-3 text-left text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                    Monthly
+                    <span className="mt-1 block text-[9px] normal-case tracking-normal">Coming later with backend support</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -253,14 +303,17 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background border border-border max-w-lg w-full max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+      <div className="flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-200">
         {/* Header */}
         <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start">
           <div>
-            <h3 className="text-xl font-serif text-foreground">Transaction History: {investor.name}</h3>
+            <h3 className="text-2xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
             <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">
               {investor.type === 'EQUITY' ? `Equity · ${investor.siteName}` : `Fixed Rate · ${investor.fixedRate}% p.a.`}
+            </p>
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+              Add capital, principal returns, or interest from here. Follow-up payments stay inside each ledger row, so you only enter the new amount instead of re-entering the full transaction value.
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -273,7 +326,8 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
           ) : transactions.length === 0 ? (
             <p className="text-sm text-muted-foreground italic text-center py-8">No transactions yet.</p>
           ) : (
-            <div className="border border-border divide-y divide-border">
+            <div className="overflow-x-auto border border-border">
+              <div className="min-w-[760px] divide-y divide-border">
               <div className="grid grid-cols-6 gap-4 px-4 py-3 bg-muted/30">
                 <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</span>
                 <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Kind</span>
@@ -310,15 +364,27 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
                   <span className="text-xs text-muted-foreground truncate font-medium">{t.note || '—'}</span>
                 </div>
               ))}
+              </div>
             </div>
           )}
 
           {/* Add Transaction Form */}
           {addMode && (
             <form onSubmit={handleSubmit(onSubmit)} className="mt-4 border border-border p-4 flex flex-col gap-3">
-              <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
-                {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? 'Interest Payment' : 'Return Principal'}
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
+                  {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? 'Interest Payment' : 'Return Principal'}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
+                  className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase"
+                >
+                  Back
+                </Button>
+              </div>
 
               {apiError && (
                 <div className="bg-red-500/10 border border-red-500/20 p-3 text-[10px] font-bold text-red-500">
@@ -389,7 +455,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-4 border-t border-border flex items-center justify-between">
+        <div className="px-8 py-4 border-t border-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1">Total Invested</p>
@@ -417,29 +483,35 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-3 lg:items-end">
+            {!addMode && !investor.isClosed && (
+              <p className="max-w-md text-[10px] leading-relaxed text-muted-foreground">
+                Use Add Capital for new investor money, Return Principal after paying capital back, and Record Interest only for fixed-rate payouts.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
             {!addMode && !investor.isClosed && (
               <>
                 <Button size="sm" onClick={() => setAddMode('invest')}
                   className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"
                 >
-                  <ArrowDownLeft className="w-3 h-3" /> Invest
+                  <ArrowDownLeft className="w-3 h-3" /> Add Capital
                 </Button>
                 {investor.type === 'FIXED_RATE' && (
                   <Button size="sm" variant="outline" onClick={() => setAddMode('interest')}
                     className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5"
                   >
-                    <ArrowUpRight className="w-3 h-3" /> Interest
+                    <ArrowUpRight className="w-3 h-3" /> Record Interest
                   </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={() => setAddMode('return')}
                   className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
                 >
-                  <ArrowUpRight className="w-3 h-3" /> {investor.type === 'FIXED_RATE' ? 'Close Account' : 'Return'}
+                  <ArrowUpRight className="w-3 h-3" /> {investor.type === 'FIXED_RATE' ? 'Return Principal / Close' : 'Return Capital'}
                 </Button>
               </>
             )}
-            
+            </div>
           </div>
         </div>
       </div>
@@ -487,8 +559,10 @@ function DeleteConfirm({ investor, onClose }: { investor: Investor; onClose: () 
 
 // ── Main Page ───────────────────────────────────────
 export default function InvestorsPage() {
+  const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
-  const { data, isLoading } = useInvestors(typeFilter);
+  const activeSearchQuery = searchQuery.trim() || undefined;
+  const { data, isLoading } = useInvestors(typeFilter, activeSearchQuery);
   const [addOpen, setAddOpen] = useState(false);
   const [editInvestor, setEditInvestor] = useState<Investor | null>(null);
   const [deleteInvestor, setDeleteInvestor] = useState<Investor | null>(null);
@@ -522,16 +596,37 @@ export default function InvestorsPage() {
       <div className="space-y-8 animate-in fade-in duration-700">
 
         {/* Header */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Investors</h1>
             <p className="mt-2 text-base text-muted-foreground italic">
               Manage equity and fixed-rate investors across your company.
             </p>
           </div>
-          <Button onClick={() => setAddOpen(true)} className="h-11 text-xs font-bold tracking-widest uppercase gap-2 px-8">
-            <Plus className="w-4 h-4" /> Add Investor
-          </Button>
+          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative flex-1 lg:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by investor, phone, or site"
+                className="h-11 rounded-full border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-slate-700"
+                  aria-label="Clear investor search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button onClick={() => setAddOpen(true)} className="h-11 text-xs font-bold tracking-widest uppercase gap-2 px-8">
+              <Plus className="w-4 h-4" /> Add Investor
+            </Button>
+          </div>
         </div>
 
         {/* Type Tabs */}
@@ -634,10 +729,10 @@ export default function InvestorsPage() {
 
                 {/* Actions */}
                 <div className="col-span-3 flex justify-end gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setTxInvestor(inv)}
-                    className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary hover:text-primary"
+                  <Button variant="outline" size="sm" onClick={() => setTxInvestor(inv)}
+                    className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary border-primary/30 hover:text-primary hover:bg-primary/5"
                   >
-                    <Eye className="w-3 h-3" /> Transactions
+                    <Eye className="w-3 h-3" /> Ledger & Actions
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => setEditInvestor(inv)}
                     className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"

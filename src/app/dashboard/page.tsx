@@ -239,7 +239,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="flex flex-col divide-y divide-border">
                   {sites.slice(0, 6).map((site: any) => (
-                    <Link key={site.id} href={`/sites/${site.slug}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
+                    <Link key={site.id} href={`/sites/${site.id}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
                       <div className="w-8 h-8 flex items-center justify-center bg-primary/10 shrink-0">
                         <Building2 className="w-3.5 h-3.5 text-primary" />
                       </div>

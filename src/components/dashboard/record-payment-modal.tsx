@@ -51,7 +51,7 @@ export function RecordPaymentModal({
   onClose, 
   isPending 
 }: RecordPaymentModalProps) {
-  const remaining = totalAmount - currentlyPaid
+  const remaining = Math.max(totalAmount - currentlyPaid, 0)
   const [paymentAmount, setPaymentAmount] = useState(remaining)
   const [note, setNote] = useState("")
   const [history, setHistory] = useState<PaymentRecord[]>([])
@@ -104,14 +104,14 @@ export function RecordPaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="absolute inset-0" onClick={onClose} />
       <div className={cn(
-        "relative bg-background border border-border w-full transition-all duration-300 shadow-2xl flex flex-col md:flex-row",
-        showHistory ? "max-w-4xl" : "max-w-md"
+        "relative flex h-[min(100dvh,92rem)] w-full flex-col overflow-hidden border border-border bg-background shadow-2xl transition-all duration-300 sm:max-h-[90vh] sm:rounded-none md:flex-row",
+        showHistory ? "max-w-5xl" : "max-w-xl"
       )}>
         {/* Main Content */}
-        <div className="flex-1 overflow-y-auto max-h-[90vh]">
+        <div className="flex-1 overflow-y-auto">
           {/* Header */}
           <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start">
             <div>
@@ -137,6 +137,12 @@ export function RecordPaymentModal({
                 {formatINR(remaining)}
               </p>
             </div>
+          </div>
+
+          <div className="px-8 py-4 border-b border-border bg-background">
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              Enter only the <strong className="text-foreground">new payment received now</strong>. The total value for this record is already loaded above, so you do not need to enter it again.
+            </p>
           </div>
 
           {/* Form */}
@@ -181,7 +187,7 @@ export function RecordPaymentModal({
                 className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary hover:opacity-80 transition-all"
               >
                 <History className="w-4 h-4" />
-                {showHistory ? "Hide History" : `View Ledger (${history.length})`}
+                {showHistory ? "Hide Ledger" : `View Ledger (${history.length})`}
               </button>
               <div className="flex gap-2">
                 <button type="button" onClick={onClose} className="text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-all px-4 py-2">
@@ -201,7 +207,7 @@ export function RecordPaymentModal({
 
         {/* Side Ledger (History) */}
         {showHistory && (
-          <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-border bg-muted/30 flex flex-col max-h-[90vh]">
+          <div className="w-full border-t border-border bg-muted/30 md:w-96 md:border-l md:border-t-0 flex flex-col">
             <div className="p-6 border-b border-border bg-background">
               <h4 className="text-[10px] font-bold tracking-[0.3em] uppercase text-foreground">Payment History</h4>
               <p className="text-[9px] text-muted-foreground mt-1 font-bold italic">Audit trail of all previous installments</p>

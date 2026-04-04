@@ -62,8 +62,12 @@ export const useUpdateVendor = (options?: { onSuccess?: () => void }) => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateVendorInput }) =>
       vendorService.updateVendor(id, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['vendorTransactions', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['vendorPayments', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['vendorStatement', variables.id] });
       options?.onSuccess?.();
     },
   });
@@ -73,8 +77,12 @@ export const useDeleteVendor = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => vendorService.deleteVendor(id),
-    onSuccess: () => {
+    onSuccess: (_, vendorId) => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.removeQueries({ queryKey: ['vendor', vendorId] });
+      queryClient.removeQueries({ queryKey: ['vendorTransactions', vendorId] });
+      queryClient.removeQueries({ queryKey: ['vendorPayments', vendorId] });
+      queryClient.removeQueries({ queryKey: ['vendorStatement', vendorId] });
       options?.onSuccess?.();
     },
   });
