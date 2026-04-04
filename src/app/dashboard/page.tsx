@@ -77,8 +77,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: userData, isLoading: isUserLoading, isError: isUserError } = useMe();
   const { data: companyData, isLoading: isCompanyLoading, error: companyError } = useCompany();
-  const { data: activityData, fetchNextPage, hasNextPage, isFetchingNextPage } = useActivity();
-  const { data: sitesData } = useSites();
+  const { data: activityData, fetchNextPage, hasNextPage, isFetchingNextPage } = useActivity({ 
+    enabled: !!companyData?.data?.company 
+  });
+  const { data: sitesData } = useSites({ 
+    enabled: !!companyData?.data?.company 
+  });
 
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const handleActivityScroll = useCallback(() => {
@@ -96,7 +100,8 @@ export default function DashboardPage() {
   }, [isUserError, router]);
 
   useEffect(() => {
-    if (companyError && (companyError as any).message?.includes('No company found')) {
+    const err = companyError as any;
+    if (err && (err.error?.includes('No company found') || err.status === 404)) {
       router.push('/setup-company');
     }
   }, [companyError, router]);

@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/services/site.service';
 import { CreateSiteInput, BookFlatInput, CreateExpenseInput, CreateFloorInput, CreateFlatInput } from '@/schemas/site.schema';
 
-export const useSites = (showArchived?: 'true' | 'only') => {
+export const useSites = (options?: { showArchived?: 'true' | 'only'; enabled?: boolean } | 'true' | 'only') => {
+  const showArchived = typeof options === 'string' ? options : options?.showArchived;
+  const enabled = typeof options === 'object' ? options?.enabled : true;
+
   return useQuery({
     queryKey: ['sites', showArchived ?? 'active'],
     queryFn: () => siteService.getSites(showArchived),
     retry: false,
+    enabled: enabled,
   });
 };
 

@@ -86,12 +86,13 @@ export const useDeletePartner = (options?: { onSuccess?: () => void }) => {
   });
 };
 
-export const useActivity = () => {
+export const useActivity = (options?: { enabled?: boolean }) => {
   return useInfiniteQuery({
     queryKey: ['activity'],
     queryFn: ({ pageParam }: { pageParam: string | undefined }) => companyService.getActivity(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage: any) => lastPage?.data?.nextCursor ?? undefined,
+    ...options,
   });
 };
 

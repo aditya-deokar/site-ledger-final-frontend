@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/services/auth.service';
-import { LoginInput, SignUpInput, ForgotPasswordInput, ResetPasswordInput } from '@/schemas/auth.schema';
-import { forgotPassword, resetPassword } from '@/services/auth.api';
+import { LoginInput, SignUpInput, ForgotPasswordInput, ResetPasswordInput, VerifySignUpInput } from '@/schemas/auth.schema';
+import { forgotPassword, resetPassword, verifyResetCode } from '@/services/auth.api';
 import { useRouter } from 'next/navigation';
 
 export const useSignIn = () => {
@@ -20,14 +20,22 @@ export const useSignIn = () => {
 };
 
 export const useSignUp = () => {
-  const router = useRouter();
-
   return useMutation({
     mutationFn: (data: SignUpInput) => authService.signUp(data),
+  });
+};
+
+export const useVerifySignUp = () => {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: VerifySignUpInput) => authService.verifySignUp(data),
     onSuccess: (response) => {
       localStorage.setItem('accessToken', response.data.accessToken);
       localStorage.setItem('refreshToken', response.data.refreshToken);
-      router.push('/setup-company');
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      router.push('/');
     },
   });
 };
@@ -44,6 +52,12 @@ export const useMe = () => {
 export const useForgotPassword = () => {
   return useMutation({
     mutationFn: (data: ForgotPasswordInput) => forgotPassword(data),
+  });
+};
+
+export const useVerifyResetCode = () => {
+  return useMutation({
+    mutationFn: (data: { email: string; code: string }) => verifyResetCode(data),
   });
 };
 
