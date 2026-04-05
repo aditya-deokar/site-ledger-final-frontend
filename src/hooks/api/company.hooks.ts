@@ -41,6 +41,7 @@ export const useAddPartner = (options?: { onSuccess?: () => void }) => {
     mutationFn: (data: PartnerInput) => companyService.addPartner(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -53,6 +54,7 @@ export const useUpdatePartner = (options?: { onSuccess?: () => void }) => {
       companyService.updatePartner(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -66,6 +68,7 @@ export const useBatchUpdatePartners = (options?: { onSuccess?: () => void }) => 
       Promise.all(partners.map(({ id, data }) => companyService.updatePartner(id, data))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -77,17 +80,19 @@ export const useDeletePartner = (options?: { onSuccess?: () => void }) => {
     mutationFn: (id: string) => companyService.deletePartner(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
 };
 
-export const useActivity = () => {
+export const useActivity = (options?: { enabled?: boolean }) => {
   return useInfiniteQuery({
     queryKey: ['activity'],
     queryFn: ({ pageParam }: { pageParam: string | undefined }) => companyService.getActivity(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage: any) => lastPage?.data?.nextCursor ?? undefined,
+    ...options,
   });
 };
 

@@ -137,7 +137,11 @@ export function CustomerProfile({
 
   const paymentHistory = (paymentHistoryData?.data?.payments ?? []) as CustomerPaymentHistoryItem[]
 
-  const pct = customer.sellingPrice > 0 ? Math.min(100, (customer.amountPaid / customer.sellingPrice) * 100) : 0
+  const pct = customer.sellingPrice > 0
+    ? Math.min(100, (customer.amountPaid / customer.sellingPrice) * 100)
+    : customer.remaining <= 0
+      ? 100
+      : 0
   const isSold = customer.flatStatus === "SOLD"
 
   const flatDisplayName = customer.customFlatId || `Flat ${customer.flatNumber}`
@@ -259,6 +263,9 @@ export function CustomerProfile({
               <div className="h-2 bg-muted overflow-hidden">
                 <div className={cn("h-full transition-all", isSold ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
               </div>
+              <p className="mt-2 text-[10px] text-muted-foreground/60">
+                Follow-up collections only need the newly received amount. The agreement value above stays linked to this record.
+              </p>
             </div>
           </div>
 
@@ -282,7 +289,7 @@ export function CustomerProfile({
 
         {isReceiptModalOpen && (
           <ReceiptEditor
-            customer={customer}
+            customer={{ ...customer, siteName }}
             siteAddress={siteData?.data?.site?.address}
             payments={paymentHistory}
             onClose={() => setIsReceiptModalOpen(false)}
@@ -294,7 +301,7 @@ export function CustomerProfile({
           <div className="px-8 py-5 border-t border-border flex gap-2">
             {customer.remaining > 0 && (
               <Button onClick={() => setIsPaymentModalOpen(true)} className="flex-1 h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
-                <IndianRupee className="w-3.5 h-3.5" /> Record Payment
+                <IndianRupee className="w-3.5 h-3.5" /> Add Due Payment
               </Button>
             )}
             <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4">

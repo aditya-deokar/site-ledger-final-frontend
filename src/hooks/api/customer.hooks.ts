@@ -30,6 +30,7 @@ export const useUpdateCustomer = (options?: { onSuccess?: () => void }) => {
       queryClient.invalidateQueries({ queryKey: ['floors'] });
       queryClient.invalidateQueries({ queryKey: ['site'] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -40,13 +41,14 @@ export const useRecordCustomerPayment = (options?: { onSuccess?: () => void }) =
   return useMutation({
     mutationFn: ({ customerId, data }: { customerId: string; data: { amount: number; note?: string } }) =>
       customerService.recordPayment(customerId, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });
       queryClient.invalidateQueries({ queryKey: ['allCustomers'] });
-      queryClient.invalidateQueries({ queryKey: ['customerPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['customerPayments', variables.customerId] });
       queryClient.invalidateQueries({ queryKey: ['floors'] });
       queryClient.invalidateQueries({ queryKey: ['site'] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });
@@ -65,12 +67,14 @@ export const useCancelBooking = (options?: { onSuccess?: () => void }) => {
   return useMutation({
     mutationFn: ({ siteId, flatId, customerId }: { siteId: string; flatId: string; customerId: string }) =>
       customerService.cancelBooking(siteId, flatId, customerId),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });
       queryClient.invalidateQueries({ queryKey: ['allCustomers'] });
+      queryClient.removeQueries({ queryKey: ['customerPayments', variables.customerId] });
       queryClient.invalidateQueries({ queryKey: ['floors'] });
       queryClient.invalidateQueries({ queryKey: ['site'] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
   });

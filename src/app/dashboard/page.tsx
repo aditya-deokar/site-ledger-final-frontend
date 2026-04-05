@@ -77,8 +77,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: userData, isLoading: isUserLoading, isError: isUserError } = useMe();
   const { data: companyData, isLoading: isCompanyLoading, error: companyError } = useCompany();
-  const { data: activityData, fetchNextPage, hasNextPage, isFetchingNextPage } = useActivity();
-  const { data: sitesData } = useSites();
+  const { data: activityData, fetchNextPage, hasNextPage, isFetchingNextPage } = useActivity({ 
+    enabled: !!companyData?.data?.company 
+  });
+  const { data: sitesData } = useSites({ 
+    enabled: !!companyData?.data?.company 
+  });
 
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const handleActivityScroll = useCallback(() => {
@@ -96,7 +100,8 @@ export default function DashboardPage() {
   }, [isUserError, router]);
 
   useEffect(() => {
-    if (companyError && (companyError as any).message?.includes('No company found')) {
+    const err = companyError as any;
+    if (err && (err.error?.includes('No company found') || err.status === 404)) {
       router.push('/setup-company');
     }
   }, [companyError, router]);
@@ -239,7 +244,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="flex flex-col divide-y divide-border">
                   {sites.slice(0, 6).map((site: any) => (
-                    <Link key={site.id} href={`/sites/${site.slug}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
+                    <Link key={site.id} href={`/sites/${site.id}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
                       <div className="w-8 h-8 flex items-center justify-center bg-primary/10 shrink-0">
                         <Building2 className="w-3.5 h-3.5 text-primary" />
                       </div>

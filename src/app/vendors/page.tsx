@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import {
-  Loader2, Plus, Phone, Mail, Pencil, Trash2, Users, ArrowRight, X
+  Loader2, Plus, Phone, Mail, Pencil, Trash2, Users, ArrowRight, X, Search, BookOpen
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -40,7 +40,20 @@ function VendorsListSkeleton() {
   );
 }
 
-const TYPE_BADGE_CLASS = 'bg-muted text-muted-foreground border-border';
+const MATERIAL_SUPPLIER_LABEL = 'Material Supplier';
+
+const normalizeVendorType = (type: string) => {
+  const normalizedType = type.trim();
+  const normalizedKey = normalizedType.toLowerCase().replace(/\s+/g, ' ');
+
+  if (normalizedKey === 'material supplier' || normalizedKey === 'material suppliers') {
+    return MATERIAL_SUPPLIER_LABEL;
+  }
+
+  return normalizedType;
+};
+
+const getVendorDisplayId = (vendorId: string) => vendorId.slice(-8).toUpperCase();
 
 // ── Vendor Form (shared by add & edit) ──────────────
 function VendorForm({
@@ -112,38 +125,6 @@ function VendorForm({
   );
 }
 
-// ── Side Panel ──────────────────────────────────────
-function SidePanel({
-  title,
-  subtitle,
-  onClose,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="flex-1 bg-black/20" onClick={onClose} />
-      <div className="w-full max-w-md bg-background border-l border-border flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300 overflow-y-auto">
-        <div className="px-8 pt-8 pb-5 border-b border-border">
-          {subtitle && (
-            <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-2">{subtitle}</p>
-          )}
-          <div className="flex items-start justify-between">
-            <h2 className="text-3xl font-serif tracking-tight text-foreground">{title}</h2>
-            <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-        <div className="px-8 py-6 flex-1">{children}</div>
-      </div>
-    </div>
-  );
-}
 
 // ── Delete Confirm ─────────────────────────────────
 function DeleteConfirm({
@@ -186,9 +167,9 @@ function DeleteConfirm({
 
 
 export default function VendorsPage() {
+  const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
-  const { data, isLoading } = useVendors(typeFilter);
-  const { data: allVendorsData } = useVendors();
+  const { data, isLoading } = useVendors();
   const [addOpen, setAddOpen] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
@@ -204,12 +185,15 @@ export default function VendorsPage() {
   const { mutate: create, isPending: creating } = useCreateVendor({ onSuccess: handleCloseAdd });
   const { mutate: update, isPending: updating } = useUpdateVendor({ onSuccess: handleCloseEdit });
 
-  const vendors = useMemo(() => data?.data?.vendors ?? [], [data]);
-  const allVendors = useMemo(() => allVendorsData?.data?.vendors ?? vendors, [allVendorsData, vendors]);
+  const allVendors = useMemo(() => data?.data?.vendors ?? [], [data]);
 
   const tabs = useMemo(() => {
     const uniqueTypes = Array.from(
-      new Set(allVendors.map((vendor) => vendor.type).filter((type) => type.trim().length > 0))
+      new Set(
+        allVendors
+          .map((vendor) => normalizeVendorType(vendor.type))
+          .filter((type) => type.length > 0)
+      )
     ).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 
     return [
@@ -218,37 +202,88 @@ export default function VendorsPage() {
     ];
   }, [allVendors]);
 
+  const vendors = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+    return allVendors.filter((vendor) => {
+      const matchesType = !typeFilter || normalizeVendorType(vendor.type) === typeFilter;
+
+      if (!matchesType) {
+        return false;
+      }
+
+      if (!normalizedSearchQuery) {
+        return true;
+      }
+
+      const displayId = getVendorDisplayId(vendor.id).toLowerCase();
+
+      return (
+        vendor.name.toLowerCase().includes(normalizedSearchQuery) ||
+        vendor.id.toLowerCase().includes(normalizedSearchQuery) ||
+        displayId.includes(normalizedSearchQuery)
+      );
+    });
+  }, [allVendors, searchQuery, typeFilter]);
+
+  const hasActiveFilters = Boolean(typeFilter || searchQuery.trim());
+  const selectedVendor = useMemo(
+    () => allVendors.find((vendor) => vendor.id === profileVendorId) ?? null,
+    [allVendors, profileVendorId]
+  );
+
   return (
     <DashboardShell>
       <div className="space-y-8 animate-in fade-in duration-700">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Vendors</h1>
             <p className="mt-2 text-base text-muted-foreground italic">
               Manage your company-wide vendor registry.
             </p>
           </div>
-          <Button
-            onClick={handleOpenAdd}
-            className="h-11 text-xs font-bold tracking-widest uppercase gap-2 px-8 flex-1 sm:flex-initial"
-          >
-            <Plus className="w-4 h-4" /> Add Vendor
-          </Button>
+          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+            <div className="relative flex-1 lg:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by vendor name or ID"
+                className="h-11 rounded-full border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-slate-700"
+                  aria-label="Clear vendor search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button
+              onClick={handleOpenAdd}
+              className="h-11 rounded-full px-5 text-sm font-semibold gap-2 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" /> Add Vendor
+            </Button>
+          </div>
         </div>
 
         {/* Type Tabs */}
-        <div className="flex gap-1 border-b border-border overflow-x-auto pb-px scrollbar-hide">
+        <div className="flex flex-wrap gap-2">
           {tabs.map((t) => (
             <button
               key={t.key ?? 'all'}
               onClick={() => handleSetType(t.key)}
               className={cn(
-                'px-5 py-3 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap',
+                'rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap',
                 typeFilter === t.key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'bg-cyan-600 text-white'
+                  : 'text-gray-500 hover:bg-slate-100 hover:text-slate-900'
               )}
             >
               {t.label}
@@ -269,9 +304,9 @@ export default function VendorsPage() {
           <>
             {/* Vendor Count */}
             <div className="flex items-center gap-4">
-              <Users className="w-5 h-5 text-muted-foreground/40" />
-              <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                Vendors Total
+              <Users className="w-5 h-5 text-slate-400" />
+              <span className="text-sm font-medium text-slate-500">
+                {hasActiveFilters ? 'Vendors found' : 'Vendors total'}
               </span>
               <span className="text-2xl sm:text-3xl font-sans font-bold text-foreground">{vendors.length}</span>
             </div>
@@ -279,83 +314,88 @@ export default function VendorsPage() {
             {/* Vendor List */}
             {vendors.length === 0 ? (
               <div className="border border-dashed border-border flex items-center justify-center py-20">
-                <p className="text-sm text-muted-foreground italic">No vendors found.</p>
+                <p className="text-sm text-muted-foreground italic">
+                  {hasActiveFilters ? 'No vendors match your current filters.' : 'No vendors found.'}
+                </p>
               </div>
             ) : (
-          <div className="border border-border divide-y divide-border overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-border divide-y divide-border text-left">
             {/* Table Header (Desktop) */}
-            <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
-              <div className="col-span-4 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Vendor</div>
-              <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Type</div>
-              <div className="col-span-4 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Contact Details</div>
-              <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Actions</div>
+            <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-slate-50/80 text-left">
+              <div className="col-span-4 text-sm font-semibold text-gray-500">Vendor</div>
+              <div className="col-span-2 text-sm font-semibold text-gray-500">Type</div>
+              <div className="col-span-3 text-sm font-semibold text-gray-500">Contact details</div>
+              <div className="col-span-3 text-sm font-semibold text-gray-500">Actions</div>
             </div>
 
             {/* Rows */}
             {vendors.map((vendor) => (
               <div
                 key={vendor.id}
-                className="grid grid-cols-1 lg:grid-cols-12 gap-4 px-4 sm:px-6 py-4 hover:bg-muted/20 transition-colors items-center group"
+                className="grid grid-cols-1 gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/20 sm:px-6 lg:grid-cols-12 lg:items-center"
               >
                 {/* Name */}
-                <div className="lg:col-span-4 flex flex-col gap-1.5">
-                  <button onClick={() => setProfileVendorId(vendor.id)} className="font-serif text-base tracking-tight text-primary hover:underline text-left truncate">{vendor.name}</button>
-                  <p className="text-[10px] font-bold tracking-widest text-muted-foreground/40 mt-0.5">
-                    ID: {vendor.id.slice(-8).toUpperCase()}
+                <div className="lg:col-span-4 flex flex-col items-start gap-1">
+                  <button
+                    onClick={() => setProfileVendorId(vendor.id)}
+                    className="truncate text-left font-serif text-base tracking-tight text-primary hover:underline"
+                  >
+                    {vendor.name}
+                  </button>
+                  <p className="text-xs text-gray-400">
+                    {getVendorDisplayId(vendor.id)}
                   </p>
                 </div>
 
                 {/* Type Badge */}
                 <div className="lg:col-span-2">
-                  <span className={cn(
-                    'inline-block px-3 py-1.5 text-[11px] font-bold tracking-widest border whitespace-nowrap',
-                    TYPE_BADGE_CLASS
-                  )}>
-                    {vendor.type}
+                  <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-sm text-slate-700">
+                    {normalizeVendorType(vendor.type)}
                   </span>
                 </div>
 
                 {/* Contact */}
-                <div className="lg:col-span-4 flex flex-col gap-1 text-[11px] text-muted-foreground font-medium">
+                <div className="lg:col-span-3 flex flex-col items-start gap-2 text-sm text-slate-600">
                   {vendor.phone && (
                     <span className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-muted-foreground/30" />
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
                       {vendor.phone}
                     </span>
                   )}
                   {vendor.email && (
                     <span className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-muted-foreground/30" />
+                      <Mail className="w-3.5 h-3.5 text-slate-400" />
                       <span className="truncate">{vendor.email}</span>
                     </span>
                   )}
                   {!vendor.phone && !vendor.email && (
-                    <span className="text-muted-foreground/30 italic">No contact info</span>
+                    <span className="italic text-slate-400">No contact info</span>
                   )}
                 </div>
 
                 {/* Actions */}
-                <div className="lg:col-span-2 flex justify-end gap-1 pt-3 lg:pt-0 border-t lg:border-none border-border/50 items-center">
+                <div className="lg:col-span-3 flex flex-wrap items-center justify-start gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary hover:text-primary mr-1"
+                    className="h-9 rounded-md px-3 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     onClick={() => setProfileVendorId(vendor.id)}
                   >
+                    <BookOpen className="w-3.5 h-3.5" />
                     Ledger
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                    size="icon-sm"
+                    className="h-9 w-9 rounded-md text-slate-500 hover:bg-slate-100 hover:text-primary"
                     onClick={() => handleEdit(vendor)}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                    size="icon-sm"
+                    className="h-9 w-9 rounded-md text-slate-500 hover:bg-slate-100 hover:text-destructive"
                     onClick={() => handleDelete(vendor)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -414,7 +454,11 @@ export default function VendorsPage() {
 
       {/* Vendor Transactions */}
       {profileVendorId && (
-        <VendorProfile vendorId={profileVendorId} vendorName={vendors.find(v => v.id === profileVendorId)?.name} onClose={() => setProfileVendorId(null)} />
+        <VendorProfile
+          vendorId={profileVendorId}
+          vendorName={selectedVendor?.name}
+          onClose={() => setProfileVendorId(null)}
+        />
       )}
     </DashboardShell>
   );

@@ -69,8 +69,13 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-background border border-border max-w-lg w-full max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
-        <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start">
-          <h3 className="text-xl font-serif text-foreground">Transaction History: {investor.name}</h3>
+        <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start gap-4">
+          <div>
+            <h3 className="text-xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Add capital for new money coming in, and use Return Capital only when principal is being paid back.
+            </p>
+          </div>
           <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-8 py-4">
@@ -130,7 +135,12 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               if (mode === "invest") addTx({ investorId: investor.id, data: payload }, { onError })
               else retTx({ investorId: investor.id, data: payload }, { onError })
             })} className="mt-4 border border-border p-4 flex flex-col gap-3">
-              <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Return Investment"}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Return Investment"}</p>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset() }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
+                  Back
+                </Button>
+              </div>
 
               {apiError && (
                 <div className="bg-red-500/10 border border-red-500/20 p-3 text-[10px] font-bold text-red-500">
@@ -150,22 +160,33 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Transaction Amount</Label>
+                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">
+                    {mode === "invest" ? "Capital Amount" : "Principal to Return"}
+                  </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                    <Input type="number" min={0} placeholder="Total" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register("amount", { valueAsNumber: true })} />
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder={mode === "invest" ? "Capital amount" : "Return amount"}
+                      className="h-10 pl-8 bg-muted border-none rounded-none text-sm"
+                      {...register("amount", { valueAsNumber: true })}
+                    />
                   </div>
                   {errors.amount && <p className="text-[10px] text-destructive mt-1">{errors.amount.message}</p>}
                 </div>
                 <div>
-                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Initial Payment</Label>
+                  <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Paid Now (Optional)</Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                    <Input type="number" min={0} placeholder="Paid" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register("amountPaid", { valueAsNumber: true })} />
+                    <Input type="number" min={0} placeholder="0" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register("amountPaid", { valueAsNumber: true })} />
                   </div>
                   {errors.amountPaid && <p className="text-[10px] text-destructive mt-1">{errors.amountPaid.message}</p>}
                 </div>
               </div>
+              <p className="text-[10px] text-muted-foreground">
+                Leave Paid Now at 0 if you only want to create the ledger entry and settle it later from the row status button.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">Initial Payment Date</Label>
@@ -178,7 +199,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               </div>
               <div className="flex gap-2">
                 <Button type="submit" disabled={adding || returning} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "return" ? "bg-red-500 hover:bg-red-600" : "")}>
-                  {(adding || returning) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Confirm" : "Confirm Return"}
+                  {(adding || returning) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Return Capital"}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset() }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
               </div>
@@ -204,17 +225,24 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col items-end gap-3">
             {!mode && !investor.isClosed && (
-              <>
-                <Button size="sm" onClick={() => handleSetMode("invest")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"><ArrowDownLeft className="w-3 h-3" /> Invest</Button>
-                <Button size="sm" variant="outline" onClick={() => handleSetMode("return")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"><ArrowUpRight className="w-3 h-3" /> Return</Button>
-              </>
+              <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
+                Use the status chip inside each row for follow-up payments later. You do not need to recreate the original transaction.
+              </p>
             )}
-            {!mode && investor.isClosed && (
-              <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 px-2">Account Closed</span>
-            )}
-            <Button size="sm" variant="outline" onClick={onClose} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Close</Button>
+            <div className="flex gap-2">
+              {!mode && !investor.isClosed && (
+                <>
+                  <Button size="sm" onClick={() => handleSetMode("invest")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"><ArrowDownLeft className="w-3 h-3" /> Add Capital</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleSetMode("return")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"><ArrowUpRight className="w-3 h-3" /> Return Capital</Button>
+                </>
+              )}
+              {!mode && investor.isClosed && (
+                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 px-2">Account Closed</span>
+              )}
+              <Button size="sm" variant="outline" onClick={onClose} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Close</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -263,6 +291,9 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
         <form onSubmit={handleSubmit((data) => create({ ...data, type: "EQUITY", siteId }))} className="px-8 py-6 flex flex-col gap-5 flex-1">
           <input type="hidden" {...register("type")} />
           <input type="hidden" {...register("siteId")} />
+          <div className="border border-primary/20 bg-primary/5 p-4 text-[11px] leading-relaxed text-muted-foreground">
+            This creates the investor profile for <strong className="text-foreground">{siteName}</strong>. Use Ledger & Actions later whenever you want to add remaining capital or record a return.
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Investor Full Name</Label>
             <Input placeholder="e.g. Satej Patil" className="h-11 bg-muted border-none rounded-none text-sm" {...register("name")} />
@@ -308,10 +339,13 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
     <>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-end justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1">Total Capital Committed</p>
             <p className="text-3xl font-serif text-foreground tracking-tight">{formatINR(totalInvested)}</p>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+              Create the investor once, then use Ledger & Actions to add more capital or record returns without opening another investor record.
+            </p>
           </div>
           <Button onClick={() => setAddOpen(true)} className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-6">
             <Plus className="w-4 h-4" /> Add Investor
@@ -358,9 +392,9 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
                   )}
                 </div>
                 <div className="col-span-3 text-right">
-                  <Button variant="ghost" size="sm" onClick={() => setTxInvestor(inv)}
-                    className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary hover:text-primary"
-                  >View Transactions</Button>
+                  <Button variant="outline" size="sm" onClick={() => setTxInvestor(inv)}
+                    className="h-8 text-[9px] font-bold tracking-widest uppercase gap-1 text-primary border-primary/30 hover:text-primary hover:bg-primary/5"
+                  >Ledger & Actions</Button>
                 </div>
               </div>
             ))}
