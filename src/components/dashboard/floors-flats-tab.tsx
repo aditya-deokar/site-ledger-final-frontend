@@ -228,6 +228,7 @@ function BookFlatPanel({
   onClose: () => void
 }) {
   const { mutate: bookFlat, isPending, error } = useBookFlat(siteId, { onSuccess: onClose })
+  const isExistingOwner = flat.flatType === 'EXISTING_OWNER'
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<BookFlatInput>({
     resolver: zodResolver(bookFlatSchema),
@@ -271,9 +272,14 @@ function BookFlatPanel({
               </div>
             )}
 
-            {flat.flatType === 'EXISTING_OWNER' && (
-              <div className="bg-violet-500/10 border border-violet-500/20 text-violet-700 px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase w-fit">
-                EXISTING OWNER
+            {isExistingOwner && (
+              <div className="border border-violet-500/20 bg-violet-500/5 p-4">
+                <div className="w-fit rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[10px] font-bold tracking-widest uppercase text-violet-700">
+                  EXISTING OWNER
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  Owner-acquisition entries can be saved with <strong className="text-foreground">zero selling price</strong>. If money is received later, add only the new amount from the owner profile.
+                </p>
               </div>
             )}
 
@@ -317,7 +323,9 @@ function BookFlatPanel({
               <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Payment Breakdown</p>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</Label>
+                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                  {isExistingOwner ? "Settlement Value" : "Selling Price"}
+                </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                   <Input
@@ -327,11 +335,18 @@ function BookFlatPanel({
                     {...register("sellingPrice", { valueAsNumber: true })}
                   />
                 </div>
+                <p className="text-[10px] text-muted-foreground/60">
+                  {isExistingOwner
+                    ? "Use 0 if this flat is only being transferred back to an existing owner."
+                    : "This becomes the total agreement value used for later payment tracking."}
+                </p>
                 {errors.sellingPrice && <p className="text-[10px] text-destructive">{errors.sellingPrice.message}</p>}
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Booking Amount</Label>
+                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                  {isExistingOwner ? "Amount Received Now" : "Booking Amount Received Now"}
+                </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                   <Input
@@ -341,6 +356,9 @@ function BookFlatPanel({
                     {...register("bookingAmount", { valueAsNumber: true })}
                   />
                 </div>
+                <p className="text-[10px] text-muted-foreground/60">
+                  Future payments can be added later from the profile. You will not need to enter the total amount again.
+                </p>
               </div>
 
               {/* Summary */}
@@ -370,11 +388,13 @@ function BookFlatPanel({
             >
               {isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <><BookOpen className="w-4 h-4" /> Book Flat</>
+                : <><BookOpen className="w-4 h-4" /> {isExistingOwner ? "Create Owner Entry" : "Book Flat"}</>
               }
             </Button>
             <p className="text-[9px] text-center text-muted-foreground/40 uppercase tracking-widest">
-              By proceeding, you generate a temporary booking receipt valid for 72 hours.
+              {isExistingOwner
+                ? "You can add later payments from the owner profile whenever funds are received."
+                : "By proceeding, you generate a temporary booking receipt valid for 72 hours."}
             </p>
           </div>
         </form>
@@ -413,7 +433,13 @@ function FlatCard({ flat, onBook, onCustomerClick }: { flat: Flat; onBook: (flat
   }
 
   const c = flat.customer
-  const pct = c && c.sellingPrice > 0 ? Math.min(100, (c.amountPaid / c.sellingPrice) * 100) : 0
+  const pct = c
+    ? c.sellingPrice > 0
+      ? Math.min(100, (c.amountPaid / c.sellingPrice) * 100)
+      : c.remaining <= 0
+        ? 100
+        : 0
+    : 0
 
   const isSold = flat.status === "SOLD"
 

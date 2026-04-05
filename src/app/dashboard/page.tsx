@@ -13,6 +13,9 @@ import { Loader2, TrendingUp, Wallet, Users, Landmark, ArrowUpRight, Building2, 
 import { cn } from '@/lib/utils';
 
 function formatINR(n: number) { return '₹' + Math.abs(n).toLocaleString('en-IN'); }
+function formatSignedINR(n: number) {
+  return `${n < 0 ? '-' : '+'}${formatINR(n)}`;
+}
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }).toUpperCase();
 }
@@ -239,7 +242,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="flex flex-col divide-y divide-border">
                   {sites.slice(0, 6).map((site: any) => (
-                    <Link key={site.id} href={`/sites/${site.slug}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
+                    <Link key={site.id} href={`/sites/${site.id}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-muted/30 -mx-2 px-2 transition-colors">
                       <div className="w-8 h-8 flex items-center justify-center bg-primary/10 shrink-0">
                         <Building2 className="w-3.5 h-3.5 text-primary" />
                       </div>
@@ -252,6 +255,15 @@ export default function DashboardPage() {
                       <div className="text-right shrink-0">
                         <p className="text-lg font-sans font-bold text-primary">{formatINR(site.remainingFund)}</p>
                         <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Site Balance</p>
+                        <p
+                          className={cn(
+                            'mt-2 text-sm font-sans font-bold',
+                            site.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-500'
+                          )}
+                        >
+                          {formatSignedINR(site.totalProfit)}
+                        </p>
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">Total Profit</p>
                       </div>
                     </Link>
                   ))}

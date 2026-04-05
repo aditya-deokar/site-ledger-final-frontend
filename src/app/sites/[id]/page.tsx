@@ -214,73 +214,74 @@ function PullFundDialog({ siteId, remainingFund, onClose }: { siteId: string; re
 }
 
 // ── Fund History Dialog ──────────────────────────────
-function FundHistoryDialog({ siteId, onClose }: { siteId: string; onClose: () => void }) {
+function FundHistoryPanel({ siteId }: { siteId: string }) {
   const { data, isLoading } = useFundHistory(siteId);
   const history = data?.data?.history || [];
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl rounded-none border-border p-0 gap-0">
-        <DialogHeader className="px-8 pt-8 pb-4 border-b border-border">
-          <DialogTitle className="text-2xl font-serif tracking-tight flex items-center gap-3">
-            <History className="w-6 h-6 text-primary" />
-            Site Fund Ledger
-          </DialogTitle>
-        </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
-          {isLoading ? (
-            <div className="p-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground/20" /></div>
-          ) : history.length === 0 ? (
-            <div className="p-20 text-center text-xs font-bold tracking-widest uppercase text-muted-foreground/30">No history found</div>
-          ) : (
-            <div className="flex flex-col">
-              {history.map((record: any, i: number) => {
-                const isAllocation = record.type === 'ALLOCATION';
-                return (
-                  <div key={record.id} className={cn(
-                    "px-8 py-5 flex items-start justify-between border-b border-border/50 hover:bg-muted/30 transition-colors",
-                    i === history.length - 1 && "border-b-0"
-                  )}>
-                    <div className="flex gap-4">
-                      <div className={cn(
-                        "w-10 h-10 shrink-0 flex items-center justify-center rounded-none",
-                        isAllocation ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
-                      )}>
-                        {isAllocation ? <Plus className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                          {new Date(record.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <span className="text-sm font-medium text-foreground">{record.note || (isAllocation ? 'Company to site transfer' : 'Site to company transfer')}</span>
-                      </div>
+    <div className="border border-border bg-background">
+      <div className="border-b border-border px-6 py-5 sm:px-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-3 text-2xl font-serif tracking-tight text-foreground">
+              <History className="w-6 h-6 text-primary" />
+              Site Fund Ledger
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Long-running allocation and withdrawal history lives here as a full page section instead of a cramped modal.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-h-[70vh] overflow-y-auto">
+        {isLoading ? (
+          <div className="p-20 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground/20" /></div>
+        ) : history.length === 0 ? (
+          <div className="p-20 text-center text-xs font-bold tracking-widest uppercase text-muted-foreground/30">No history found</div>
+        ) : (
+          <div className="flex flex-col">
+            {history.map((record: any, i: number) => {
+              const isAllocation = record.type === 'ALLOCATION';
+              return (
+                <div key={record.id} className={cn(
+                  "px-6 py-5 sm:px-8 flex flex-col gap-4 border-b border-border/50 hover:bg-muted/30 transition-colors md:flex-row md:items-start md:justify-between",
+                  i === history.length - 1 && "border-b-0"
+                )}>
+                  <div className="flex gap-4">
+                    <div className={cn(
+                      "w-10 h-10 shrink-0 flex items-center justify-center rounded-none",
+                      isAllocation ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
+                    )}>
+                      {isAllocation ? <Plus className="w-5 h-5" /> : <ArrowDownLeft className="w-5 h-5" />}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={cn(
-                        "text-lg font-sans font-bold",
-                        isAllocation ? "text-emerald-600" : "text-red-500"
-                      )}>
-                        {isAllocation ? '+' : '-'}{formatINR(record.amount)}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                        {new Date(record.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      {typeof record.runningBalance === 'number' && (
-                        <span className="text-[10px] text-muted-foreground/50">
-                          Balance {formatINR(record.runningBalance)}
-                        </span>
-                      )}
+                      <span className="text-sm font-medium text-foreground">{record.note || (isAllocation ? 'Company to site transfer' : 'Site to company transfer')}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className="px-8 py-6 border-t border-border flex justify-end bg-muted/20">
-          <Button variant="outline" onClick={onClose} className="rounded-none h-10 text-[10px] font-bold uppercase tracking-widest">
-            Close History
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+                  <div className="flex flex-col gap-1 md:items-end">
+                    <span className={cn(
+                      "text-lg font-sans font-bold",
+                      isAllocation ? "text-emerald-600" : "text-red-500"
+                    )}>
+                      {isAllocation ? '+' : '-'}{formatINR(record.amount)}
+                    </span>
+                    {typeof record.runningBalance === 'number' && (
+                      <span className="text-[10px] text-muted-foreground/50">
+                        Balance {formatINR(record.runningBalance)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 function FundDeploymentChart({ allocated, expenses }: { allocated: number; expenses: number }) {
@@ -402,13 +403,20 @@ function ExistingOwnersTab({ siteId }: { siteId: string }) {
 
 // ── Page ─────────────────────────────────────────────
 export default function SiteDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const { data, isLoading } = useSite(id);
+  const params = useParams<{ id?: string | string[] }>();
+  const siteId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const { data, isLoading, error } = useSite(siteId ?? '');
   const [addFundOpen, setAddFundOpen] = useState(false);
   const [pullFundOpen, setPullFundOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  type TabKey = 'overview' | 'expenses' | 'floors' | 'investors' | 'existingOwners';
+  type TabKey = 'overview' | 'ledger' | 'expenses' | 'floors' | 'investors' | 'existingOwners';
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+
+  const errorMessage =
+    typeof error === 'string'
+      ? error
+      : typeof error === 'object' && error !== null && 'error' in error && typeof error.error === 'string'
+        ? error.error
+        : 'We could not load this site right now.';
 
   if (isLoading) {
     return (
@@ -418,7 +426,24 @@ export default function SiteDetailPage() {
     );
   }
 
-  if (!data?.data?.site) return null;
+  if (!siteId || !data?.data?.site) {
+    return (
+      <DashboardShell>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 text-center">
+          <h1 className="text-3xl font-serif text-foreground">Site unavailable</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {siteId ? errorMessage : 'The site link is missing a valid site id.'}
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-flex h-10 items-center justify-center rounded-none border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      </DashboardShell>
+    );
+  }
   const site = data.data.site;
   const isRedevelopment = site.projectType === 'REDEVELOPMENT';
 
@@ -433,11 +458,12 @@ export default function SiteDetailPage() {
     { label: 'Total Allocated', value: site.allocatedFund },
     { label: 'Total Expenses', value: site.totalExpenses, red: true },
     { label: 'Remaining Fund', value: site.remainingFund, highlight: true },
-    { label: 'Total Profit', value: site.totalProfit ?? 0, green: true },
+    { label: 'Total Profit', value: Number.isFinite(site.totalProfit) ? site.totalProfit : null, green: true },
   ];
 
   const tabs = [
     { key: 'overview', label: 'Overview' },
+    { key: 'ledger', label: 'Site Ledger' },
     { key: 'expenses', label: 'Expenses' },
     { key: 'floors', label: 'Floors & Flats' },
     { key: 'investors', label: 'Investors' },
@@ -458,20 +484,32 @@ export default function SiteDetailPage() {
         {/* Page title + actions */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-10">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-foreground tracking-tight capitalize">{site.name}</h1>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => setPullFundOpen(true)}
-              className="flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2 text-red-500 border-red-500/30 hover:bg-red-500/5 hover:text-red-500"
-            >
-              <ArrowUpRight className="w-4 h-4" /> Pull Fund
-            </Button>
-            <Button
-              onClick={() => setAddFundOpen(true)}
-              className="flex-1 sm:flex-initial h-10 px-5 sm:px-6 text-[10px] font-bold tracking-widest uppercase gap-2"
-            >
-              <Plus className="w-4 h-4" /> Add Fund
-            </Button>
+          <div className="flex flex-col items-stretch gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                disabled
+                className="flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2"
+              >
+                Complete Site Report
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setPullFundOpen(true)}
+                className="flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2 text-red-500 border-red-500/30 hover:bg-red-500/5 hover:text-red-500"
+              >
+                <ArrowUpRight className="w-4 h-4" /> Pull Fund
+              </Button>
+              <Button
+                onClick={() => setAddFundOpen(true)}
+                className="flex-1 sm:flex-initial h-10 px-5 sm:px-6 text-[10px] font-bold tracking-widest uppercase gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add Fund
+              </Button>
+            </div>
+            <p className="text-[10px] text-right text-muted-foreground/60">
+              Complete site report is a UI placeholder until the backend report endpoint is available.
+            </p>
           </div>
         </div>
 
@@ -489,7 +527,7 @@ export default function SiteDetailPage() {
                 'text-xl sm:text-2xl font-sans font-bold tracking-tight truncate',
                 red ? 'text-red-500' : highlight ? 'text-primary' : green ? 'text-emerald-600' : 'text-foreground'
               )}>
-                {formatINR(value)}
+                {typeof value === 'number' ? formatINR(value) : 'Pending'}
               </span>
             </div>
           ))}
@@ -528,6 +566,9 @@ export default function SiteDetailPage() {
                 <div>
                   <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Project Address</p>
                   <p className="text-base text-muted-foreground leading-relaxed">{site.address}</p>
+                  <p className="mt-2 text-xs text-muted-foreground/70">
+                    This address is currently reused as the default site address for receipt preparation.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-muted p-5 flex flex-col gap-1.5">
@@ -593,15 +634,17 @@ export default function SiteDetailPage() {
               <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 self-start">Fund Deployment</p>
               <FundDeploymentChart allocated={site.allocatedFund} expenses={site.totalExpenses} />
               <button 
-                onClick={() => setHistoryOpen(true)}
+                onClick={() => setActiveTab('ledger')}
                 className="mt-4 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-primary hover:underline group"
               >
-                <History className="w-3.5 h-3.5 transition-transform group-hover:rotate-12" /> View History
+                <History className="w-3.5 h-3.5 transition-transform group-hover:rotate-12" /> Open Ledger
               </button>
             </div>
 
           </div>
         )}
+
+        {activeTab === 'ledger' && <FundHistoryPanel siteId={site.id} />}
 
         {activeTab === 'floors' && (
           <FloorsFlatsTab siteId={site.id} siteName={site.name} projectType={site.projectType} />
@@ -617,7 +660,6 @@ export default function SiteDetailPage() {
 
       {addFundOpen && <AddFundDialog siteId={site.id} onClose={() => setAddFundOpen(false)} />}
       {pullFundOpen && <PullFundDialog siteId={site.id} remainingFund={site.remainingFund} onClose={() => setPullFundOpen(false)} />}
-      {historyOpen && <FundHistoryDialog siteId={site.id} onClose={() => setHistoryOpen(false)} />}
     </DashboardShell>
   );
 }
