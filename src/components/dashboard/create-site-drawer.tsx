@@ -111,8 +111,31 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Floors</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 5"
+                  className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
+                  {...register('totalFloors', { valueAsNumber: true })}
+                />
+                {errors.totalFloors && <p className="text-[10px] text-destructive">{errors.totalFloors.message}</p>}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Units/Flats</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 20"
+                  className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
+                  {...register('totalFlats', { valueAsNumber: true })}
+                />
+                {errors.totalFlats && <p className="text-[10px] text-destructive">{errors.totalFlats.message}</p>}
+              </div>
+            </div>
+
             <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">
-              Site settings beyond name, address, and project type are not exposed by the current frontend API yet. This pass keeps receipt defaults safe by clearly reusing the site information you enter here.
+              Initial site setup includes core structural details like floor and unit counts. You can manage specific flat numbers and names later in the Site Structure tool.
             </div>
           </form>
         </div>

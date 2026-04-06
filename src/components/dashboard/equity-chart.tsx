@@ -59,17 +59,18 @@ export function EquityChart({ partners, onPartnersUpdate }: EquityChartProps) {
             </Pie>
             <Tooltip
               contentStyle={{
-                backgroundColor: "var(--background)",
-                border: "1px solid var(--border)",
+                backgroundColor: "var(--sidebar)",
+                border: "1px solid var(--sidebar-border)",
                 borderRadius: "0px",
                 fontSize: "10px",
                 fontWeight: "bold",
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
-                color: "var(--foreground)",
+                color: "var(--sidebar-foreground)",
               }}
-              itemStyle={{ color: "var(--foreground)" }}
-              formatter={(value: number) => [`${value}%`, ""]}
+              active
+              itemStyle={{ color: "var(--sidebar-foreground)" }}
+              formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name]}
             />
           </PieChart>
         </ResponsiveContainer>
