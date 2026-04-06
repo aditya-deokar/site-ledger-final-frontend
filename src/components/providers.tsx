@@ -6,13 +6,22 @@ import { useState } from 'react';
 
 import { Toaster } from '@/components/ui/sonner';
 
+const shouldRetryQuery = (failureCount: number, error: any) => {
+  if (error?.status === 401) {
+    return false;
+  }
+
+  return failureCount < 1;
+};
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
-        refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: shouldRetryQuery,
       },
     },
   }));

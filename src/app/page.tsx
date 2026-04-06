@@ -2,19 +2,25 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+
+import { useAuthBootstrap } from '@/hooks/use-auth-bootstrap';
 
 export default function RootPage() {
   const router = useRouter();
+  const { isLoading, isAuthenticated } = useAuthBootstrap();
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-
-      router.push('/login');
-    } else {
-      router.push('/dashboard');
+    if (isLoading) {
+      return;
     }
-  }, [router]);
 
-  return null;
+    router.replace(isAuthenticated ? '/dashboard' : '/login');
+  }, [isAuthenticated, isLoading, router]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
 }
