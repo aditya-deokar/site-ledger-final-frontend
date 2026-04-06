@@ -1,4 +1,5 @@
 import api from '@/lib/axios';
+import { clearStoredTokens } from '@/lib/auth-session';
 import { LoginInput, SignUpInput, AuthResponse, UserResponse, VerifySignUpInput } from '@/schemas/auth.schema';
 
 export const authService = {
@@ -24,9 +25,8 @@ export const authService = {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      window.location.href = '/login';
+      clearStoredTokens();
+      window.location.replace('/login');
     }
   },
 };
