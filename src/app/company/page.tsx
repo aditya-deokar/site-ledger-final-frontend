@@ -418,12 +418,6 @@ export default function CompanyPage() {
           </div>
         </div>
 
-        {withdrawalsLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : (
-          <WithdrawalLedger withdrawals={withdrawals} />
-        )}
-
         {/* Partners + Equity Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
@@ -431,7 +425,7 @@ export default function CompanyPage() {
           <div className="lg:col-span-2 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h2 className="text-3xl font-serif text-foreground tracking-tight">Partners</h2>
+                <h2 className="text-3xl font-serif text-foreground tracking-tight">Partners Withdrawal Ledger</h2>
                 <span className="px-2 py-0.5 bg-muted text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
                   {String(partners.length).padStart(2, '0')}
                 </span>
@@ -519,6 +513,12 @@ export default function CompanyPage() {
             <EquityChart partners={partners} onPartnersUpdate={handlePartnersUpdate} />
           </div>
         </div>
+
+        {withdrawalsLoading ? (
+          <Skeleton className="h-64 w-full" />
+        ) : (
+          <WithdrawalLedger withdrawals={withdrawals} />
+        )}
       </div>
 
       <AddPartnerDrawer open={addOpen} onOpenChange={setAddOpen} />

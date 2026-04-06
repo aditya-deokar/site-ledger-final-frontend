@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2 } from 'lucide-react';
+import { useAuthBootstrap } from '@/hooks/use-auth-bootstrap';
 
-export default function SetupCompanyPage() {
+function SetupCompanyForm() {
   const router = useRouter();
   const { data: companyData, isLoading: isCheckingCompany } = useCompany();
   const { mutate: createCompany, isPending, error } = useCreateCompany();
@@ -102,4 +103,34 @@ export default function SetupCompanyPage() {
       </Card>
     </div>
   );
+}
+
+export default function SetupCompanyPage() {
+  const router = useRouter();
+  const { isLoading, isAuthenticated } = useAuthBootstrap();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background gap-6">
+        <div className="relative">
+          <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-150 animate-pulse" />
+          <div className="relative z-10 w-16 h-16 bg-zinc-950 flex items-center justify-center border border-primary/20">
+            <Building2 className="h-8 w-8 text-primary animate-pulse" />
+          </div>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-muted-foreground/50">Site Ledger</p>
+          <p className="text-sm font-serif italic text-muted-foreground animate-pulse">Verifying access before company setup...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <SetupCompanyForm />;
 }

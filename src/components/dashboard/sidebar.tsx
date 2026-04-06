@@ -16,6 +16,9 @@ import {
   X
 } from "lucide-react"
 
+import Image from "next/image"
+import logo from "@/assets/logo.png"
+
 // ── Sidebar Context (for hamburger toggle) ──────────
 type SidebarCtx = {
   open: boolean
@@ -27,9 +30,9 @@ type SidebarCtx = {
 const SidebarContext = createContext<SidebarCtx>({
   open: false,
   collapsed: false,
-  toggle: () => {},
-  close: () => {},
-  toggleCollapsed: () => {},
+  toggle: () => { },
+  close: () => { },
+  toggleCollapsed: () => { },
 })
 export const useSidebar = () => useContext(SidebarContext)
 
@@ -71,29 +74,39 @@ export function Sidebar() {
       )}
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-screen flex-col border-r border-gray-100 bg-sidebar transition-all duration-300 dark:bg-background dark:border-border",
+        "fixed inset-y-0 left-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
         "w-64 translate-x-0 lg:relative lg:z-auto",
         !open && "max-lg:-translate-x-full",
         collapsed ? "lg:w-20" : "lg:w-64"
       )}>
         {/* Logo & Branding */}
-        <div className={cn("flex items-center justify-between gap-3 p-6 pb-8", collapsed && "lg:px-4")}>
-          <Link href="/" className={cn("group flex min-w-0 flex-col gap-0.5", collapsed && "lg:items-center")} onClick={close}>
-            <span className="text-xl font-serif tracking-tight text-gray-900 dark:text-foreground group-hover:text-primary transition-colors">
-              SiteLedger
-            </span>
-            <span className={cn("text-[9px] tracking-[0.3em] font-bold text-gray-400 dark:text-muted-foreground uppercase", collapsed && "lg:hidden")}>
-              Construction Management
-            </span>
+        <div className={cn("flex items-center justify-between gap-3 p-6 pb-8", collapsed && "lg:px-4 lg:py-8")}>
+          <Link href="/" className={cn("group flex min-w-0 items-center gap-4 px-2", collapsed && "lg:justify-center lg:px-0")} onClick={close}>
+            <Image
+              src={logo}
+              alt="SiteLedger Logo"
+              width={32}
+              height={32}
+              className={cn("shrink-0", collapsed && "w-8 h-8")}
+            />
+            {!collapsed && (
+              <div className="flex flex-col gap-0.5 overflow-hidden pl-1 pr-2">
+                <span className="text-xl font-serif tracking-tight text-sidebar-foreground group-hover:text-primary transition-colors whitespace-nowrap">
+                  SiteLedger
+                </span>
+              </div>
+            )}
           </Link>
           {/* Close button on mobile */}
-          <button onClick={close} className="lg:hidden text-gray-400 hover:text-foreground transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          {!collapsed && (
+            <button onClick={close} className="lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Navigation */}
-        <nav className={cn("flex flex-1 flex-col gap-1 px-4", collapsed && "lg:px-3")}>
+        <nav className={cn("flex flex-1 flex-col gap-1 px-4 overflow-y-auto scrollbar-none", collapsed && "lg:px-3")}>
           {menuItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
@@ -106,11 +119,11 @@ export function Sidebar() {
                   "group flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-all",
                   collapsed && "lg:justify-center lg:px-2",
                   isActive
-                    ? "bg-primary/5 text-primary border-r-2 border-primary"
-                    : "text-gray-400 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground hover:bg-gray-50 dark:hover:bg-muted/50"
+                    ? "bg-primary/10 text-primary border-r-2 border-primary"
+                    : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 )}
               >
-                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500")} />
+                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60")} />
                 <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
               </Link>
             )
@@ -118,7 +131,7 @@ export function Sidebar() {
         </nav>
 
         {/* Bottom Nav */}
-        <div className={cn("flex flex-col gap-1 border-t border-gray-50 p-4 dark:border-border", collapsed && "lg:px-3")}>
+        <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
           {bottomItems.map((item) => (
             <Link
               key={item.label}
@@ -126,11 +139,11 @@ export function Sidebar() {
               onClick={close}
               title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-muted-foreground hover:text-gray-900 dark:hover:text-foreground hover:bg-gray-50 dark:hover:bg-muted/50 transition-all",
+                "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-all",
                 collapsed && "lg:justify-center lg:px-2"
               )}
             >
-              <item.icon className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+              <item.icon className="w-4 h-4 text-red-400 dark:text-red-500/50" />
               <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
             </Link>
           ))}

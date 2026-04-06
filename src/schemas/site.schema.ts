@@ -93,6 +93,8 @@ export const createSiteSchema = z.object({
   name: z.string().min(1, 'Site name is required'),
   address: z.string().min(1, 'Address is required'),
   projectType: z.enum(['NEW_CONSTRUCTION', 'REDEVELOPMENT']).optional().default('NEW_CONSTRUCTION'),
+  totalFloors: z.number().min(0).optional().default(0),
+  totalFlats: z.number().min(0).optional().default(0),
 });
 export type CreateSiteInput = z.input<typeof createSiteSchema>;
 

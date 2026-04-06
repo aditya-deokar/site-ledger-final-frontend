@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { storeTokens } from '@/lib/auth-session';
 import { authService } from '@/services/auth.service';
 import { LoginInput, SignUpInput, ForgotPasswordInput, ResetPasswordInput, VerifySignUpInput } from '@/schemas/auth.schema';
 import { forgotPassword, resetPassword, verifyResetCode } from '@/services/auth.api';
@@ -11,8 +12,10 @@ export const useSignIn = () => {
   return useMutation({
     mutationFn: (data: LoginInput) => authService.login(data),
     onSuccess: (response) => {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      storeTokens({
+        accessToken: response.data.accessToken,
+        refreshToken: response.data.refreshToken,
+      });
       queryClient.invalidateQueries({ queryKey: ['me'] });
       router.push('/');
     },
@@ -32,8 +35,10 @@ export const useVerifySignUp = () => {
   return useMutation({
     mutationFn: (data: VerifySignUpInput) => authService.verifySignUp(data),
     onSuccess: (response) => {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      storeTokens({
+        accessToken: response.data.accessToken,
+        refreshToken: response.data.refreshToken,
+      });
       queryClient.invalidateQueries({ queryKey: ['me'] });
       router.push('/');
     },
