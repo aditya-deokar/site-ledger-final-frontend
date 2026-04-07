@@ -46,7 +46,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-gray-50 dark:bg-black font-sans">
+      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-black font-sans">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <Header />
