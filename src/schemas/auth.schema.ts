@@ -1,16 +1,23 @@
 import { z } from 'zod';
+import { strongPasswordSchema } from '../lib/password-policy';
 
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(1, 'Password is required.'),
 });
 
-export const signUpSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  firstName: z.string().min(1, 'First name is required').optional(),
-  lastName: z.string().min(1, 'Last name is required').optional(),
-});
+export const signUpSchema = z
+  .object({
+    email: z.string().email('Invalid email address'),
+    password: strongPasswordSchema,
+    confirmPassword: z.string().min(1, 'Please confirm your password.'),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match.',
+    path: ['confirmPassword'],
+  });
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
@@ -52,10 +59,16 @@ export interface UserResponse {
 
 export const forgotPasswordSchema = z.object({ email: z.string().email() });
 
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
-});
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, 'Reset token is required.'),
+    newPassword: strongPasswordSchema,
+    confirmPassword: z.string().min(1, 'Please confirm your password.'),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match.',
+    path: ['confirmPassword'],
+  });
 
 export const verifyResetCodeSchema = z.object({
   email: z.string().email('Invalid email address'),
