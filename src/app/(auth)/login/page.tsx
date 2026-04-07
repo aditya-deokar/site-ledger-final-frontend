@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { getApiErrorMessage } from '@/lib/api-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
@@ -22,6 +23,8 @@ export default function LoginPage() {
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
   });
+
+  const loginErrorMessage = error ? getApiErrorMessage(error, 'Authentication failed.') : null;
 
   const onSubmit = (data: LoginInput) => {
     signIn(data);
@@ -41,7 +44,7 @@ export default function LoginPage() {
           <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 p-4 animate-in fade-in slide-in-from-top-2">
             <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
             <p className="text-[11px] font-bold tracking-widest uppercase text-destructive">
-              {typeof error === 'string' ? error : 'Authentication Failed'}
+              {loginErrorMessage}
             </p>
           </div>
         )}

@@ -5,10 +5,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpSchema, SignUpInput } from '@/schemas/auth.schema';
 import { useSignUp, useVerifySignUp } from '@/hooks/api/auth.hooks';
+import { PasswordRequirements } from '@/components/auth/password-requirements';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { getApiErrorMessage } from '@/lib/api-error';
 import Link from 'next/link';
 import { Loader2, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
@@ -25,13 +27,25 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    watch,
+    formState: { errors, isValid },
     getValues,
   } = useForm<SignUpInput>({
     resolver: zodResolver(signUpSchema),
+    mode: 'onChange',
+    defaultValues: {
+      firstName: undefined,
+      lastName: undefined,
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
   });
 
-  const onSubmit = (data: SignUpInput) => {
+  const passwordValue = watch('password', '');
+  const signupErrorMessage = signUpError ? getApiErrorMessage(signUpError, 'Registration failed.') : null;
+
+  const requestVerificationCode = (data: SignUpInput) => {
     setSignupEmail(data.email);
     signUp(data, {
       onSuccess: () => {
@@ -39,10 +53,13 @@ export default function RegisterPage() {
         toast.success('Verification code sent to your email');
       },
       onError: (err: any) => {
-        const errorMessage = err.response?.data?.error || 'Registration failed';
-        toast.error(errorMessage);
+        toast.error(getApiErrorMessage(err, 'Registration failed.'));
       }
     });
+  };
+
+  const onSubmit = (data: SignUpInput) => {
+    requestVerificationCode(data);
   };
 
   const handleVerify = (code: string) => {
@@ -53,8 +70,7 @@ export default function RegisterPage() {
         toast.success('Account verified successfully!');
       },
       onError: (err: any) => {
-        const errorMessage = err.response?.data?.error || 'Invalid verification code';
-        toast.error(errorMessage);
+        toast.error(getApiErrorMessage(err, 'Invalid verification code.'));
       }
     });
   };
@@ -120,7 +136,7 @@ export default function RegisterPage() {
               <button 
                 type="button"
                 className="font-bold uppercase tracking-widest text-primary not-italic hover:underline underline-offset-4 disabled:opacity-50 transition-colors"
-                onClick={() => signUp(getValues())}
+                onClick={() => requestVerificationCode(getValues())}
                 disabled={isSignUpPending}
               >
                 {isSignUpPending ? 'Resending...' : 'Resend Code'}
@@ -142,6 +158,15 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        {signupErrorMessage && (
+          <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 p-4 animate-in fade-in slide-in-from-top-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+            <p className="text-[11px] font-bold tracking-widest uppercase text-destructive">
+              {signupErrorMessage}
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
@@ -172,12 +197,24 @@ export default function RegisterPage() {
             id="password"
             label="Secure Password"
             placeholder="Create a strong password"
+            autoComplete="new-password"
             error={errors.password?.message}
             {...register('password')}
           />
+
+          <PasswordRequirements password={passwordValue} />
+
+          <PasswordInput
+            id="confirmPassword"
+            label="Confirm Password"
+            placeholder="Re-enter your password"
+            autoComplete="new-password"
+            error={errors.confirmPassword?.message}
+            {...register('confirmPassword')}
+          />
         </div>
 
-        <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all shadow-lg shadow-primary/10" disabled={isSignUpPending}>
+        <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all shadow-lg shadow-primary/10" disabled={isSignUpPending || !isValid}>
           {isSignUpPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Register Institutional Identity'}
         </Button>
       </form>
