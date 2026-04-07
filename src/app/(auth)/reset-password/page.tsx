@@ -5,10 +5,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resetPasswordSchema, ResetPasswordInput } from '@/schemas/auth.schema';
 import { useResetPassword } from '@/hooks/api/auth.hooks';
+import { PasswordRequirements } from '@/components/auth/password-requirements';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { getApiErrorMessage } from '@/lib/api-error';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2 } from 'lucide-react';
@@ -25,14 +27,20 @@ function ResetPasswordForm() {
     register,
     handleSubmit,
     setValue,
-    formState: { errors },
+    watch,
+    formState: { errors, isValid },
   } = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
+    mode: 'onChange',
     defaultValues: {
       token: urlToken || '',
       newPassword: '',
+      confirmPassword: '',
     }
   });
+
+  const newPasswordValue = watch('newPassword', '');
+  const resetErrorMessage = error ? getApiErrorMessage(error, 'Unable to update your password.') : null;
 
   useEffect(() => {
     if (urlToken) {
@@ -83,7 +91,7 @@ function ResetPasswordForm() {
           <div className="flex items-center gap-3 bg-destructive/10 border border-destructive/20 p-4 animate-in fade-in slide-in-from-top-2">
             <div className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
             <p className="text-[11px] font-bold tracking-widest uppercase text-destructive">
-              Invalid or expired token
+              {resetErrorMessage}
             </p>
           </div>
         )}
@@ -127,12 +135,24 @@ function ResetPasswordForm() {
                 id="newPassword"
                 label="Secure Password"
                 placeholder="Create your new password"
+                autoComplete="new-password"
                 error={errors.newPassword?.message}
                 {...register('newPassword')}
               />
+
+              <PasswordRequirements password={newPasswordValue} />
+
+              <PasswordInput
+                id="confirmPassword"
+                label="Confirm Password"
+                placeholder="Re-enter your new password"
+                autoComplete="new-password"
+                error={errors.confirmPassword?.message}
+                {...register('confirmPassword')}
+              />
             </div>
 
-            <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all" disabled={isPending}>
+            <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all" disabled={isPending || !isValid}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Password'}
             </Button>
           </>

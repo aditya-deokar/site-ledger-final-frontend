@@ -7,6 +7,7 @@ import { useForgotPassword, useVerifyResetCode } from '@/hooks/api/auth.hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getApiErrorMessage } from '@/lib/api-error';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Loader2, ArrowLeft, KeyRound } from 'lucide-react';
@@ -40,7 +41,7 @@ export default function ForgotPasswordPage() {
         toast.success('Reset code sent to your email');
       },
       onError: (err: any) => {
-        toast.error(err.response?.data?.error || 'Request failed');
+        toast.error(getApiErrorMessage(err, 'Request failed.'));
       }
     });
   };
@@ -55,7 +56,7 @@ export default function ForgotPasswordPage() {
         router.push(`/reset-password?token=${resetToken}`);
       },
       onError: (err: any) => {
-        toast.error(err.response?.data?.error || 'Invalid reset code');
+        toast.error(getApiErrorMessage(err, 'Invalid reset code.'));
       }
     });
   };
