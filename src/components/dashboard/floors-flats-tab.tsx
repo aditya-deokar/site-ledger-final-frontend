@@ -696,7 +696,7 @@ export function FloorsFlatsTab({
             floorNumber: floors.find(f => f.flats.some(fl => fl.id === customerView.flat.id))?.floorNumber || 0,
             floorName: customerView.floorName,
             flatStatus: customerView.flat.status,
-            createdAt: "",
+            createdAt: customerView.flat.customer.createdAt,
           }}
           siteId={siteId}
           siteName={siteName}
