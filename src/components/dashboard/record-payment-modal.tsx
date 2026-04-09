@@ -118,7 +118,13 @@ export function RecordPaymentModal({
               <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-primary mb-1">Additive Ledger</p>
               <h3 className="text-lg font-serif text-foreground">{title}</h3>
             </div>
-            <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="text-[10px] font-bold uppercase tracking-widest px-4 py-2 border-border hover:bg-muted"
+            >
+              Cancel
+            </Button>
           </div>
 
           {/* Summary */}

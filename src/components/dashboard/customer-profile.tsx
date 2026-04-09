@@ -401,23 +401,23 @@ export function CustomerProfile({
 
         {/* Footer Actions */}
         {mode === "view" && (
-          <div className="px-8 py-5 border-t border-border flex gap-2">
+          <div className="px-8 py-5 border-t border-border grid grid-cols-2 gap-3">
             {customer.remaining > 0 && (
-              <Button onClick={() => setIsPaymentModalOpen(true)} className="flex-1 h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
+              <Button onClick={() => setIsPaymentModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
                 <IndianRupee className="w-3.5 h-3.5" /> Add Due Payment
               </Button>
             )}
-            <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4">
+            <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
               <Download className="w-3.5 h-3.5" /> Receipt
             </Button>
-            <Button variant="outline" onClick={() => setMode("edit")} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4">
+            <Button variant="outline" onClick={() => setMode("edit")} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
             {customer.flatStatus === "BOOKED" && (
               <Button variant="outline" onClick={() => setMode("cancel")}
-                className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
+                className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/5"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Cancel
+                <Trash2 className="w-3.5 h-3.5" /> Cancel Booking
               </Button>
             )}
           </div>
