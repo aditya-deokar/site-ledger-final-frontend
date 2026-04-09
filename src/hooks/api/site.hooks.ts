@@ -86,11 +86,65 @@ export const useCreateFloor = (siteId: string, options?: { onSuccess?: () => voi
   });
 };
 
+export const useUpdateFloor = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ floorId, data }: { floorId: string; data: CreateFloorInput }) =>
+      siteService.updateFloor(siteId, floorId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useDeleteFloor = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (floorId: string) => siteService.deleteFloor(siteId, floorId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
 export const useCreateFlat = (siteId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ floorId, data }: { floorId: string; data: CreateFlatInput }) =>
       siteService.createFlat(siteId, floorId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useUpdateFlatDetails = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ flatId, data }: { flatId: string; data: CreateFlatInput }) =>
+      siteService.updateFlatDetails(siteId, flatId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useDeleteFlat = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (flatId: string) => siteService.deleteFlat(siteId, flatId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
       queryClient.invalidateQueries({ queryKey: ['site', siteId] });
