@@ -4,20 +4,47 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { bookFlatSchema, BookFlatInput, Floor, Flat, createFloorSchema, CreateFloorInput, createFlatSchema, CreateFlatInput } from "@/schemas/site.schema"
-import { Customer } from "@/schemas/customer.schema"
 import { CustomerProfile } from "@/components/dashboard/customer-profile"
-import { useFloors, useBookFlat, useCreateFloor, useCreateFlat } from "@/hooks/api/site.hooks"
+import {
+  useFloors,
+  useBookFlat,
+  useCreateFloor,
+  useCreateFlat,
+  useUpdateFloor,
+  useDeleteFloor,
+  useUpdateFlatDetails,
+  useDeleteFlat,
+} from "@/hooks/api/site.hooks"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
-import { ChevronDown, ChevronUp, Plus, Loader2, X, BookOpen, LayoutGrid } from "lucide-react"
+import { getApiErrorMessage } from "@/lib/api-error"
+import { ChevronDown, ChevronUp, Plus, Loader2, X, BookOpen, LayoutGrid, Pencil, Trash2 } from "lucide-react"
 
 function formatINR(n: number) {
   return "₹" + n.toLocaleString("en-IN")
 }
 
 // ── Add Floor Panel ───────────────────────────────────
+function getFloorDisplayName(floor: Pick<Floor, "floorName" | "floorNumber">) {
+  return floor.floorName || `Floor ${floor.floorNumber}`
+}
+
+function getFlatDisplayName(flat: Pick<Flat, "customFlatId" | "flatNumber">) {
+  return flat.customFlatId || `Flat ${flat.flatNumber}`
+}
+
 function AddFloorPanel({
   siteId,
   onClose,
@@ -216,6 +243,341 @@ function FlatTypeOption({
 }
 
 // ── Book Flat Panel ───────────────────────────────────
+function EditFloorDialog({
+  siteId,
+  floor,
+  onClose,
+}: {
+  siteId: string
+  floor: Floor
+  onClose: () => void
+}) {
+  const { mutate: updateFloor, isPending, error } = useUpdateFloor(siteId, { onSuccess: onClose })
+  const floorDisplayName = getFloorDisplayName(floor)
+  const formId = `edit-floor-form-${floor.id}`
+
+  const { register, handleSubmit, formState: { errors } } = useForm<CreateFloorInput>({
+    resolver: zodResolver(createFloorSchema),
+    defaultValues: { floorName: floor.floorName ?? "" },
+  })
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md rounded-none border-border p-0 gap-0">
+        <DialogHeader className="px-8 pt-8 pb-4 border-b border-border">
+          <DialogTitle className="text-2xl font-serif tracking-tight">Edit Floor</DialogTitle>
+        </DialogHeader>
+
+        <form
+          id={formId}
+          onSubmit={handleSubmit((data) => updateFloor({ floorId: floor.id, data }))}
+          className="px-8 py-6 flex flex-col gap-5"
+        >
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+              {getApiErrorMessage(error, "Failed to update floor.")}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Floor Name</Label>
+            <Input
+              placeholder="e.g. Ground Floor, 1st Floor, Basement"
+              className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
+              {...register("floorName")}
+            />
+            {errors.floorName && <p className="text-[10px] text-destructive">{errors.floorName.message}</p>}
+          </div>
+
+          <div className="border border-border bg-muted/20 p-4">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Editing</p>
+            <p className="mt-2 text-sm font-serif text-foreground">{floorDisplayName}</p>
+            <p className="mt-2 text-[10px] text-muted-foreground/70">
+              The floor number stays the same. This only updates the visible floor label.
+            </p>
+          </div>
+        </form>
+
+        <div className="px-8 pb-8 flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest"
+          >
+            Cancel
+          </Button>
+          <Button
+            form={formId}
+            type="submit"
+            disabled={isPending}
+            className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Floor"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteFloorDialog({
+  siteId,
+  floor,
+  onClose,
+}: {
+  siteId: string
+  floor: Floor
+  onClose: () => void
+}) {
+  const { mutate: deleteFloor, isPending, error } = useDeleteFloor(siteId, { onSuccess: onClose })
+  const floorDisplayName = getFloorDisplayName(floor)
+  const canDelete = floor.flats.length === 0
+
+  return (
+    <AlertDialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <AlertDialogContent className="max-w-lg border-t-4 border-t-red-500 rounded-none p-0 overflow-hidden bg-background">
+        <AlertDialogHeader className="p-8 pb-4">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 bg-red-500/10 flex items-center justify-center">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <AlertDialogTitle className="text-2xl font-serif text-center">
+              Delete &ldquo;{floorDisplayName}&rdquo;?
+            </AlertDialogTitle>
+            <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest">
+              This removes the floor record from the site structure.
+            </p>
+          </div>
+        </AlertDialogHeader>
+
+        <div className="px-8 pb-6 flex flex-col gap-4">
+          <div className={cn(
+            "border p-4 text-[11px] leading-relaxed",
+            canDelete ? "border-border bg-muted/20 text-muted-foreground" : "border-red-500/20 bg-red-500/5 text-red-600"
+          )}>
+            {canDelete
+              ? "This floor is empty, so it can be deleted safely."
+              : `This floor still contains ${floor.flats.length} flat${floor.flats.length === 1 ? "" : "s"}. Delete those flats first, then remove the floor.`}
+          </div>
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+              {getApiErrorMessage(error, "Failed to delete floor.")}
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter className="p-8 pt-0 flex gap-4 sm:space-x-4">
+          <AlertDialogCancel className="flex-1 rounded-none border-border bg-transparent text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted h-12">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault()
+              if (!canDelete) return
+              deleteFloor(floor.id)
+            }}
+            disabled={isPending || !canDelete}
+            className="flex-1 rounded-none bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase tracking-widest h-12 disabled:opacity-60"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Floor"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+function EditFlatDialog({
+  siteId,
+  flat,
+  floorName,
+  projectType,
+  onClose,
+}: {
+  siteId: string
+  flat: Flat
+  floorName: string
+  projectType: 'NEW_CONSTRUCTION' | 'REDEVELOPMENT'
+  onClose: () => void
+}) {
+  const { mutate: updateFlat, isPending, error } = useUpdateFlatDetails(siteId, { onSuccess: onClose })
+  const flatDisplayName = getFlatDisplayName(flat)
+  const formId = `edit-flat-form-${flat.id}`
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateFlatInput>({
+    resolver: zodResolver(createFlatSchema),
+    defaultValues: {
+      customFlatId: flat.customFlatId ?? "",
+      flatType: flat.flatType,
+    },
+  })
+
+  const selectedFlatType = watch("flatType")
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md rounded-none border-border p-0 gap-0">
+        <DialogHeader className="px-8 pt-8 pb-4 border-b border-border">
+          <DialogTitle className="text-2xl font-serif tracking-tight">Edit Flat</DialogTitle>
+        </DialogHeader>
+
+        <form
+          id={formId}
+          onSubmit={handleSubmit((data) =>
+            updateFlat({
+              flatId: flat.id,
+              data: {
+                ...data,
+                flatType: projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType,
+              },
+            })
+          )}
+          className="px-8 py-6 flex flex-col gap-5"
+        >
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+              {getApiErrorMessage(error, "Failed to update flat.")}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Custom Flat ID</Label>
+            <Input
+              placeholder="e.g. A-101, Shop-1, G-01"
+              className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
+              {...register("customFlatId")}
+            />
+            {errors.customFlatId && <p className="text-[10px] text-destructive">{errors.customFlatId.message}</p>}
+            <p className="text-[10px] text-muted-foreground/50 mt-1 italic">This ID must remain unique within this site</p>
+          </div>
+
+          <input type="hidden" {...register("flatType")} />
+
+          {projectType === "REDEVELOPMENT" && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Type</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <FlatTypeOption
+                  label="Customer Flat"
+                  value="CUSTOMER"
+                  selected={selectedFlatType === "CUSTOMER"}
+                  onSelect={(value) => setValue("flatType", value, { shouldValidate: true })}
+                />
+                <FlatTypeOption
+                  label="Existing Owner Flat"
+                  value="EXISTING_OWNER"
+                  selected={selectedFlatType === "EXISTING_OWNER"}
+                  onSelect={(value) => setValue("flatType", value, { shouldValidate: true })}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="border border-border bg-muted/20 p-4">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Editing</p>
+            <p className="mt-2 text-sm font-serif text-foreground">{flatDisplayName}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">{floorName}</p>
+            <p className="mt-2 text-[10px] text-muted-foreground/70">
+              Only available, unassigned flats can be edited. Booked or sold units stay locked.
+            </p>
+          </div>
+        </form>
+
+        <div className="px-8 pb-8 flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest"
+          >
+            Cancel
+          </Button>
+          <Button
+            form={formId}
+            type="submit"
+            disabled={isPending}
+            className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Flat"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteFlatDialog({
+  siteId,
+  flat,
+  floorName,
+  onClose,
+}: {
+  siteId: string
+  flat: Flat
+  floorName: string
+  onClose: () => void
+}) {
+  const { mutate: deleteFlat, isPending, error } = useDeleteFlat(siteId, { onSuccess: onClose })
+  const flatDisplayName = getFlatDisplayName(flat)
+  const canDelete = flat.status === "AVAILABLE" && !flat.customer
+
+  return (
+    <AlertDialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <AlertDialogContent className="max-w-lg border-t-4 border-t-red-500 rounded-none p-0 overflow-hidden bg-background">
+        <AlertDialogHeader className="p-8 pb-4">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 bg-red-500/10 flex items-center justify-center">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <AlertDialogTitle className="text-2xl font-serif text-center">
+              Delete &ldquo;{flatDisplayName}&rdquo;?
+            </AlertDialogTitle>
+            <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest">
+              This removes the flat from {floorName}.
+            </p>
+          </div>
+        </AlertDialogHeader>
+
+        <div className="px-8 pb-6 flex flex-col gap-4">
+          <div className={cn(
+            "border p-4 text-[11px] leading-relaxed",
+            canDelete ? "border-border bg-muted/20 text-muted-foreground" : "border-red-500/20 bg-red-500/5 text-red-600"
+          )}>
+            {canDelete
+              ? "This flat is still available and unassigned, so it can be deleted."
+              : "This flat can no longer be deleted because it is already linked to a customer or no longer available."}
+          </div>
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+              {getApiErrorMessage(error, "Failed to delete flat.")}
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter className="p-8 pt-0 flex gap-4 sm:space-x-4">
+          <AlertDialogCancel className="flex-1 rounded-none border-border bg-transparent text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted h-12">
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault()
+              if (!canDelete) return
+              deleteFlat(flat.id)
+            }}
+            disabled={isPending || !canDelete}
+            className="flex-1 rounded-none bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase tracking-widest h-12 disabled:opacity-60"
+          >
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Flat"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 function BookFlatPanel({
   siteId,
   flat,
@@ -243,7 +605,7 @@ function BookFlatPanel({
     bookFlat({ flatId: flat.id, data: { ...data, email: data.email || undefined } })
   }
 
-  const flatDisplayName = flat.customFlatId || `Flat ${flat.flatNumber}`
+  const flatDisplayName = getFlatDisplayName(flat)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -408,31 +770,64 @@ function BookFlatPanel({
 }
 
 // ── Flat Card ─────────────────────────────────────────
-function FlatCard({ flat, onBook, onCustomerClick }: { flat: Flat; onBook: (flat: Flat) => void; onCustomerClick: (flat: Flat) => void }) {
-  const flatDisplayName = flat.customFlatId || `Flat ${flat.flatNumber}`
+function FlatCard({
+  flat,
+  onBook,
+  onCustomerClick,
+  onEdit,
+  onDelete,
+}: {
+  flat: Flat
+  onBook: (flat: Flat) => void
+  onCustomerClick: (flat: Flat) => void
+  onEdit: (flat: Flat) => void
+  onDelete: (flat: Flat) => void
+}) {
+  const flatDisplayName = getFlatDisplayName(flat)
   const isOwnerFlat = flat.flatType === 'EXISTING_OWNER'
 
   if (flat.status === "AVAILABLE") {
     return (
-      <button
-        onClick={() => onBook(flat)}
-        className="relative border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all p-4 flex flex-col items-center justify-center gap-2 min-h-36 group"
-      >
+      <div className="relative border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all min-h-36 group">
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onEdit(flat)}
+            className="w-8 h-8 flex items-center justify-center border border-border bg-background/90 text-muted-foreground/60 transition-colors hover:text-foreground hover:border-primary/40"
+            aria-label={`Edit ${flatDisplayName}`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(flat)}
+            className="w-8 h-8 flex items-center justify-center border border-border bg-background/90 text-muted-foreground/60 transition-colors hover:text-red-500 hover:border-red-500/40"
+            aria-label={`Delete ${flatDisplayName}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
         {isOwnerFlat && (
           <span className="absolute top-4 right-4 bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase">
             OWNER
           </span>
         )}
-        <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 group-hover:text-primary transition-colors">
-          {flatDisplayName} &nbsp; Available
-        </p>
-        <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/20 group-hover:border-primary/40 flex items-center justify-center transition-colors">
-          <Plus className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-        </div>
-        <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/30 group-hover:text-primary/60 transition-colors">
-          Book This Flat
-        </p>
-      </button>
+        <button
+          type="button"
+          onClick={() => onBook(flat)}
+          className="w-full h-full p-4 pt-12 flex flex-col items-center justify-center gap-2 text-center"
+        >
+          <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 group-hover:text-primary transition-colors">
+            {flatDisplayName} &nbsp; Available
+          </p>
+          <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/20 group-hover:border-primary/40 flex items-center justify-center transition-colors">
+            <Plus className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
+          </div>
+          <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/30 group-hover:text-primary/60 transition-colors">
+            Book This Flat
+          </p>
+        </button>
+      </div>
     )
   }
 
@@ -453,14 +848,14 @@ function FlatCard({ flat, onBook, onCustomerClick }: { flat: Flat; onBook: (flat
       isSold ? "bg-foreground/5 border-foreground/10" : "border-amber-500/30 bg-amber-500/5"
     )}>
       {isOwnerFlat && (
-        <span className="absolute top-4 right-4 bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase">
+        <span className="absolute top-4 right-4 bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase">
           OWNER
         </span>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-base font-serif text-foreground font-bold">{flatDisplayName}</span>
+        <span className="text-lg font-serif text-foreground font-bold">{flatDisplayName}</span>
         <span className={cn(
-          "text-[9px] font-bold tracking-widest uppercase px-2 py-0.5",
+          "text-[10px] font-bold tracking-widest uppercase px-2.5 py-1",
           isSold ? "bg-foreground/10 text-foreground/70" : "bg-amber-500/20 text-amber-600"
         )}>
           {isSold ? "Sold" : "Booked"}
@@ -469,23 +864,23 @@ function FlatCard({ flat, onBook, onCustomerClick }: { flat: Flat; onBook: (flat
       {c && (
         <>
           <div>
-            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">
               {isSold ? "Owner" : "Customer"}
             </p>
-            <button onClick={() => onCustomerClick(flat)} className="text-sm font-serif text-primary hover:underline truncate text-left">
+            <button onClick={() => onCustomerClick(flat)} className="text-base font-serif font-medium text-primary hover:underline truncate text-left">
               {c.name}
             </button>
           </div>
           <div>
-            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">
               {isSold ? "Payment Received" : "Booking Amount"}
             </p>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs font-serif text-foreground">{formatINR(c.amountPaid)}</span>
-              <span className="text-[9px] text-muted-foreground/40">/</span>
-              <span className="text-[9px] text-muted-foreground/50">{formatINR(c.sellingPrice)}</span>
+              <span className="text-sm font-serif text-foreground">{formatINR(c.amountPaid)}</span>
+              <span className="text-[10px] text-muted-foreground/40">/</span>
+              <span className="text-[10px] text-muted-foreground/50">{formatINR(c.sellingPrice)}</span>
               <span className={cn(
-                "text-[9px] font-bold ml-auto",
+                "text-[10px] font-bold ml-auto",
                 isSold ? "text-emerald-600" : "text-amber-600"
               )}>
                 {pct.toFixed(0)}%
@@ -511,12 +906,20 @@ function FloorRow({
   onBook,
   onCustomerClick,
   onAddFlat,
+  onEditFloor,
+  onDeleteFloor,
+  onEditFlat,
+  onDeleteFlat,
 }: {
   floor: Floor
   defaultOpen: boolean
   onBook: (flat: Flat, floorName: string) => void
   onCustomerClick: (flat: Flat, floorName: string) => void
   onAddFlat: (floorId: string, floorName: string) => void
+  onEditFloor: (floor: Floor) => void
+  onDeleteFloor: (floor: Floor) => void
+  onEditFlat: (flat: Flat, floorName: string) => void
+  onDeleteFlat: (flat: Flat, floorName: string) => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
 
@@ -524,7 +927,7 @@ function FloorRow({
   const booked = floor.flats.filter(f => f.status === "BOOKED").length
   const available = floor.flats.filter(f => f.status === "AVAILABLE").length
 
-  const floorDisplayName = floor.floorName || `Floor ${floor.floorNumber}`
+  const floorDisplayName = getFloorDisplayName(floor)
 
   return (
     <div className="border border-border">
@@ -534,11 +937,11 @@ function FloorRow({
           onClick={() => setOpen(o => !o)}
           className="flex-1 flex items-center gap-4 text-left"
         >
-          <h3 className="text-lg font-serif text-foreground tracking-tight">{floorDisplayName}</h3>
-          <span className="px-2 py-0.5 bg-muted text-[9px] font-bold tracking-widest uppercase text-muted-foreground">
+          <h3 className="text-xl font-serif text-foreground tracking-tight">{floorDisplayName}</h3>
+          <span className="px-2.5 py-1 bg-muted text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
             {floor.flats.length} Flats
           </span>
-          <div className="hidden sm:flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
+          <div className="hidden sm:flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest">
             {sold > 0 && <span className="text-foreground/60">{sold} Sold</span>}
             {booked > 0 && <span className="text-amber-600">{booked} Booked</span>}
             {available > 0 && <span className="text-muted-foreground/50">{available} Available</span>}
@@ -548,8 +951,24 @@ function FloorRow({
           <Button
             size="sm"
             variant="ghost"
+            onClick={() => onEditFloor(floor)}
+            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-muted rounded-none gap-1"
+          >
+            <Pencil className="w-3 h-3" /> Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onDeleteFloor(floor)}
+            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-red-500/10 hover:text-red-500 rounded-none gap-1"
+          >
+            <Trash2 className="w-3 h-3" /> Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => onAddFlat(floor.id, floorDisplayName)}
-            className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase hover:bg-primary hover:text-black rounded-none gap-1"
+            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-primary hover:text-black rounded-none gap-1"
           >
             <Plus className="w-3 h-3" /> Add Flat
           </Button>
@@ -568,6 +987,8 @@ function FloorRow({
               flat={flat}
               onBook={(f) => onBook(f, floorDisplayName)}
               onCustomerClick={(f) => onCustomerClick(f, floorDisplayName)}
+              onEdit={(f) => onEditFlat(f, floorDisplayName)}
+              onDelete={(f) => onDeleteFlat(f, floorDisplayName)}
             />
           ))}
           {floor.flats.length === 0 && (
@@ -602,6 +1023,10 @@ export function FloorsFlatsTab({
   const [customerView, setCustomerView] = useState<{ flat: Flat; floorName: string } | null>(null)
   const [addingFloor, setAddingFloor] = useState(false)
   const [addingFlat, setAddingFlat] = useState<{ floorId: string; floorName: string } | null>(null)
+  const [editingFloor, setEditingFloor] = useState<Floor | null>(null)
+  const [deletingFloor, setDeletingFloor] = useState<Floor | null>(null)
+  const [editingFlat, setEditingFlat] = useState<{ flat: Flat; floorName: string } | null>(null)
+  const [deletingFlat, setDeletingFlat] = useState<{ flat: Flat; floorName: string } | null>(null)
 
   if (isLoading) {
     return (
@@ -651,6 +1076,10 @@ export function FloorsFlatsTab({
                 onBook={(flat, floorName) => setBooking({ flat, floorName })}
                 onCustomerClick={(flat, floorName) => setCustomerView({ flat, floorName })}
                 onAddFlat={(floorId, floorName) => setAddingFlat({ floorId, floorName })}
+                onEditFloor={(selectedFloor) => setEditingFloor(selectedFloor)}
+                onDeleteFloor={(selectedFloor) => setDeletingFloor(selectedFloor)}
+                onEditFlat={(flat, floorName) => setEditingFlat({ flat, floorName })}
+                onDeleteFlat={(flat, floorName) => setDeletingFlat({ flat, floorName })}
               />
             ))}
           </div>
@@ -671,6 +1100,41 @@ export function FloorsFlatsTab({
           floorName={addingFlat.floorName}
           projectType={projectType}
           onClose={() => setAddingFlat(null)}
+        />
+      )}
+
+      {editingFloor && (
+        <EditFloorDialog
+          siteId={siteId}
+          floor={editingFloor}
+          onClose={() => setEditingFloor(null)}
+        />
+      )}
+
+      {deletingFloor && (
+        <DeleteFloorDialog
+          siteId={siteId}
+          floor={deletingFloor}
+          onClose={() => setDeletingFloor(null)}
+        />
+      )}
+
+      {editingFlat && (
+        <EditFlatDialog
+          siteId={siteId}
+          flat={editingFlat.flat}
+          floorName={editingFlat.floorName}
+          projectType={projectType}
+          onClose={() => setEditingFlat(null)}
+        />
+      )}
+
+      {deletingFlat && (
+        <DeleteFlatDialog
+          siteId={siteId}
+          flat={deletingFlat.flat}
+          floorName={deletingFlat.floorName}
+          onClose={() => setDeletingFlat(null)}
         />
       )}
 
