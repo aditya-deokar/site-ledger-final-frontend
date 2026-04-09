@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { FloorsFlatsTab } from '@/components/dashboard/floors-flats-tab';
@@ -28,8 +28,8 @@ function formatINR(n: number) {
 }
 
 // ── Add Fund Dialog ───────────────────────────────────
-function AddFundDialog({ siteId, onClose }: { siteId: string; onClose: () => void }) {
-  const [amount, setAmount] = useState('');
+function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onClose: () => void; defaultAmount?: number }) {
+  const [amount, setAmount] = useState(defaultAmount && defaultAmount > 0 ? String(defaultAmount) : '');
   const [note, setNote] = useState('');
   const { mutate: addFund, isPending, error } = useAddFund(siteId, { onSuccess: onClose });
   const { data: companyData } = useCompany();
@@ -404,12 +404,37 @@ function ExistingOwnersTab({ siteId }: { siteId: string }) {
 // ── Page ─────────────────────────────────────────────
 export default function SiteDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const siteId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const { data, isLoading, error } = useSite(siteId ?? '');
   const [addFundOpen, setAddFundOpen] = useState(false);
   const [pullFundOpen, setPullFundOpen] = useState(false);
   type TabKey = 'overview' | 'ledger' | 'expenses' | 'floors' | 'investors' | 'existingOwners';
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const addFundIntent = searchParams.get('fund') === 'add';
+  const requestedFundAmount = Number(searchParams.get('amount') ?? '');
+  const addFundDefaultAmount = Number.isFinite(requestedFundAmount) && requestedFundAmount > 0 ? requestedFundAmount : undefined;
+
+  useEffect(() => {
+    if (addFundIntent) {
+      setAddFundOpen(true);
+    }
+  }, [addFundIntent]);
+
+  const handleCloseAddFund = () => {
+    setAddFundOpen(false);
+
+    if (!addFundIntent) return;
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('fund');
+    nextParams.delete('amount');
+    const nextQuery = nextParams.toString();
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   const errorMessage =
     typeof error === 'string'
@@ -658,7 +683,7 @@ export default function SiteDetailPage() {
 
       </div>
 
-      {addFundOpen && <AddFundDialog siteId={site.id} onClose={() => setAddFundOpen(false)} />}
+      {addFundOpen && <AddFundDialog siteId={site.id} defaultAmount={addFundDefaultAmount} onClose={handleCloseAddFund} />}
       {pullFundOpen && <PullFundDialog siteId={site.id} remainingFund={site.remainingFund} onClose={() => setPullFundOpen(false)} />}
     </DashboardShell>
   );

@@ -257,9 +257,13 @@ function BookFlatPanel({
             <h2 className="text-2xl font-serif tracking-tight text-foreground">
               Book {flatDisplayName} · {floorName}
             </h2>
-            <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground transition-colors mt-0.5">
-              <X className="w-5 h-5" />
-            </button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="text-[10px] font-bold uppercase tracking-widest px-4 py-2 border-border hover:bg-muted"
+            >
+              Cancel
+            </Button>
           </div>
           
         </div>
@@ -696,7 +700,7 @@ export function FloorsFlatsTab({
             floorNumber: floors.find(f => f.flats.some(fl => fl.id === customerView.flat.id))?.floorNumber || 0,
             floorName: customerView.floorName,
             flatStatus: customerView.flat.status,
-            createdAt: "",
+            createdAt: customerView.flat.customer.createdAt,
           }}
           siteId={siteId}
           siteName={siteName}

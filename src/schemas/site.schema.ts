@@ -19,6 +19,7 @@ export interface FlatCustomer {
   amountPaid: number;
   remaining: number;
   customerType?: 'CUSTOMER' | 'EXISTING_OWNER';
+  createdAt: string;
 }
 
 export interface Flat {
