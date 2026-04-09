@@ -111,7 +111,7 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-6 hidden">
               <div className="flex flex-col gap-2">
                 <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Floors</Label>
                 <Input

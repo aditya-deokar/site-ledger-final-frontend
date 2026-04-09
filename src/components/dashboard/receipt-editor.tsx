@@ -447,8 +447,12 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
             <h2 className="text-2xl font-serif text-foreground">Receipt Workspace</h2>
             <p className="text-sm text-muted-foreground">Customer, project, and site details are prefilled from the current booking wherever available.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="w-4 h-4" />
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="text-[10px] font-bold uppercase tracking-widest px-4 py-2 border-border hover:bg-muted"
+          >
+            Cancel
           </Button>
         </div>
 
