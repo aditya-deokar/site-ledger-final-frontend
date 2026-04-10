@@ -13,8 +13,15 @@ import {
   LogOut,
   Users2,
   UserCheck,
-  X
+  Receipt,
+  X,
+  PanelLeft,
+  Moon,
+  Sun
 } from "lucide-react"
+
+import { ModeToggle } from "@/components/mode-toggle"
+import { useTheme } from "next-themes"
 
 import Image from "next/image"
 import logo from "@/assets/logo.png"
@@ -38,10 +45,24 @@ export const useSidebar = () => useContext(SidebarContext)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sidebar_collapsed')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+
   const toggle = useCallback(() => setOpen(o => !o), [])
   const close = useCallback(() => setOpen(false), [])
-  const toggleCollapsed = useCallback(() => setCollapsed((value) => !value), [])
+  
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem('sidebar_collapsed', JSON.stringify(next))
+      return next
+    })
+  }, [])
 
   return (
     <SidebarContext.Provider value={{ open, collapsed, toggle, close, toggleCollapsed }}>
@@ -58,13 +79,15 @@ const menuItems = [
   { icon: UserCircle, label: "Investors", href: "/investors" },
   { icon: Users, label: "Vendors", href: "/vendors" },
   { icon: BarChart3, label: "Expenses", href: "/expenses" },
+  { icon: Receipt, label: "Transactions", href: "/transactions" },
 ]
 
 const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { open, collapsed, close } = useSidebar()
+  const { open, collapsed, close, toggleCollapsed } = useSidebar()
+  const { theme, setTheme } = useTheme()
 
   return (
     <>
@@ -130,6 +153,7 @@ export function Sidebar() {
           })}
         </nav>
 
+
         {/* Bottom Nav */}
         <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
           {bottomItems.map((item) => (
@@ -147,6 +171,32 @@ export function Sidebar() {
               <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
             </Link>
           ))}
+        </div>
+
+        {/* Controls: Mode & Collapse */}
+        <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all",
+              collapsed && "lg:justify-center lg:px-2"
+            )}
+            title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <PanelLeft className={cn("w-4 h-4", collapsed && "lg:w-5 lg:h-5")} />
+            {!collapsed && <span>Collapse Sidebar</span>}
+          </button>
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className={cn(
+              "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all",
+              collapsed && "lg:justify-center lg:px-2"
+            )}
+            title={collapsed ? "Toggle Night Mode" : undefined}
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Night Mode"}</span>}
+          </button>
         </div>
       </aside>
     </>

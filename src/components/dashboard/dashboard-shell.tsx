@@ -7,8 +7,8 @@ import { Loader2 } from 'lucide-react';
 
 import { useAuthBootstrap } from '@/hooks/use-auth-bootstrap';
 
-import { Sidebar, SidebarProvider } from './sidebar';
-import { Header } from './header';
+import { Sidebar, SidebarProvider, useSidebar } from './sidebar';
+import { Menu } from 'lucide-react';
 
 function DashboardShellLoading() {
   return (
@@ -46,15 +46,31 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-black font-sans">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-10 lg:pb-10 lg:pt-8">
-            {children}
-          </main>
-        </div>
-      </div>
+      <DashboardContent>{children}</DashboardContent>
     </SidebarProvider>
+  );
+}
+
+function DashboardContent({ children }: { children: React.ReactNode }) {
+  const { toggle } = useSidebar();
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-black font-sans">
+      <Sidebar />
+      <div className="flex flex-col flex-1 min-w-0 relative">
+        {/* Mobile Toggle - Floating because header is gone */}
+        <button
+          onClick={toggle}
+          className="lg:hidden fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-all active:scale-95"
+          aria-label="Toggle Menu"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+
+        <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-10 lg:pb-10 lg:pt-8">
+          {children}
+        </main>
+      </div>
+    </div>
   );
 }

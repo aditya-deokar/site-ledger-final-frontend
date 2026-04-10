@@ -638,9 +638,9 @@ export default function SiteDetailPage() {
                   { label: 'Sold & Registered', count: flatsSummary.sold, color: 'bg-primary' },
                   ...(isRedevelopment
                     ? [
-                        { label: 'Customer Flats', count: flatsSummary.customerFlats ?? 0, color: 'bg-primary' },
-                        { label: 'Owner Flats', count: flatsSummary.ownerFlats ?? 0, color: 'bg-violet-500' },
-                      ]
+                      { label: 'Customer Flats', count: flatsSummary.customerFlats ?? 0, color: 'bg-primary' },
+                      { label: 'Owner Flats', count: flatsSummary.ownerFlats ?? 0, color: 'bg-violet-500' },
+                    ]
                     : []),
                 ].map(({ label, count, color }) => (
                   <div key={label} className="flex items-center justify-between">
@@ -658,7 +658,7 @@ export default function SiteDetailPage() {
             <div className="border border-border p-6 flex flex-col gap-4 items-center justify-center relative">
               <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 self-start">Fund Deployment</p>
               <FundDeploymentChart allocated={site.allocatedFund} expenses={site.totalExpenses} />
-              <button 
+              <button
                 onClick={() => setActiveTab('ledger')}
                 className="mt-4 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-primary hover:underline group"
               >

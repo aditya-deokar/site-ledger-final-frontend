@@ -28,7 +28,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
 }
 
-const AVATAR_COLORS = ['bg-teal-600','bg-blue-600','bg-amber-500','bg-rose-600','bg-violet-600','bg-emerald-600'];
+const AVATAR_COLORS = ['bg-teal-600', 'bg-blue-600', 'bg-amber-500', 'bg-rose-600', 'bg-violet-600', 'bg-emerald-600'];
 function avatarColor(name: string) { return AVATAR_COLORS[(name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length]; }
 function initials(name: string) { const p = name.trim().split(' '); return (p[0][0] + (p[1]?.[0] || '')).toUpperCase(); }
 function formatTransactionKind(kind: Transaction['kind']) {
@@ -303,219 +303,219 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-      <div className="flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-200">
-        {/* Header */}
-        <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start">
-          <div>
-            <h3 className="text-2xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
-            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">
-              {investor.type === 'EQUITY' ? `Equity · ${investor.siteName}` : `Fixed Rate · ${investor.fixedRate}% p.a.`}
-            </p>
-            <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-              Add capital, principal returns, or interest from here. Follow-up payments stay inside each ledger row, so you only enter the new amount instead of re-entering the full transaction value.
-            </p>
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+        <div className="flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-200">
+          {/* Header */}
+          <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start">
+            <div>
+              <h3 className="text-2xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
+              <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1">
+                {investor.type === 'EQUITY' ? `Equity · ${investor.siteName}` : `Fixed Rate · ${investor.fixedRate}% p.a.`}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
+                Add capital, principal returns, or interest from here. Follow-up payments stay inside each ledger row, so you only enter the new amount instead of re-entering the full transaction value.
+              </p>
+            </div>
+            <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
           </div>
-          <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
-        </div>
 
-        {/* Transactions */}
-        <div className="flex-1 overflow-y-auto px-8 py-4">
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-          ) : transactions.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic text-center py-8">No transactions yet.</p>
-          ) : (
-            <div className="overflow-x-auto border border-border">
-              <div className="min-w-[760px] divide-y divide-border">
-              <div className="grid grid-cols-6 gap-4 px-4 py-3 bg-muted/30">
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</span>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Kind</span>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</span>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid / Due</span>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</span>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</span>
-              </div>
-              {transactions.map((t) => (
-                <div key={t.id} className="grid grid-cols-6 gap-4 px-4 py-4 items-center">
-                  <span className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(t.createdAt)}</span>
-                  <span className={cn('inline-flex w-fit px-2 py-1 text-[9px] font-bold tracking-widest uppercase border', transactionKindClasses(t.kind))}>
-                    {formatTransactionKind(t.kind)}
-                  </span>
-                  <span className={cn(
-                    'text-base font-sans font-bold',
-                    t.kind === 'PRINCIPAL_IN' ? 'text-emerald-600' : t.kind === 'INTEREST' ? 'text-amber-600' : 'text-red-500',
-                  )}>
-                    {formatINR(Math.abs(t.amount))}
-                  </span>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
-                    <span className="text-[10px] text-red-500/80">Due {formatINR(t.remaining)}</span>
+          {/* Transactions */}
+          <div className="flex-1 overflow-y-auto px-8 py-4">
+            {isLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : transactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic text-center py-8">No transactions yet.</p>
+            ) : (
+              <div className="overflow-x-auto border border-border">
+                <div className="min-w-[760px] divide-y divide-border">
+                  <div className="grid grid-cols-6 gap-4 px-4 py-3 bg-muted/30">
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</span>
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Kind</span>
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</span>
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid / Due</span>
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</span>
+                    <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {t.paymentStatus === 'COMPLETED' ? (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
-                    ) : t.paymentStatus === 'PARTIAL' ? (
-                      <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL</button>
-                    ) : (
-                      <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING</button>
+                  {transactions.map((t) => (
+                    <div key={t.id} className="grid grid-cols-6 gap-4 px-4 py-4 items-center">
+                      <span className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(t.createdAt)}</span>
+                      <span className={cn('inline-flex w-fit px-2 py-1 text-[9px] font-bold tracking-widest uppercase border', transactionKindClasses(t.kind))}>
+                        {formatTransactionKind(t.kind)}
+                      </span>
+                      <span className={cn(
+                        'text-base font-sans font-bold',
+                        t.kind === 'PRINCIPAL_IN' ? 'text-emerald-600' : t.kind === 'INTEREST' ? 'text-amber-600' : 'text-red-500',
+                      )}>
+                        {formatINR(Math.abs(t.amount))}
+                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
+                        <span className="text-[10px] text-red-500/80">Due {formatINR(t.remaining)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {t.paymentStatus === 'COMPLETED' ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-500/10 text-green-600 border border-green-500/20">PAID</span>
+                        ) : t.paymentStatus === 'PARTIAL' ? (
+                          <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 hover:bg-yellow-500/20 transition-colors cursor-pointer">PARTIAL</button>
+                        ) : (
+                          <button onClick={() => setPayTx(t)} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-500/10 text-red-600 border border-red-500/20 hover:bg-red-500/20 transition-colors cursor-pointer">PENDING</button>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground truncate font-medium">{t.note || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add Transaction Form */}
+            {addMode && (
+              <form onSubmit={handleSubmit(onSubmit)} className="mt-4 border border-border p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
+                    {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? 'Interest Payment' : 'Return Principal'}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
+                    className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase"
+                  >
+                    Back
+                  </Button>
+                </div>
+
+                {apiError && (
+                  <div className="bg-red-500/10 border border-red-500/20 p-3 text-[10px] font-bold text-red-500">
+                    {apiError}
+                  </div>
+                )}
+
+                {/* Interest Calculator for FIXED_RATE */}
+                {addMode === 'interest' && investor.type === 'FIXED_RATE' && (
+                  <div className="border border-amber-500/20 bg-amber-500/5 p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-bold tracking-widest uppercase text-amber-600">
+                        Interest Calculator — {investor.fixedRate}% p.a. on {formatINR(outstandingPrincipal)}
+                      </p>
+                      <Button type="button" size="sm" variant="outline" onClick={calculateInterest}
+                        className="h-7 rounded-none text-[9px] font-bold tracking-widest uppercase px-3 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                      >Calculate</Button>
+                    </div>
+                    {calcResult && (
+                      <div className="grid grid-cols-3 gap-2 mt-1">
+                        <button type="button" onClick={() => setValue('amount', calcResult.annual)}
+                          className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
+                        >
+                          <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Yearly</p>
+                          <p className="text-sm font-serif text-foreground">{formatINR(calcResult.annual)}</p>
+                        </button>
+                        <button type="button" onClick={() => setValue('amount', calcResult.monthly)}
+                          className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
+                        >
+                          <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Monthly</p>
+                          <p className="text-sm font-serif text-foreground">{formatINR(calcResult.monthly)}</p>
+                        </button>
+                        <button type="button" onClick={() => setValue('amount', calcResult.daily)}
+                          className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
+                        >
+                          <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Daily</p>
+                          <p className="text-sm font-serif text-foreground">{formatINR(calcResult.daily)}</p>
+                        </button>
+                      </div>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground truncate font-medium">{t.note || '—'}</span>
-                </div>
-              ))}
-              </div>
-            </div>
-          )}
+                )}
 
-          {/* Add Transaction Form */}
-          {addMode && (
-            <form onSubmit={handleSubmit(onSubmit)} className="mt-4 border border-border p-4 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
-                  {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? 'Interest Payment' : 'Return Principal'}
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
-                  className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase"
-                >
-                  Back
-                </Button>
-              </div>
-
-              {apiError && (
-                <div className="bg-red-500/10 border border-red-500/20 p-3 text-[10px] font-bold text-red-500">
-                  {apiError}
-                </div>
-              )}
-
-              {/* Interest Calculator for FIXED_RATE */}
-              {addMode === 'interest' && investor.type === 'FIXED_RATE' && (
-                <div className="border border-amber-500/20 bg-amber-500/5 p-3 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-bold tracking-widest uppercase text-amber-600">
-                      Interest Calculator — {investor.fixedRate}% p.a. on {formatINR(outstandingPrincipal)}
-                    </p>
-                    <Button type="button" size="sm" variant="outline" onClick={calculateInterest}
-                      className="h-7 rounded-none text-[9px] font-bold tracking-widest uppercase px-3 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                    >Calculate</Button>
-                  </div>
-                  {calcResult && (
-                    <div className="grid grid-cols-3 gap-2 mt-1">
-                      <button type="button" onClick={() => setValue('amount', calcResult.annual)}
-                        className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
-                      >
-                        <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Yearly</p>
-                        <p className="text-sm font-serif text-foreground">{formatINR(calcResult.annual)}</p>
-                      </button>
-                      <button type="button" onClick={() => setValue('amount', calcResult.monthly)}
-                        className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
-                      >
-                        <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Monthly</p>
-                        <p className="text-sm font-serif text-foreground">{formatINR(calcResult.monthly)}</p>
-                      </button>
-                      <button type="button" onClick={() => setValue('amount', calcResult.daily)}
-                        className="border border-border p-2 hover:bg-amber-500/10 transition-colors text-left"
-                      >
-                        <p className="text-[8px] font-bold tracking-widest uppercase text-muted-foreground/40">Daily</p>
-                        <p className="text-sm font-serif text-foreground">{formatINR(calcResult.daily)}</p>
-                      </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
+                      <Input type="number" min={0} placeholder="Amount" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register('amount', { valueAsNumber: true })} />
                     </div>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                    <Input type="number" min={0} placeholder="Amount" className="h-10 pl-8 bg-muted border-none rounded-none text-sm" {...register('amount', { valueAsNumber: true })} />
+                    {errors.amount && <p className="text-[10px] text-destructive mt-1">{errors.amount.message}</p>}
                   </div>
-                  {errors.amount && <p className="text-[10px] text-destructive mt-1">{errors.amount.message}</p>}
+                  <Input placeholder="Note (optional)" className="h-10 bg-muted border-none rounded-none text-sm" {...register('note')} />
                 </div>
-                <Input placeholder="Note (optional)" className="h-10 bg-muted border-none rounded-none text-sm" {...register('note')} />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={isPending} size="sm"
-                  className={cn('flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase',
-                    addMode === 'return' ? 'bg-red-500 hover:bg-red-600' : addMode === 'interest' ? 'bg-amber-500 hover:bg-amber-600' : ''
-                  )}
-                >
-                  {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : addMode === 'invest' ? 'Confirm Investment' : addMode === 'interest' ? 'Pay Interest' : 'Return Principal'}
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
-                  className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4"
-                >Cancel</Button>
-              </div>
-            </form>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-8 py-4 border-t border-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1">Total Invested</p>
-              <p className="text-xl font-sans font-bold text-primary">{formatINR(totalInvested)}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Total Returned</p>
-              <p className="text-xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
-            </div>
-            {investor.type === 'FIXED_RATE' && (
-              <>
-                <div>
-                  <p className="text-[11px] font-bold tracking-widest uppercase text-amber-600/70 mb-1">Interest Paid</p>
-                  <p className="text-xl font-sans font-bold text-amber-600">{formatINR(interestPaid)}</p>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={isPending} size="sm"
+                    className={cn('flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase',
+                      addMode === 'return' ? 'bg-red-500 hover:bg-red-600' : addMode === 'interest' ? 'bg-amber-500 hover:bg-amber-600' : ''
+                    )}
+                  >
+                    {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : addMode === 'invest' ? 'Confirm Investment' : addMode === 'interest' ? 'Pay Interest' : 'Return Principal'}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
+                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4"
+                  >Cancel</Button>
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Outstanding Principal</p>
-                  <p className="text-xl font-sans font-bold text-foreground">{formatINR(outstandingPrincipal)}</p>
-                </div>
-              </>
-            )}
-            {investor.isClosed && (
-              <div className="flex items-center">
-                <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 px-3 py-1.5 bg-muted">Account Closed</span>
-              </div>
+              </form>
             )}
           </div>
-          <div className="flex flex-col gap-3 lg:items-end">
-            {!addMode && !investor.isClosed && (
-              <p className="max-w-md text-[10px] leading-relaxed text-muted-foreground">
-                Use Add Capital for new investor money, Return Principal after paying capital back, and Record Interest only for fixed-rate payouts.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-            {!addMode && !investor.isClosed && (
-              <>
-                <Button size="sm" onClick={() => setAddMode('invest')}
-                  className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"
-                >
-                  <ArrowDownLeft className="w-3 h-3" /> Add Capital
-                </Button>
-                {investor.type === 'FIXED_RATE' && (
-                  <Button size="sm" variant="outline" onClick={() => setAddMode('interest')}
-                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5"
-                  >
-                    <ArrowUpRight className="w-3 h-3" /> Record Interest
-                  </Button>
+
+          {/* Footer */}
+          <div className="px-8 py-4 border-t border-border flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1">Total Invested</p>
+                <p className="text-xl font-sans font-bold text-primary">{formatINR(totalInvested)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Total Returned</p>
+                <p className="text-xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
+              </div>
+              {investor.type === 'FIXED_RATE' && (
+                <>
+                  <div>
+                    <p className="text-[11px] font-bold tracking-widest uppercase text-amber-600/70 mb-1">Interest Paid</p>
+                    <p className="text-xl font-sans font-bold text-amber-600">{formatINR(interestPaid)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Outstanding Principal</p>
+                    <p className="text-xl font-sans font-bold text-foreground">{formatINR(outstandingPrincipal)}</p>
+                  </div>
+                </>
+              )}
+              {investor.isClosed && (
+                <div className="flex items-center">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 px-3 py-1.5 bg-muted">Account Closed</span>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 lg:items-end">
+              {!addMode && !investor.isClosed && (
+                <p className="max-w-md text-[10px] leading-relaxed text-muted-foreground">
+                  Use Add Capital for new investor money, Return Principal after paying capital back, and Record Interest only for fixed-rate payouts.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {!addMode && !investor.isClosed && (
+                  <>
+                    <Button size="sm" onClick={() => setAddMode('invest')}
+                      className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"
+                    >
+                      <ArrowDownLeft className="w-3 h-3" /> Add Capital
+                    </Button>
+                    {investor.type === 'FIXED_RATE' && (
+                      <Button size="sm" variant="outline" onClick={() => setAddMode('interest')}
+                        className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5"
+                      >
+                        <ArrowUpRight className="w-3 h-3" /> Record Interest
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => setAddMode('return')}
+                      className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
+                    >
+                      <ArrowUpRight className="w-3 h-3" /> {investor.type === 'FIXED_RATE' ? 'Return Principal / Close' : 'Return Capital'}
+                    </Button>
+                  </>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setAddMode('return')}
-                  className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
-                >
-                  <ArrowUpRight className="w-3 h-3" /> {investor.type === 'FIXED_RATE' ? 'Return Principal / Close' : 'Return Capital'}
-                </Button>
-              </>
-            )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
       {payTx && (
         <RecordPaymentModal

@@ -15,11 +15,11 @@ import { RecordPaymentModal } from "./record-payment-modal"
 // Simple Indian number to words converter
 const convertToIndianWords = (num: number): string => {
   if (num === 0) return 'Zero Rupees Only'
-  
+
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
   const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
-  
+
   const convertLessThanOneThousand = (n: number): string => {
     if (n === 0) return ''
     if (n < 10) return ones[n]
@@ -27,7 +27,7 @@ const convertToIndianWords = (num: number): string => {
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '')
     return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convertLessThanOneThousand(n % 100) : '')
   }
-  
+
   const convert = (n: number): string => {
     if (n === 0) return ''
     if (n < 1000) return convertLessThanOneThousand(n)
@@ -35,16 +35,16 @@ const convertToIndianWords = (num: number): string => {
     if (n < 10000000) return convertLessThanOneThousand(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + convert(n % 100000) : '')
     return convertLessThanOneThousand(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + convert(n % 10000000) : '')
   }
-  
+
   const wholePart = Math.floor(num)
   const decimalPart = Math.round((num - wholePart) * 100)
-  
+
   let result = convert(wholePart) + ' Rupees'
   if (decimalPart > 0) {
     result += ' and ' + convertLessThanOneThousand(decimalPart) + ' Paise'
   }
   result += ' Only'
-  
+
   return result
 }
 
@@ -228,9 +228,9 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   const updateTax = (id: string, field: string, value: any) => {
     const updatedTaxes = watchedTaxes.map(tax => {
       if (tax.id !== id) return tax
-      
+
       const updatedTax = { ...tax, [field]: value }
-      
+
       // Recalculate tax amount
       if (field === 'value' || field === 'type') {
         if (updatedTax.type === 'percentage') {
@@ -239,10 +239,10 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
           updatedTax.calculatedAmount = updatedTax.value
         }
       }
-      
+
       return updatedTax
     })
-    
+
     setValue('taxes', updatedTaxes)
   }
 
@@ -593,9 +593,9 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                 </div>
                 <div className="md:col-span-3">
                   <Label htmlFor="amountInWords">Amount in Words</Label>
-                  <Input 
-                    {...register('amountInWords')} 
-                    readOnly 
+                  <Input
+                    {...register('amountInWords')}
+                    readOnly
                     className="bg-muted cursor-not-allowed"
                     placeholder="Auto-generated from total amount"
                   />
@@ -621,23 +621,23 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
               {watchedTaxes.map((tax, index) => (
                 <div key={tax.id} className="grid grid-cols-1 gap-2 border border-border/60 p-3 md:grid-cols-[auto_minmax(0,1.3fr)_180px_160px_auto_auto] md:items-center">
                   <div className="text-sm text-muted-foreground font-medium">#{index + 1}</div>
-                  <Input 
-                    value={tax.name} 
-                    onChange={(e) => updateTax(tax.id, 'name', e.target.value)} 
-                    placeholder="Tax Name (e.g., GST, VAT)" 
+                  <Input
+                    value={tax.name}
+                    onChange={(e) => updateTax(tax.id, 'name', e.target.value)}
+                    placeholder="Tax Name (e.g., GST, VAT)"
                   />
-                  <select 
-                    value={tax.type} 
-                    onChange={(e) => updateTax(tax.id, 'type', e.target.value)} 
+                  <select
+                    value={tax.type}
+                    onChange={(e) => updateTax(tax.id, 'type', e.target.value)}
                     className="h-10 bg-muted border-none rounded-none text-sm"
                   >
                     <option value="percentage">Percentage (%)</option>
                     <option value="amount">Fixed Amount (₹)</option>
                   </select>
-                  <Input 
-                    type="number" 
-                    value={tax.value} 
-                    onChange={(e) => updateTax(tax.id, 'value', Number(e.target.value) || 0)} 
+                  <Input
+                    type="number"
+                    value={tax.value}
+                    onChange={(e) => updateTax(tax.id, 'value', Number(e.target.value) || 0)}
                     placeholder={tax.type === 'percentage' ? 'e.g., 18' : 'e.g., 5000'}
                   />
                   <div className="text-sm font-bold text-primary">
@@ -648,7 +648,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                   </Button>
                 </div>
               ))}
-              
+
               {watchedTaxes.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
                   <div>
@@ -661,7 +661,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                   </div>
                 </div>
               )}
-              
+
               {watchedTaxes.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
                   <p className="text-sm">No taxes added</p>
@@ -724,7 +724,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
                   No ledger payments recorded yet. Use Record Ledger Payment to add the first collection before downloading a receipt.
                 </div>
               )}
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
                 <div>
                   <Label>Total Paid</Label>
