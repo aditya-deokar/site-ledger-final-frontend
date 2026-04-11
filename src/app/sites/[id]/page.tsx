@@ -364,34 +364,34 @@ function ExistingOwnersTab({ siteId }: { siteId: string }) {
               className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/20 transition-colors items-center text-left"
             >
               <div className="lg:col-span-4 flex flex-col gap-2">
-                <span className="w-fit px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full">
+                <span className="w-fit px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full">
                   OWNER
                 </span>
                 <div>
-                  <p className="font-serif text-base font-bold text-foreground truncate">{c.name}</p>
-                  <p className="text-[12px] text-muted-foreground/60 mt-1">{c.phone ?? '—'}</p>
+                  <p className="font-serif text-lg font-bold text-foreground truncate">{c.name}</p>
+                  <p className="text-sm text-muted-foreground/60 mt-1">{c.phone ?? '—'}</p>
                 </div>
               </div>
 
               <div className="lg:col-span-2">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</p>
-                <p className="text-sm font-serif text-foreground">{c.customFlatId ?? c.flatId ?? '—'}</p>
-                <p className="text-[12px] text-muted-foreground/70 mt-1 truncate">{c.floorName ?? `Floor ${c.floorNumber}`}</p>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</p>
+                <p className="text-base font-serif text-foreground">{c.customFlatId ?? c.flatId ?? '—'}</p>
+                <p className="text-sm text-muted-foreground/70 mt-1 truncate">{c.floorName ?? `Floor ${c.floorNumber}`}</p>
               </div>
 
               <div className="lg:col-span-2">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</p>
-                <p className="text-sm font-serif text-foreground">{c.sellingPrice > 0 ? formatINR(c.sellingPrice) : '—'}</p>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</p>
+                <p className="text-base font-serif text-foreground">{c.sellingPrice > 0 ? formatINR(c.sellingPrice) : '—'}</p>
               </div>
 
               <div className="lg:col-span-2">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount Paid</p>
-                <p className="text-sm font-serif text-foreground">{formatINR(c.amountPaid)}</p>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount Paid</p>
+                <p className="text-base font-serif text-foreground">{formatINR(c.amountPaid)}</p>
               </div>
 
               <div className="lg:col-span-2 lg:text-right">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Remaining</p>
-                <p className="text-sm font-serif font-bold text-foreground">{formatINR(c.remaining)}</p>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Remaining</p>
+                <p className="text-base font-serif font-bold text-foreground">{formatINR(c.remaining)}</p>
               </div>
             </div>
           ))}

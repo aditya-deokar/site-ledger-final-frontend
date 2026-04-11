@@ -13,6 +13,22 @@
   input[type="number"] {
     -moz-appearance: textfield;
   }
+
+  /* A lot of the dashboard uses fixed 9-11px labels; bump them slightly for readability. */
+  .text-\[9px\] {
+    font-size: 10px !important;
+    line-height: 14px !important;
+  }
+
+  .text-\[10px\] {
+    font-size: 11px !important;
+    line-height: 15px !important;
+  }
+
+  .text-\[11px\] {
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -125,10 +141,19 @@
   * {
     @apply border-border outline-primary/50;
   }
+  html {
+    font-size: 17px;
+  }
   body {
     @apply bg-background text-foreground font-sans;
   }
   h1, h2, h3, h4, .font-serif {
     @apply font-serif;
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 16px;
   }
 }

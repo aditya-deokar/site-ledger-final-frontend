@@ -32,8 +32,20 @@ export const siteService = {
   createFloor: (siteId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
     api.post(`/sites/${siteId}/floors`, data),
 
+  updateFloor: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
+    api.patch(`/sites/${siteId}/floors/${floorId}`, data),
+
+  deleteFloor: (siteId: string, floorId: string) =>
+    api.delete(`/sites/${siteId}/floors/${floorId}`),
+
   createFlat: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFlatInput) =>
     api.post(`/sites/${siteId}/floors/${floorId}/flats`, data),
+
+  updateFlatDetails: (siteId: string, flatId: string, data: import('@/schemas/site.schema').CreateFlatInput) =>
+    api.patch(`/sites/${siteId}/flats/${flatId}`, data),
+
+  deleteFlat: (siteId: string, flatId: string) =>
+    api.delete(`/sites/${siteId}/flats/${flatId}`),
 
   bookFlat: (siteId: string, flatId: string, data: import('@/schemas/site.schema').BookFlatInput) =>
     api.post(`/sites/${siteId}/flats/${flatId}/customer`, data),
