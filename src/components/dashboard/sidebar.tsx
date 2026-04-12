@@ -1,26 +1,25 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback } from "react"
+import { createContext, useContext, useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
-  BarChart3,
-  Users,
-  LayoutGrid,
-  Building2,
-  UserCircle,
+  LayoutDashboard,
+  ArrowLeftRight,
+  Building,
+  HardHat,
+  Contact,
+  Wallet,
+  Store,
+  PieChart,
   LogOut,
-  Users2,
-  UserCheck,
-  Receipt,
   X,
   PanelLeft,
   Moon,
   Sun
 } from "lucide-react"
 
-import { ModeToggle } from "@/components/mode-toggle"
 import { useTheme } from "next-themes"
 
 import Image from "next/image"
@@ -55,7 +54,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
   const toggle = useCallback(() => setOpen(o => !o), [])
   const close = useCallback(() => setOpen(false), [])
-  
+
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev
@@ -72,22 +71,34 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 }
 
 const menuItems = [
-  { icon: LayoutGrid, label: "Dashboard", href: "/dashboard" },
-  { icon: Users2, label: "Company & Partners", href: "/company" },
-  { icon: Building2, label: "Site Management", href: "/sites" },
-  { icon: UserCheck, label: "Customers", href: "/customers" },
-  { icon: UserCircle, label: "Investors", href: "/investors" },
-  { icon: Users, label: "Vendors", href: "/vendors" },
-  { icon: BarChart3, label: "Expenses", href: "/expenses" },
-  { icon: Receipt, label: "Transactions", href: "/transactions" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: ArrowLeftRight, label: "My Transactions", href: "/transactions" },
+  { icon: Building, label: "Company & Partners", href: "/company" },
+  { icon: HardHat, label: "Site Management", href: "/sites" },
+  { icon: Contact, label: "Customers", href: "/customers" },
+  { icon: Wallet, label: "Investors", href: "/investors" },
+  { icon: Store, label: "Vendors", href: "/vendors" },
+  { icon: PieChart, label: "Expenses", href: "/expenses" },
 ]
 
 const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]
 
+// Track mount globally for sidebar to prevent navigation flickers
+let hasSidebarMountedGlobally = false;
+
 export function Sidebar() {
   const pathname = usePathname()
   const { open, collapsed, close, toggleCollapsed } = useSidebar()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  // Avoid hydration mismatch for theme-dependent UI
+  useEffect(() => {
+    hasSidebarMountedGlobally = true
+    setMounted(true)
+  }, [])
+
+  const isDark = mounted && (resolvedTheme === 'dark');
 
   return (
     <>
@@ -97,7 +108,7 @@ export function Sidebar() {
       )}
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-[width,transform] duration-300 ease-in-out",
         "w-64 translate-x-0 lg:relative lg:z-auto",
         !open && "max-lg:-translate-x-full",
         collapsed ? "lg:w-20" : "lg:w-64"
@@ -130,46 +141,16 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className={cn("flex flex-1 flex-col gap-1 px-4 overflow-y-auto scrollbar-none", collapsed && "lg:px-3")}>
-          {menuItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={close}
-                title={collapsed ? item.label : undefined}
-                className={cn(
-                  "group flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-all",
-                  collapsed && "lg:justify-center lg:px-2",
-                  isActive
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
-                    : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                )}
-              >
-                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60")} />
-                <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
-              </Link>
-            )
-          })}
+          {menuItems.map((item) => (
+            <SidebarItem key={item.label} {...item} pathname={pathname} collapsed={collapsed} close={close} />
+          ))}
         </nav>
 
 
         {/* Bottom Nav */}
         <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
           {bottomItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={close}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-all",
-                collapsed && "lg:justify-center lg:px-2"
-              )}
-            >
-              <item.icon className="w-4 h-4 text-red-400 dark:text-red-500/50" />
-              <span className={cn(collapsed && "lg:hidden")}>{item.label}</span>
-            </Link>
+            <SidebarItem key={item.label} {...item} pathname={pathname} collapsed={collapsed} close={close} isDestructive />
           ))}
         </div>
 
@@ -187,18 +168,52 @@ export function Sidebar() {
             {!collapsed && <span>Collapse Sidebar</span>}
           </button>
           <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
             className={cn(
               "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-all",
               collapsed && "lg:justify-center lg:px-2"
             )}
-            title={collapsed ? "Toggle Night Mode" : undefined}
+            title={mounted ? (isDark ? "Switch to Light" : "Switch to Night") : "Mode Toggle"}
           >
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            {!collapsed && <span>{theme === "dark" ? "Light Mode" : "Night Mode"}</span>}
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {!collapsed && <span>{mounted ? (isDark ? "Light Mode" : "Night Mode") : "Mode Toggle"}</span>}
           </button>
         </div>
       </aside>
     </>
   )
+}
+
+interface SidebarItemProps {
+  icon: any;
+  label: string;
+  href: string;
+  pathname: string;
+  collapsed: boolean;
+  close: () => void;
+  isDestructive?: boolean;
+}
+
+function SidebarItem({ icon: Icon, label, href, pathname, collapsed, close, isDestructive }: SidebarItemProps) {
+  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <Link
+      href={href}
+      onClick={close}
+      title={collapsed ? label : undefined}
+      className={cn(
+        "group flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-all",
+        collapsed && "lg:justify-center lg:px-2",
+        isActive
+          ? "bg-primary/10 text-primary border-r-2 border-primary"
+          : isDestructive
+            ? "text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20"
+            : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+      )}
+    >
+      <Icon className={cn("w-4 h-4", isActive ? "text-primary" : isDestructive ? "text-red-400 dark:text-red-500/50" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60")} />
+      <span className={cn(collapsed && "lg:hidden")}>{label}</span>
+    </Link>
+  );
 }

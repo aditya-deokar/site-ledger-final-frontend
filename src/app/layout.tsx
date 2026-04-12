@@ -3,7 +3,6 @@ import { Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { ThemeProvider } from "@/components/theme-provider";
 import Providers from "@/components/providers";
 
 const poppins = Poppins({
@@ -41,16 +40,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("h-full", "antialiased", geistMono.variable, poppins.variable, poppinsDisplay.variable, "font-sans")}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <Providers>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
         </Providers>
       </body>
     </html>

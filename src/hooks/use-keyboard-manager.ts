@@ -59,7 +59,8 @@ export function useKeyboardManager({ shortcuts, enabled = true }: UseKeyboardMan
       filter: (event) => {
         // Allow certain keys even in input fields
         const key = event.key.toLowerCase();
-        return ['tab', 'enter', 'escape'].includes(key) || (key === 'backspace' && event.altKey);
+        return ['tab', 'enter', 'escape'].includes(key) || 
+               (key === 'backspace' && (event.altKey || event.ctrlKey || event.shiftKey));
       }
     }
   );

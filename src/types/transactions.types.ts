@@ -13,6 +13,16 @@ export const TRANSACTION_TYPES = {
   SITE_TO_COMPANY_TRANSFER: 'SITE_TO_COMPANY_TRANSFER',
   PARTNER_CAPITAL_IN: 'PARTNER_CAPITAL_IN',
   COMPANY_WITHDRAWAL: 'COMPANY_WITHDRAWAL',
+  // Entity Management
+  CUSTOMER_MANAGE: 'CUSTOMER_MANAGE',
+  VENDOR_MANAGE: 'VENDOR_MANAGE',
+  INVESTOR_MANAGE: 'INVESTOR_MANAGE',
+  PARTNER_MANAGE: 'PARTNER_MANAGE',
+  // Entity Creation Forms
+  CREATE_CUSTOMER: 'CREATE_CUSTOMER',
+  CREATE_VENDOR: 'CREATE_VENDOR',
+  CREATE_INVESTOR: 'CREATE_INVESTOR',
+  CREATE_PARTNER: 'CREATE_PARTNER',
 } as const;
 
 export type TransactionType = typeof TRANSACTION_TYPES[keyof typeof TRANSACTION_TYPES];
@@ -21,6 +31,7 @@ export const TRANSACTION_GROUPS = {
   MONEY_IN: 'MONEY_IN',
   MONEY_OUT: 'MONEY_OUT',
   TRANSFERS: 'TRANSFERS',
+  ENTITIES: 'ENTITIES',
 } as const;
 
 export type TransactionGroup = typeof TRANSACTION_GROUPS[keyof typeof TRANSACTION_GROUPS];
@@ -46,14 +57,21 @@ export const TRANSACTION_GROUP_MAPPING: Record<TransactionGroup, TransactionType
     TRANSACTION_TYPES.COMPANY_TO_SITE_TRANSFER,
     TRANSACTION_TYPES.SITE_TO_COMPANY_TRANSFER,
   ],
+  [TRANSACTION_GROUPS.ENTITIES]: [
+    TRANSACTION_TYPES.CUSTOMER_MANAGE,
+    TRANSACTION_TYPES.VENDOR_MANAGE,
+    TRANSACTION_TYPES.INVESTOR_MANAGE,
+    TRANSACTION_TYPES.PARTNER_MANAGE,
+  ],
 };
 
 // Transaction display information
 // Display names for transaction groups
 export const TRANSACTION_GROUP_DISPLAY_NAMES: Record<TransactionGroup, string> = {
   [TRANSACTION_GROUPS.MONEY_IN]: 'Money In',
-  [TRANSACTION_GROUPS.MONEY_OUT]: 'Money Out',
-  [TRANSACTION_GROUPS.TRANSFERS]: 'Transfers',
+  [TRANSACTION_GROUPS.MONEY_OUT]: 'Money Out', 
+  [TRANSACTION_GROUPS.TRANSFERS]: 'Money Transfer',
+  [TRANSACTION_GROUPS.ENTITIES]: 'Manage People',
 };
 
 export const TRANSACTION_DISPLAY_INFO: Record<TransactionType, {
@@ -78,22 +96,22 @@ export const TRANSACTION_DISPLAY_INFO: Record<TransactionType, {
     color: 'text-red-600',
   },
   [TRANSACTION_TYPES.GENERAL_EXPENSE]: {
-    label: 'Direct Expense',
-    description: 'Daily site costs (chai, snacks, minor items)',
+    label: 'Daily Expense',
+    description: 'Small daily costs (chai, snacks, minor items)',
     group: TRANSACTION_GROUPS.MONEY_OUT,
     icon: 'Receipt',
     color: 'text-amber-600',
   },
   [TRANSACTION_TYPES.VENDOR_EXPENSE]: {
-    label: 'Vendor Bill',
-    description: 'Booking money you owe a supplier',
+    label: 'New Vendor Bill',
+    description: 'Record a new bill from supplier',
     group: TRANSACTION_GROUPS.MONEY_OUT,
     icon: 'User',
     color: 'text-purple-600',
   },
   [TRANSACTION_TYPES.EXPENSE_PAYMENT]: {
-    label: 'Vendor Payment',
-    description: 'Paying money you owe a supplier',
+    label: 'Pay Vendor Bill',
+    description: 'Pay existing vendor bills',
     group: TRANSACTION_GROUPS.MONEY_OUT,
     icon: 'CreditCard',
     color: 'text-orange-600',
@@ -147,6 +165,62 @@ export const TRANSACTION_DISPLAY_INFO: Record<TransactionType, {
     icon: 'ArrowUp',
     color: 'text-rose-600',
   },
+  [TRANSACTION_TYPES.CUSTOMER_MANAGE]: {
+    label: 'Customer Management',
+    description: 'Manage customers - Add, Edit, Delete',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'Users',
+    color: 'text-emerald-500',
+  },
+  [TRANSACTION_TYPES.VENDOR_MANAGE]: {
+    label: 'Vendor Management',
+    description: 'Manage vendors - Add, Edit, Delete',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'Store',
+    color: 'text-purple-500',
+  },
+  [TRANSACTION_TYPES.INVESTOR_MANAGE]: {
+    label: 'Investor Management',
+    description: 'Manage investors - Add, Edit, Delete',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'Wallet',
+    color: 'text-blue-500',
+  },
+  [TRANSACTION_TYPES.PARTNER_MANAGE]: {
+    label: 'Partner Management',
+    description: 'Manage partners - Add, Edit, Delete',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'Shield',
+    color: 'text-indigo-500',
+  },
+  [TRANSACTION_TYPES.CREATE_CUSTOMER]: {
+    label: 'Create Customer',
+    description: 'Add a new customer to the system',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'UserPlus',
+    color: 'text-emerald-600',
+  },
+  [TRANSACTION_TYPES.CREATE_VENDOR]: {
+    label: 'Create Vendor',
+    description: 'Add a new vendor to the system',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'Store',
+    color: 'text-purple-600',
+  },
+  [TRANSACTION_TYPES.CREATE_INVESTOR]: {
+    label: 'Create Investor',
+    description: 'Add a new investor to the system',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'UserPlus',
+    color: 'text-blue-600',
+  },
+  [TRANSACTION_TYPES.CREATE_PARTNER]: {
+    label: 'Create Partner',
+    description: 'Add a new partner to the system',
+    group: TRANSACTION_GROUPS.ENTITIES,
+    icon: 'UserPlus',
+    color: 'text-indigo-600',
+  },
 };
 
 // Base transaction form data
@@ -163,7 +237,7 @@ export interface CustomerPaymentData extends BaseTransactionData {
 }
 
 // Transaction form data union
-export type TransactionFormData = 
+export type TransactionFormData =
   | CustomerPaymentData
   // Add other transaction types as we implement them
   ;

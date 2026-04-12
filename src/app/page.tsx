@@ -15,7 +15,7 @@ export default function RootPage() {
       return;
     }
 
-    router.replace(isAuthenticated ? '/dashboard' : '/login');
+    router.replace(isAuthenticated ? '/transactions' : '/login');
   }, [isAuthenticated, isLoading, router]);
 
   return (

@@ -14,6 +14,8 @@ const shouldRetryQuery = (failureCount: number, error: any) => {
   return failureCount < 1;
 };
 
+import { ThemeProvider } from 'next-themes';
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
@@ -28,9 +30,16 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
-      <Toaster richColors position="top-right" closeButton />
-      <ReactQueryDevtools initialIsOpen={false} />
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        {children}
+        <Toaster richColors position="top-right" closeButton />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

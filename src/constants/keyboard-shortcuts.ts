@@ -9,6 +9,11 @@ export const TRANSACTION_SHORTCUTS = {
   INVESTOR_PRINCIPAL_OUT: { key: '8', description: 'Investor Principal Out' },
   INVESTOR_INTEREST: { key: '9', description: 'Investor Interest' },
   COMPANY_WITHDRAWAL: { key: '0', description: 'Company Withdrawal' },
+  // Entity Management - Single entry per entity type
+  CUSTOMER_MANAGE: { key: 'c', description: 'Customer Management' },
+  VENDOR_MANAGE: { key: 'v', description: 'Vendor Management' },
+  INVESTOR_MANAGE: { key: 'i', description: 'Investor Management' },
+  PARTNER_MANAGE: { key: 'p', description: 'Partner Management' },
 } as const;
 
 // Kept for backward compatibility if needed, but TRANSACTION_SHORTCUTS is preferred

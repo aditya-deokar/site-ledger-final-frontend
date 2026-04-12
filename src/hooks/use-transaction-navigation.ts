@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { TRANSACTION_GROUPS, TRANSACTION_GROUP_MAPPING, TransactionType, TransactionGroup } from '@/types/transactions.types';
 
 export function useTransactionNavigation() {
-  const [selectedGroup, setSelectedGroup] = useState<TransactionGroup>(TRANSACTION_GROUPS.MONEY_IN);
+  const [selectedGroup, setSelectedGroup] = useState<TransactionGroup>(TRANSACTION_GROUPS.MONEY_OUT);
   const [focusedCardIndex, setFocusedCardIndex] = useState(0);
 
   // Get current group's transaction types
