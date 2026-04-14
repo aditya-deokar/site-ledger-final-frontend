@@ -5,13 +5,15 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Customer, updateCustomerSchema, UpdateCustomerInput } from "@/schemas/customer.schema"
+import { createFlatSchema } from "@/schemas/site.schema"
 import { useUpdateCustomer, useCancelBooking, useCustomerPayments, useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
-import { useSite } from "@/hooks/api/site.hooks"
+import { useSite, useUpdateFlatDetails } from "@/hooks/api/site.hooks"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { getApiErrorMessage } from "@/lib/api-error"
 import { X, Loader2, Phone, Mail, Building2, Layers, Hash, CreditCard, Pencil, Trash2, IndianRupee, Download } from "lucide-react"
 import { RecordPaymentModal } from "./record-payment-modal"
 import { ReceiptEditor } from "./receipt-editor"
@@ -66,16 +68,60 @@ type CancelBookingError = {
   shortfall?: number
 }
 
+const editCustomerProfileSchema = updateCustomerSchema.extend({
+  customFlatId: createFlatSchema.shape.customFlatId,
+})
+
+type EditCustomerProfileInput = UpdateCustomerInput & {
+  customFlatId: string
+}
+
 // ── Edit Details Form ───────────────────────────────
 function EditForm({ customer, siteId, onClose }: { customer: Customer; siteId: string; onClose: () => void }) {
-  const { mutate, isPending } = useUpdateCustomer({ onSuccess: onClose })
-  const { register, handleSubmit, formState: { errors } } = useForm<UpdateCustomerInput>({
-    resolver: zodResolver(updateCustomerSchema),
-    defaultValues: { name: customer.name, phone: customer.phone ?? "", email: customer.email ?? "" },
+  const { mutateAsync: updateCustomer, isPending: isUpdatingCustomer, error: customerError } = useUpdateCustomer()
+  const { mutateAsync: updateFlat, isPending: isUpdatingFlat, error: flatError } = useUpdateFlatDetails(siteId)
+  const isPending = isUpdatingCustomer || isUpdatingFlat
+
+  const { register, handleSubmit, formState: { errors } } = useForm<EditCustomerProfileInput>({
+    resolver: zodResolver(editCustomerProfileSchema),
+    defaultValues: {
+      customFlatId: customer.customFlatId ?? "",
+      name: customer.name,
+      phone: customer.phone ?? "",
+      email: customer.email ?? "",
+    },
   })
 
   return (
-    <form onSubmit={handleSubmit((data) => mutate({ siteId, flatId: customer.flatId, customerId: customer.id, data: { name: data.name, phone: data.phone, email: data.email || undefined } }))} className="flex flex-col gap-4">
+    <form
+      onSubmit={handleSubmit(async (data) => {
+        await updateFlat({
+          flatId: customer.flatId,
+          data: { customFlatId: data.customFlatId },
+        })
+
+        await updateCustomer({
+          siteId,
+          flatId: customer.flatId,
+          customerId: customer.id,
+          data: { name: data.name, phone: data.phone, email: data.email || undefined },
+        })
+
+        onClose()
+      })}
+      className="flex flex-col gap-4"
+    >
+      {(flatError || customerError) && (
+        <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+          {getApiErrorMessage(flatError ?? customerError, "Failed to update booking details.")}
+        </div>
+      )}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</Label>
+        <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("customFlatId")} />
+        {errors.customFlatId && <p className="text-[10px] text-destructive">{errors.customFlatId.message}</p>}
+        <p className="text-[10px] text-muted-foreground/50">This updates the unit label shown in Floors & Flats.</p>
+      </div>
       <div className="flex flex-col gap-1.5">
         <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Name</Label>
         <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("name")} />

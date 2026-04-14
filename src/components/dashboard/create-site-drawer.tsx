@@ -147,14 +147,14 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                   {...register('totalFlats', { setValueAs: parseOptionalPositiveInteger })}
                 />
                 <p className="text-[10px] text-muted-foreground/60">
-                  Optional. If added, placeholder flats are generated and can be renamed later.
+                  Optional. If added, blank flats are generated automatically and you can name them later.
                 </p>
                 {errors.totalFlats && <p className="text-[10px] text-destructive">{errors.totalFlats.message}</p>}
               </div>
             </div>
 
             <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">
-              When you enter floors or flats here, SiteLedger creates the initial structure automatically. You can refine floor labels and flat IDs later in the Site Structure tool.
+              When you enter floors or flats here, SiteLedger creates the initial structure automatically. Floor labels and flat IDs can be filled in later from the Site Structure tool.
             </div>
           </form>
         </div>
