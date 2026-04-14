@@ -405,6 +405,8 @@ function EditFlatDialog({
   const { mutate: updateFlat, isPending, error } = useUpdateFlatDetails(siteId, { onSuccess: onClose })
   const flatDisplayName = getFlatDisplayName(flat)
   const formId = `edit-flat-form-${flat.id}`
+  const canChangeFlatType = flat.status === "AVAILABLE" && !flat.customer
+  const flatTypeLabel = flat.flatType === "EXISTING_OWNER" ? "Existing Owner Flat" : "Customer Flat"
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateFlatInput>({
     resolver: zodResolver(createFlatSchema),
@@ -430,7 +432,9 @@ function EditFlatDialog({
               flatId: flat.id,
               data: {
                 ...data,
-                flatType: projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType,
+                flatType: canChangeFlatType
+                  ? (projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType)
+                  : flat.flatType,
               },
             })
           )}
@@ -455,7 +459,7 @@ function EditFlatDialog({
 
           <input type="hidden" {...register("flatType")} />
 
-          {projectType === "REDEVELOPMENT" && (
+          {projectType === "REDEVELOPMENT" && canChangeFlatType && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Type</Label>
               <div className="grid grid-cols-2 gap-3">
@@ -475,12 +479,24 @@ function EditFlatDialog({
             </div>
           )}
 
+          {projectType === "REDEVELOPMENT" && !canChangeFlatType && (
+            <div className="border border-border bg-muted/20 p-4">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Type</p>
+              <p className="mt-2 text-sm font-serif text-foreground">{flatTypeLabel}</p>
+              <p className="mt-2 text-[10px] text-muted-foreground/70">
+                Flat type is locked once this unit is assigned to a customer or owner.
+              </p>
+            </div>
+          )}
+
           <div className="border border-border bg-muted/20 p-4">
             <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Editing</p>
             <p className="mt-2 text-sm font-serif text-foreground">{flatDisplayName}</p>
             <p className="mt-1 text-[10px] text-muted-foreground/70">{floorName}</p>
             <p className="mt-2 text-[10px] text-muted-foreground/70">
-              Only available, unassigned flats can be edited. Booked or sold units stay locked.
+              {canChangeFlatType
+                ? "You can update the unit ID and flat type before this unit is assigned."
+                : "You can still correct the unit ID here, but booking-linked details and flat type stay protected."}
             </p>
           </div>
         </form>
@@ -847,19 +863,29 @@ function FlatCard({
       "relative border p-4 flex flex-col gap-3 min-h-36",
       isSold ? "bg-foreground/5 border-foreground/10" : "border-amber-500/30 bg-amber-500/5"
     )}>
-      {isOwnerFlat && (
-        <span className="absolute top-4 right-4 bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase">
-          OWNER
-        </span>
-      )}
       <div className="flex items-center justify-between">
         <span className="text-lg font-serif text-foreground font-bold">{flatDisplayName}</span>
-        <span className={cn(
-          "text-[10px] font-bold tracking-widest uppercase px-2.5 py-1",
-          isSold ? "bg-foreground/10 text-foreground/70" : "bg-amber-500/20 text-amber-600"
-        )}>
-          {isSold ? "Sold" : "Booked"}
-        </span>
+        <div className="flex items-center gap-2">
+          {isOwnerFlat && (
+            <span className="bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase">
+              OWNER
+            </span>
+          )}
+          <span className={cn(
+            "text-[10px] font-bold tracking-widest uppercase px-2.5 py-1",
+            isSold ? "bg-foreground/10 text-foreground/70" : "bg-amber-500/20 text-amber-600"
+          )}>
+            {isSold ? "Sold" : "Booked"}
+          </span>
+          <button
+            type="button"
+            onClick={() => onEdit(flat)}
+            className="w-8 h-8 flex items-center justify-center border border-border bg-background/90 text-muted-foreground/60 transition-colors hover:text-foreground hover:border-primary/40"
+            aria-label={`Edit ${flatDisplayName}`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
       {c && (
         <>

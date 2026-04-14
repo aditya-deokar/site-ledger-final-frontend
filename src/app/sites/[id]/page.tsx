@@ -525,9 +525,6 @@ export default function SiteDetailPage() {
                 <Plus className="w-4 h-4" /> Add Fund
               </Button>
             </div>
-            <p className="text-[10px] text-right text-muted-foreground/60">
-              Complete site report is a UI placeholder until the backend report endpoint is available.
-            </p>
           </div>
         </div>
 
