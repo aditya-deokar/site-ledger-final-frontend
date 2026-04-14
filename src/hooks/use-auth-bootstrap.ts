@@ -11,45 +11,42 @@ import {
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
-function getInitialStatus(): AuthStatus {
-  if (typeof window === 'undefined') return 'loading';
-
-  const accessToken = getStoredAccessToken();
-  if (accessToken && !isTokenExpiringSoon(accessToken, 5_000)) {
-    return 'authenticated';
-  }
-
-  if (accessToken || getStoredRefreshToken()) {
-    return 'loading';
-  }
-
-  return 'unauthenticated';
-}
-
 export function useAuthBootstrap() {
-  const [status, setStatus] = useState<AuthStatus>(() => getInitialStatus());
+  const [status, setStatus] = useState<AuthStatus>('loading');
 
   useEffect(() => {
-    if (status !== 'loading') {
-      return;
-    }
-
     let cancelled = false;
 
     const bootstrap = async () => {
-      const accessToken = await ensureFreshAccessToken();
+      const accessToken = getStoredAccessToken();
+
+      if (accessToken && !isTokenExpiringSoon(accessToken, 5_000)) {
+        if (!cancelled) {
+          setStatus('authenticated');
+        }
+        return;
+      }
+
+      if (!accessToken && !getStoredRefreshToken()) {
+        if (!cancelled) {
+          setStatus('unauthenticated');
+        }
+        return;
+      }
+
+      const refreshedAccessToken = await ensureFreshAccessToken();
 
       if (cancelled) return;
 
-      setStatus(accessToken ? 'authenticated' : 'unauthenticated');
+      setStatus(refreshedAccessToken ? 'authenticated' : 'unauthenticated');
     };
 
-    bootstrap();
+    void bootstrap();
 
     return () => {
       cancelled = true;
     };
-  }, [status]);
+  }, []);
 
   return {
     isLoading: status === 'loading',
