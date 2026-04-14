@@ -10,7 +10,7 @@ import { InvestorsTab } from '@/components/dashboard/investors-tab';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -504,13 +504,15 @@ export default function SiteDetailPage() {
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-foreground tracking-tight capitalize">{site.name}</h1>
           <div className="flex flex-col items-stretch gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                disabled
-                className="flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2"
+              <Link
+                href={`/sites/${site.id}/report`}
+                className={buttonVariants({
+                  variant: 'outline',
+                  className: 'flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2',
+                })}
               >
                 Complete Site Report
-              </Button>
+              </Link>
               <Button
                 variant="outline"
                 onClick={() => setPullFundOpen(true)}
