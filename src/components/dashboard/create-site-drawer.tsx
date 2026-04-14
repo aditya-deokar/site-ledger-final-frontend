@@ -10,14 +10,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Database } from "lucide-react"
+import { getApiErrorMessage } from "@/lib/api-error"
 
 interface CreateSiteDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-function toSlug(name: string) {
-  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+function parseOptionalPositiveInteger(value: unknown) {
+  if (value === '' || value === null || value === undefined) {
+    return undefined
+  }
+
+  const nextValue = typeof value === "number" ? value : Number(value)
+  return Number.isNaN(nextValue) ? undefined : nextValue
 }
 
 export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) {
@@ -30,10 +36,15 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
 
   const { register, handleSubmit, watch, reset, formState: { errors }, setValue } = useForm<CreateSiteInput>({
     resolver: zodResolver(createSiteSchema),
-    defaultValues: { name: '', address: '', projectType: 'NEW_CONSTRUCTION' },
+    defaultValues: {
+      name: '',
+      address: '',
+      projectType: 'NEW_CONSTRUCTION',
+      totalFloors: undefined,
+      totalFlats: undefined,
+    },
   })
 
-  const name = watch('name') || ''
   const projectType = watch('projectType') || 'NEW_CONSTRUCTION'
 
   return (
@@ -47,7 +58,7 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
           <form id="create-site-form" onSubmit={handleSubmit((data) => createSite(data))} className="flex flex-col gap-8 mt-4">
             {error && (
               <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3 tracking-wide">
-                {typeof error === 'string' ? error : 'Failed to create site'}
+                {getApiErrorMessage(error, 'Failed to create site')}
               </div>
             )}
 
@@ -111,31 +122,39 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 hidden">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Floors</Label>
                 <Input
                   type="number"
+                  min={1}
                   placeholder="e.g. 5"
                   className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
-                  {...register('totalFloors', { valueAsNumber: true })}
+                  {...register('totalFloors', { setValueAs: parseOptionalPositiveInteger })}
                 />
+                <p className="text-[10px] text-muted-foreground/60">
+                  Optional. Leave blank to configure floors later from Site Structure.
+                </p>
                 {errors.totalFloors && <p className="text-[10px] text-destructive">{errors.totalFloors.message}</p>}
               </div>
               <div className="flex flex-col gap-2">
                 <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Units/Flats</Label>
                 <Input
                   type="number"
+                  min={1}
                   placeholder="e.g. 20"
                   className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
-                  {...register('totalFlats', { valueAsNumber: true })}
+                  {...register('totalFlats', { setValueAs: parseOptionalPositiveInteger })}
                 />
+                <p className="text-[10px] text-muted-foreground/60">
+                  Optional. If added, placeholder flats are generated and can be renamed later.
+                </p>
                 {errors.totalFlats && <p className="text-[10px] text-destructive">{errors.totalFlats.message}</p>}
               </div>
             </div>
 
             <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">
-              Initial site setup includes core structural details like floor and unit counts. You can manage specific flat numbers and names later in the Site Structure tool.
+              When you enter floors or flats here, SiteLedger creates the initial structure automatically. You can refine floor labels and flat IDs later in the Site Structure tool.
             </div>
           </form>
         </div>
