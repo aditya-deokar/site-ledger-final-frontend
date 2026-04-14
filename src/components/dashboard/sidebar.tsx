@@ -11,6 +11,7 @@ import {
   Building2,
   UserCircle,
   LogOut,
+  PanelLeft,
   Users2,
   UserCheck,
   X
@@ -18,6 +19,7 @@ import {
 
 import Image from "next/image"
 import logo from "@/assets/logo.png"
+import { ModeToggle } from "@/components/mode-toggle"
 
 // ── Sidebar Context (for hamburger toggle) ──────────
 type SidebarCtx = {
@@ -64,7 +66,7 @@ const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { open, collapsed, close } = useSidebar()
+  const { open, collapsed, close, toggleCollapsed } = useSidebar()
 
   return (
     <>
@@ -129,6 +131,28 @@ export function Sidebar() {
             )
           })}
         </nav>
+
+        <div className={cn("border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
+          <div className={cn("flex items-center gap-2", collapsed ? "justify-center lg:flex-col" : "justify-between")}>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className={cn(
+                "hidden border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/70 transition-colors hover:border-primary/30 hover:text-sidebar-foreground lg:flex",
+                collapsed ? "h-10 w-10 items-center justify-center" : "h-10 flex-1 items-center justify-center gap-2 px-3"
+              )}
+            >
+              <PanelLeft className="h-4 w-4" />
+              {!collapsed && <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Collapse</span>}
+            </button>
+
+            <div className={cn("flex", collapsed ? "justify-center" : "ml-auto")}>
+              <ModeToggle />
+            </div>
+          </div>
+        </div>
 
         {/* Bottom Nav */}
         <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", collapsed && "lg:px-3")}>
