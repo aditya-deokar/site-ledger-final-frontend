@@ -10,7 +10,7 @@ import { InvestorsTab } from '@/components/dashboard/investors-tab';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Loader2, Plus, ArrowUpRight, ChevronRight, History, ArrowDownLeft } from 'lucide-react';
+import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function formatINR(n: number) {
@@ -499,25 +499,20 @@ export default function SiteDetailPage() {
     <DashboardShell>
       <div className="flex flex-col gap-0 animate-in fade-in duration-700">
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.2em] uppercase text-muted-foreground/40 mb-5">
-          <Link href="/sites" className="hover:text-muted-foreground transition-colors">Site Management</Link>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-muted-foreground/60">{site.name}</span>
-        </div>
-
         {/* Page title + actions */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-10">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-foreground tracking-tight capitalize">{site.name}</h1>
           <div className="flex flex-col items-stretch gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                disabled
-                className="flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2"
+              <Link
+                href={`/sites/${site.id}/report`}
+                className={buttonVariants({
+                  variant: 'outline',
+                  className: 'flex-1 sm:flex-initial h-10 px-4 sm:px-5 text-[10px] font-bold tracking-widest uppercase gap-2',
+                })}
               >
                 Complete Site Report
-              </Button>
+              </Link>
               <Button
                 variant="outline"
                 onClick={() => setPullFundOpen(true)}
@@ -532,9 +527,6 @@ export default function SiteDetailPage() {
                 <Plus className="w-4 h-4" /> Add Fund
               </Button>
             </div>
-            <p className="text-[10px] text-right text-muted-foreground/60">
-              Complete site report is a UI placeholder until the backend report endpoint is available.
-            </p>
           </div>
         </div>
 
@@ -591,9 +583,7 @@ export default function SiteDetailPage() {
                 <div>
                   <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Project Address</p>
                   <p className="text-base text-muted-foreground leading-relaxed">{site.address}</p>
-                  <p className="mt-2 text-xs text-muted-foreground/70">
-                    This address is currently reused as the default site address for receipt preparation.
-                  </p>
+                  
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-muted p-5 flex flex-col gap-1.5">

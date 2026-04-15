@@ -23,6 +23,15 @@ export const useSite = (id: string) => {
   });
 };
 
+export const useSiteReport = (id: string) => {
+  return useQuery({
+    queryKey: ['site-report', id],
+    queryFn: () => siteService.getSiteReport(id),
+    retry: false,
+    enabled: !!id,
+  });
+};
+
 export const useCreateSite = (options?: { onSuccess?: (data: any) => void }) => {
   const queryClient = useQueryClient();
   return useMutation({

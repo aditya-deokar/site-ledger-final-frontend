@@ -94,8 +94,16 @@ export const createSiteSchema = z.object({
   name: z.string().min(1, 'Site name is required'),
   address: z.string().min(1, 'Address is required'),
   projectType: z.enum(['NEW_CONSTRUCTION', 'REDEVELOPMENT']).optional().default('NEW_CONSTRUCTION'),
-  totalFloors: z.number().min(0).optional().default(0),
-  totalFlats: z.number().min(0).optional().default(0),
+  totalFloors: z.number().int('Total floors must be a whole number').min(1, 'Total floors must be at least 1').optional(),
+  totalFlats: z.number().int('Total flats must be a whole number').min(1, 'Total flats must be at least 1').optional(),
+}).superRefine((data, ctx) => {
+  if (data.totalFlats && !data.totalFloors) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['totalFloors'],
+      message: 'Add at least 1 floor before generating flats.',
+    });
+  }
 });
 export type CreateSiteInput = z.input<typeof createSiteSchema>;
 

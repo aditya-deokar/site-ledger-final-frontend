@@ -1,5 +1,6 @@
 import api from '@/lib/axios';
 import { CreateSiteInput, SiteDetailResponse, SiteTransferDirection, SiteTransferResponse, SitesResponse, SiteFundHistoryResponse } from '@/schemas/site.schema';
+import { SiteReportResponse } from '@/schemas/site-report.schema';
 
 export const siteService = {
   getSites: (showArchived?: 'true' | 'only'): Promise<SitesResponse> =>
@@ -7,6 +8,9 @@ export const siteService = {
 
   getSite: (id: string): Promise<SiteDetailResponse> =>
     api.get(`/sites/${id}`),
+
+  getSiteReport: (id: string): Promise<SiteReportResponse> =>
+    api.get(`/sites/${id}/report`),
 
   createSite: (data: CreateSiteInput) =>
     api.post('/sites', data),
