@@ -24,6 +24,9 @@ const AVATAR_COLORS = [
   'bg-rose-600', 'bg-violet-600', 'bg-emerald-600',
 ];
 
+const WITHDRAWAL_FILTERS = ['ALL', 'PENDING', 'COMPLETED'] as const;
+type WithdrawalFilter = (typeof WITHDRAWAL_FILTERS)[number];
+
 function getAvatarColor(name: string) {
   const code = name.charCodeAt(0) + (name.charCodeAt(1) || 0);
   return AVATAR_COLORS[code % AVATAR_COLORS.length];
@@ -174,9 +177,9 @@ function CompanySkeleton() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="xl:col-span-2 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Skeleton className="h-8 w-32" />
             <Skeleton className="h-10 w-36" />
           </div>
@@ -192,7 +195,7 @@ function CompanySkeleton() {
             ))}
           </div>
         </div>
-        <div className="lg:col-span-1">
+        <div className="max-w-xl xl:col-span-1 xl:max-w-none">
           <Skeleton className="h-64 w-full" />
         </div>
       </div>
@@ -202,83 +205,126 @@ function CompanySkeleton() {
 
 function WithdrawalLedger({ withdrawals }: { withdrawals: CompanyWithdrawal[] }) {
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<CompanyWithdrawal | null>(null);
+  const [statusFilter, setStatusFilter] = useState<WithdrawalFilter>('ALL');
   const { mutate: recordPayment, isPending } = useRecordWithdrawalPayment({
     onSuccess: () => setSelectedWithdrawal(null),
   });
+  const filteredWithdrawals = useMemo(() => {
+    if (statusFilter === 'ALL') return withdrawals;
+    if (statusFilter === 'COMPLETED') {
+      return withdrawals.filter((withdrawal) => withdrawal.paymentStatus === 'COMPLETED');
+    }
+
+    return withdrawals.filter((withdrawal) => withdrawal.paymentStatus !== 'COMPLETED');
+  }, [statusFilter, withdrawals]);
+  const totalCount = String(withdrawals.length).padStart(2, '0');
+  const filteredCount = String(filteredWithdrawals.length).padStart(2, '0');
+  const emptyMessage = withdrawals.length === 0
+    ? 'No withdrawals recorded yet.'
+    : 'No withdrawals match the selected status.';
 
   return (
     <>
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Withdrawal Ledger</p>
             <h2 className="text-3xl font-serif text-foreground tracking-tight mt-1">Company Withdrawals</h2>
+            <p className="mt-2 text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/40">
+              Showing {filteredCount} of {totalCount}
+            </p>
           </div>
-          <span className="px-2 py-0.5 bg-muted text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
-            {String(withdrawals.length).padStart(2, '0')}
-          </span>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-end">
+            <div className="flex flex-wrap gap-2">
+              {WITHDRAWAL_FILTERS.map((filter) => {
+                const isActive = statusFilter === filter;
+
+                return (
+                  <Button
+                    key={filter}
+                    type="button"
+                    variant={isActive ? 'default' : 'outline'}
+                    onClick={() => setStatusFilter(filter)}
+                    className={cn(
+                      'h-9 rounded-none px-4 text-[9px] font-bold tracking-widest uppercase',
+                      isActive
+                        ? 'bg-primary text-black hover:bg-primary/90'
+                        : 'border-border text-muted-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    {filter}
+                  </Button>
+                );
+              })}
+            </div>
+            <span className="w-fit px-2 py-0.5 bg-muted text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
+              {filteredCount}
+            </span>
+          </div>
         </div>
 
-        {withdrawals.length === 0 ? (
+        {filteredWithdrawals.length === 0 ? (
           <div className="border border-dashed border-border flex items-center justify-center py-16">
-            <p className="text-sm text-muted-foreground italic">No withdrawals recorded yet.</p>
+            <p className="text-sm text-muted-foreground italic">{emptyMessage}</p>
           </div>
         ) : (
-          <div className="border border-border divide-y divide-border">
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30">
-              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</div>
-              <div className="col-span-3 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</div>
-              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Amount</div>
-              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Paid / Due</div>
-              <div className="col-span-1 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Status</div>
-              <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Action</div>
-            </div>
-            {withdrawals.map((withdrawal) => (
-              <div key={withdrawal.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/20 transition-colors">
-                <div className="col-span-2">
-                  <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(withdrawal.createdAt)}</p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-1">
-                    {withdrawal.paymentDate ? `Last paid ${formatDate(withdrawal.paymentDate)}` : 'No payments yet'}
-                  </p>
-                </div>
-                <div className="col-span-3">
-                  <p className="text-sm font-serif text-foreground">{withdrawal.note || 'Owner / company withdrawal'}</p>
-                </div>
-                <div className="col-span-2 text-right">
-                  <span className="text-base font-sans font-bold text-red-500">{formatINR(withdrawal.amount)}</span>
-                </div>
-                <div className="col-span-2 text-right">
-                  <p className="text-sm font-sans font-bold text-emerald-600">{formatINR(withdrawal.amountPaid)}</p>
-                  <p className="text-[10px] text-red-500/80 mt-1">Due {formatINR(withdrawal.remaining)}</p>
-                </div>
-                <div className="col-span-1 flex justify-end">
-                  <span className={cn(
-                    'text-[9px] font-bold px-1.5 py-0.5 border',
-                    withdrawal.paymentStatus === 'COMPLETED'
-                      ? 'bg-green-500/10 text-green-600 border-green-500/20'
-                      : withdrawal.paymentStatus === 'PARTIAL'
-                        ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
-                        : 'bg-red-500/10 text-red-600 border-red-500/20'
-                  )}>
-                    {withdrawal.paymentStatus}
-                  </span>
-                </div>
-                <div className="col-span-2 flex justify-end">
-                  {withdrawal.paymentStatus === 'COMPLETED' ? (
-                    <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Settled</span>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedWithdrawal(withdrawal)}
-                      className="h-8 rounded-none text-[9px] font-bold tracking-widest uppercase"
-                    >
-                      Record Payment
-                    </Button>
-                  )}
-                </div>
+          <div className="overflow-x-auto border border-border">
+            <div className="min-w-[860px] divide-y divide-border">
+              <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/30">
+                <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Date</div>
+                <div className="col-span-3 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Note</div>
+                <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Amount</div>
+                <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Paid / Due</div>
+                <div className="col-span-1 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Status</div>
+                <div className="col-span-2 text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Action</div>
               </div>
-            ))}
+              {filteredWithdrawals.map((withdrawal) => (
+                <div key={withdrawal.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-muted/20 transition-colors">
+                  <div className="col-span-2">
+                    <p className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(withdrawal.createdAt)}</p>
+                    <p className="text-[10px] text-muted-foreground/50 mt-1">
+                      {withdrawal.paymentDate ? `Last paid ${formatDate(withdrawal.paymentDate)}` : 'No payments yet'}
+                    </p>
+                  </div>
+                  <div className="col-span-3">
+                    <p className="text-sm font-serif text-foreground">{withdrawal.note || 'Owner / company withdrawal'}</p>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className="text-base font-sans font-bold text-red-500">{formatINR(withdrawal.amount)}</span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <p className="text-sm font-sans font-bold text-emerald-600">{formatINR(withdrawal.amountPaid)}</p>
+                    <p className="text-[10px] text-red-500/80 mt-1">Due {formatINR(withdrawal.remaining)}</p>
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <span className={cn(
+                      'text-[9px] font-bold px-1.5 py-0.5 border',
+                      withdrawal.paymentStatus === 'COMPLETED'
+                        ? 'bg-green-500/10 text-green-600 border-green-500/20'
+                        : withdrawal.paymentStatus === 'PARTIAL'
+                          ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                          : 'bg-red-500/10 text-red-600 border-red-500/20'
+                    )}>
+                      {withdrawal.paymentStatus}
+                    </span>
+                  </div>
+                  <div className="col-span-2 flex justify-end">
+                    {withdrawal.paymentStatus === 'COMPLETED' ? (
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Settled</span>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedWithdrawal(withdrawal)}
+                        className="h-8 rounded-none text-[9px] font-bold tracking-widest uppercase"
+                      >
+                        Record Payment
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -419,12 +465,12 @@ export default function CompanyPage() {
         </div>
 
         {/* Partners + Equity Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
           {/* Partners list */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+          <div className="xl:col-span-2 flex min-w-0 flex-col gap-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 <h2 className="text-3xl font-serif text-foreground tracking-tight">Partners Withdrawal Ledger</h2>
                 <span className="px-2 py-0.5 bg-muted text-[9px] font-bold text-muted-foreground tracking-widest uppercase">
                   {String(partners.length).padStart(2, '0')}
@@ -432,13 +478,13 @@ export default function CompanyPage() {
               </div>
               <Button
                 onClick={() => setAddOpen(true)}
-                className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-6"
+                className="h-10 w-full md:w-auto rounded-none text-[10px] font-bold tracking-widest uppercase gap-2 px-6"
               >
                 <Plus className="w-4 h-4" /> Add Partner
               </Button>
             </div>
 
-            <div className="flex flex-col divide-y divide-border border border-border">
+            <div className="flex min-w-0 flex-col divide-y divide-border border border-border">
               {partners.length === 0 ? (
                 <div className="text-center py-16 text-sm text-muted-foreground italic">
                   No partners added yet.
@@ -509,7 +555,7 @@ export default function CompanyPage() {
           </div>
 
           {/* Equity Chart */}
-          <div className="lg:col-span-1">
+          <div className="max-w-xl xl:col-span-1 xl:max-w-none">
             <EquityChart partners={partners} onPartnersUpdate={handlePartnersUpdate} />
           </div>
         </div>
@@ -521,7 +567,7 @@ export default function CompanyPage() {
         )}
       </div>
 
-      <AddPartnerDrawer open={addOpen} onOpenChange={setAddOpen} />
+      <AddPartnerDrawer open={addOpen} onOpenChange={setAddOpen} existingPartners={partners} />
 
       {editPartner && (
         <EditPartnerDrawer
@@ -529,6 +575,8 @@ export default function CompanyPage() {
           onOpenChange={(open) => { if (!open) setEditPartner(null); }}
           partner={editPartner}
           totalPartners={partners.length}
+          allPartners={partners}
+          isOverEquityLimit={totalStake > 100}
         />
       )}
 

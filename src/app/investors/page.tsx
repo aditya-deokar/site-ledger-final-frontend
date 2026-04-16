@@ -610,7 +610,7 @@ export default function InvestorsPage() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by investor, phone, or site"
-                className="h-11 rounded-full border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
+                className="h-11 rounded-none border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
               />
               {searchQuery && (
                 <button
