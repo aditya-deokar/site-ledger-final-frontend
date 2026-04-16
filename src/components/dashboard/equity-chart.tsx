@@ -68,7 +68,6 @@ export function EquityChart({ partners, onPartnersUpdate }: EquityChartProps) {
                 letterSpacing: "0.1em",
                 color: "var(--sidebar-foreground)",
               }}
-              active
               itemStyle={{ color: "var(--sidebar-foreground)" }}
               formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name]}
             />

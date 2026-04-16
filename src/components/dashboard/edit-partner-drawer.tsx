@@ -72,15 +72,15 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
   return (
     <>
       <Sheet open={isOpen} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-125 border-l border-border p-0 flex flex-col overflow-hidden bg-background">
-          <SheetHeader className="p-10 pb-6 flex-row justify-between items-center space-y-0">
+        <SheetContent className="w-full sm:max-w-[520px] border-l border-border p-0 flex flex-col overflow-hidden bg-background">
+          <SheetHeader className="p-6 pb-4 sm:p-10 sm:pb-6 flex-row justify-between items-center space-y-0">
             <SheetTitle className="text-3xl font-serif tracking-tight text-foreground italic">Edit Partner</SheetTitle>
             <button onClick={() => setShowRemoveDialog(true)} className="p-2 text-muted-foreground/30 hover:text-red-500 transition-colors">
               <Trash2 className="w-5 h-5" />
             </button>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto px-10 pb-10 flex flex-col gap-10">
+          <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-10 sm:pb-10 flex flex-col gap-8 sm:gap-10">
             {/* Equity Warning */}
             {(isOverEquityLimit || isCurrentOverLimit) && (
               <div className="bg-destructive/10 border border-destructive/30 p-4 flex flex-col gap-2">
@@ -96,7 +96,7 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
               </div>
             )}
 
-            <form id="edit-partner-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-8 mt-4">
+            <form id="edit-partner-form" onSubmit={handleSubmit(onSubmit)} className="mt-2 flex flex-col gap-6 sm:mt-4 sm:gap-8">
               {error && (
                 <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3 tracking-wide">
                   {typeof error === 'string' ? error : 'Failed to update partner'}
@@ -114,7 +114,7 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
                 {errors.email && <p className="text-[10px] text-destructive">{errors.email.message}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Phone</Label>
                   <Input className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20 text-foreground" {...register('phone')} />
@@ -160,7 +160,7 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
                 {isOverEquityLimit && partner.stakePercentage > maxAllowedStake && (
                   <div className="flex flex-col gap-2 mt-3">
                     <span className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold">Quick Reduction</span>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -196,7 +196,7 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
 
             {/* Distribution Preview */}
             <div className={cn(
-              "border p-8 flex flex-col gap-6 relative overflow-hidden",
+              "border p-6 sm:p-8 flex flex-col gap-6 relative overflow-hidden",
               isCurrentOverLimit 
                 ? "border-destructive/30 bg-destructive/5" 
                 : "border-primary/20 bg-primary/5"
@@ -238,8 +238,8 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
             </div>
           </div>
 
-          <div className="p-10 pt-6 border-t border-border flex items-center justify-between gap-6">
-            <SheetClose className="text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-all px-4 py-2 text-foreground">
+          <div className="border-t border-border p-6 pt-4 sm:p-10 sm:pt-6 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <SheetClose className="self-start text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-all px-4 py-2 text-foreground">
               Cancel
             </SheetClose>
             <Button 
@@ -247,7 +247,7 @@ export function EditPartnerDrawer({ isOpen, onOpenChange, partner, totalPartners
               type="submit" 
               disabled={isPending || isCurrentOverLimit} 
               className={cn(
-                "h-14 flex-1 font-bold text-[11px] tracking-[0.2em] uppercase rounded-none gap-2 transition-all",
+                "h-14 w-full sm:flex-1 font-bold text-[11px] tracking-[0.2em] uppercase rounded-none gap-2 transition-all",
                 isCurrentOverLimit 
                   ? "bg-muted text-muted-foreground cursor-not-allowed" 
                   : "bg-primary text-black hover:bg-primary/90"

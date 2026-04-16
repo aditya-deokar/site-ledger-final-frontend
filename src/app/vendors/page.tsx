@@ -251,7 +251,7 @@ export default function VendorsPage() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by vendor name or ID"
-                className="h-11 rounded-full border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
+                className="h-11 rounded-none border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
               />
               {searchQuery && (
                 <button
@@ -266,7 +266,7 @@ export default function VendorsPage() {
             </div>
             <Button
               onClick={handleOpenAdd}
-              className="h-11 rounded-full px-5 text-sm font-semibold gap-2 whitespace-nowrap"
+              className="h-11 rounded-none px-5 text-sm font-semibold gap-2 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" /> Add Vendor
             </Button>
