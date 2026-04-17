@@ -4,62 +4,41 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Customer, updateCustomerSchema, UpdateCustomerInput } from "@/schemas/customer.schema"
+import { z } from "zod"
+import {
+  Customer,
+  CustomerPaymentHistoryItem,
+  UpdateCustomerInput,
+  updateCustomerSchema,
+} from "@/schemas/customer.schema"
 import { createFlatSchema } from "@/schemas/site.schema"
-import { useUpdateCustomer, useCancelBooking, useCustomerPayments, useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
+import { useUpdateCustomer, useCancelDeal, useCustomerPayments, useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
 import { useSite, useUpdateFlatDetails } from "@/hooks/api/site.hooks"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { getApiErrorMessage } from "@/lib/api-error"
 import { X, Loader2, Phone, Mail, Building2, Layers, Hash, CreditCard, Pencil, Trash2, IndianRupee, Download } from "lucide-react"
 import { RecordPaymentModal } from "./record-payment-modal"
 import { ReceiptEditor } from "./receipt-editor"
 
-function formatINR(n: number) { return "₹" + n.toLocaleString("en-IN") }
+function formatINR(n: number) {
+  return "\u20B9" + n.toLocaleString("en-IN")
+}
+
 function formatDate(iso?: string | null) {
-  if (!iso) return "—"
+  if (!iso) return "\u2014"
 
   const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return "—"
+  if (Number.isNaN(date.getTime())) return "\u2014"
 
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-}
-
-function formatReceiptDate(value: string) {
-  const parts = value.split("-")
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`
-  }
-  return value
-}
-
-type CustomerPaymentHistoryItem = {
-  id: string
-  amount: number
-  note: string | null
-  createdAt: string
-}
-
-type EditableReceiptPaymentRow = {
-  id: string
-  paidDate: string
-  paidAmount: number
-  paymentMode: string
-  comment: string
-}
-
-type CancelBookingError = {
+type CancelDealError = {
   status?: number
   ok?: false
   error?: string
@@ -76,7 +55,32 @@ type EditCustomerProfileInput = UpdateCustomerInput & {
   customFlatId: string
 }
 
-// ── Edit Details Form ───────────────────────────────
+function buildCancelDealSchema(maxRefund: number) {
+  return z.object({
+    reason: z.string().trim().min(1, "Reason is required"),
+    refundAmount: z
+      .number()
+      .min(0, "Refund amount cannot be negative")
+      .max(maxRefund, `Refund amount cannot exceed ${formatINR(maxRefund)}`),
+  })
+}
+
+function getFlatDisplayName(customer: Customer) {
+  if (customer.dealStatus === "CANCELLED") {
+    return customer.cancelledFlatDisplay || customer.customFlatId || (customer.flatNumber !== null ? `Flat ${customer.flatNumber}` : "Flat -")
+  }
+
+  return customer.customFlatId || (customer.flatNumber !== null ? `Flat ${customer.flatNumber}` : "Flat -")
+}
+
+function getFloorDisplayName(customer: Customer) {
+  if (customer.dealStatus === "CANCELLED") {
+    return customer.cancelledFloorName || (customer.cancelledFloorNumber !== null ? `Floor ${customer.cancelledFloorNumber}` : "Floor -")
+  }
+
+  return customer.floorName || (customer.floorNumber !== null ? `Floor ${customer.floorNumber}` : "Floor -")
+}
+
 function EditForm({ customer, siteId, onClose }: { customer: Customer; siteId: string; onClose: () => void }) {
   const { mutateAsync: updateCustomer, isPending: isUpdatingCustomer, error: customerError } = useUpdateCustomer()
   const { mutateAsync: updateFlat, isPending: isUpdatingFlat, error: flatError } = useUpdateFlatDetails(siteId)
@@ -95,6 +99,8 @@ function EditForm({ customer, siteId, onClose }: { customer: Customer; siteId: s
   return (
     <form
       onSubmit={handleSubmit(async (data) => {
+        if (!customer.flatId) return
+
         await updateFlat({
           flatId: customer.flatId,
           data: { customFlatId: data.customFlatId },
@@ -112,45 +118,43 @@ function EditForm({ customer, siteId, onClose }: { customer: Customer; siteId: s
       className="flex flex-col gap-4"
     >
       {(flatError || customerError) && (
-        <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
+        <div className="bg-destructive/10 p-3 text-[11px] font-bold text-destructive">
           {getApiErrorMessage(flatError ?? customerError, "Failed to update booking details.")}
         </div>
       )}
       <div className="flex flex-col gap-1.5">
-        <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</Label>
-        <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("customFlatId")} />
+        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Flat ID</Label>
+        <Input className="h-10 rounded-none border-none bg-muted text-sm" {...register("customFlatId")} />
         {errors.customFlatId && <p className="text-[10px] text-destructive">{errors.customFlatId.message}</p>}
         <p className="text-[10px] text-muted-foreground/50">This updates the unit label shown in Floors & Flats.</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Name</Label>
-        <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("name")} />
+        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Name</Label>
+        <Input className="h-10 rounded-none border-none bg-muted text-sm" {...register("name")} />
         {errors.name && <p className="text-[10px] text-destructive">{errors.name.message}</p>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Phone</Label>
-          <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("phone")} />
+          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Phone</Label>
+          <Input className="h-10 rounded-none border-none bg-muted text-sm" {...register("phone")} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Email</Label>
-          <Input className="h-10 bg-muted border-none rounded-none text-sm" {...register("email")} />
+          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Email</Label>
+          <Input className="h-10 rounded-none border-none bg-muted text-sm" {...register("email")} />
         </div>
       </div>
       <div className="flex gap-2 pt-1">
-        <Button type="submit" disabled={isPending} size="sm" className="flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase">
-          {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save Changes"}
+        <Button type="submit" disabled={isPending} size="sm" className="h-9 flex-1 rounded-none text-[9px] font-bold uppercase tracking-widest">
+          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save Changes"}
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onClose} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
+        <Button type="button" variant="outline" size="sm" onClick={onClose} className="h-9 rounded-none px-4 text-[9px] font-bold uppercase tracking-widest">
+          Cancel
+        </Button>
       </div>
     </form>
   )
 }
 
-// ── Record Payment Form ─────────────────────────────
-// The PaymentForm is handled by RecordPaymentModal now.
-
-// ── Cancel Confirm ──────────────────────────────────
 function CancelConfirm({
   customer,
   siteId,
@@ -165,21 +169,31 @@ function CancelConfirm({
   onNavigateToAddFund: () => void
 }) {
   const router = useRouter()
-  const { mutate, isPending, error, reset } = useCancelBooking({ onSuccess: onDone })
-  const flatDisplayName = customer.customFlatId || `Flat ${customer.flatNumber}`
-  const floorDisplayName = customer.floorName || `Floor ${customer.floorNumber}`
-  const cancelError = error as CancelBookingError | null
+  const { mutate, isPending, error, reset } = useCancelDeal({ onSuccess: onDone })
+  const maxRefund = Math.max(customer.amountPaid, 0)
+  const cancelDealSchema = buildCancelDealSchema(maxRefund)
+  const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof cancelDealSchema>>({
+    resolver: zodResolver(cancelDealSchema),
+    defaultValues: {
+      reason: "",
+      refundAmount: maxRefund,
+    },
+  })
+
+  const flatDisplayName = getFlatDisplayName(customer)
+  const floorDisplayName = getFloorDisplayName(customer)
+  const cancelError = error as CancelDealError | null
   const hasShortfallDetails =
-    cancelError?.error === 'INSUFFICIENT_FUNDS'
-    && typeof cancelError.shortfall === 'number'
-    && typeof cancelError.availableFund === 'number'
-    && typeof cancelError.refundAmount === 'number'
+    cancelError?.error === "INSUFFICIENT_FUNDS"
+    && typeof cancelError.shortfall === "number"
+    && typeof cancelError.availableFund === "number"
+    && typeof cancelError.refundAmount === "number"
 
   const handleGoToAddFund = () => {
     if (!hasShortfallDetails) return
 
     const params = new URLSearchParams({
-      fund: 'add',
+      fund: "add",
       amount: String(cancelError.shortfall!),
     })
 
@@ -190,58 +204,120 @@ function CancelConfirm({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-red-500/10 border border-red-500/20 p-4">
-        <p className="text-sm text-foreground font-serif">Cancel booking for <strong>{customer.name}</strong>?</p>
-        <p className="text-[10px] text-muted-foreground mt-1">{flatDisplayName} ({floorDisplayName}) will be set back to AVAILABLE. Customer record will be removed.</p>
-      </div>
-      {cancelError && !hasShortfallDetails && (
-        <div className="border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-          <p className="text-[10px] leading-relaxed">
-            {typeof cancelError.error === "string" ? cancelError.error : "Failed to cancel booking"}
-          </p>
-        </div>
-      )}
-      <div className="flex gap-2">
-        <Button onClick={() => mutate({ siteId, flatId: customer.flatId, customerId: customer.id })} disabled={isPending} variant="destructive" size="sm"
-          className="flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase"
-        >{isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Cancel Booking"}</Button>
-        <Button variant="outline" size="sm" onClick={onClose} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Keep</Button>
+      <div className="border border-red-500/20 bg-red-500/10 p-4">
+        <p className="text-sm font-serif text-foreground">
+          Cancel deal for <strong>{customer.name}</strong>?
+        </p>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {flatDisplayName} ({floorDisplayName}) will be set back to AVAILABLE. Customer and payment records will stay preserved for audit.
+        </p>
       </div>
 
+      <form
+        onSubmit={handleSubmit((data) => {
+          if (!customer.flatId) return
+
+          mutate({
+            siteId,
+            flatId: customer.flatId,
+            customerId: customer.id,
+            data,
+          })
+        })}
+        className="flex flex-col gap-4"
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Cancellation Reason</Label>
+          <Textarea
+            rows={4}
+            className="rounded-none border-none bg-muted text-sm"
+            placeholder="Why is this deal being cancelled?"
+            {...register("reason")}
+          />
+          {errors.reason && <p className="text-[10px] text-destructive">{errors.reason.message}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Refund Amount</Label>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            className="h-10 rounded-none border-none bg-muted text-sm"
+            {...register("refundAmount", { valueAsNumber: true })}
+          />
+          {errors.refundAmount && <p className="text-[10px] text-destructive">{errors.refundAmount.message}</p>}
+          <p className="text-[10px] text-muted-foreground/60">
+            Enter any amount from {formatINR(0)} to {formatINR(maxRefund)}.
+          </p>
+        </div>
+
+        {cancelError && !hasShortfallDetails && (
+          <div className="border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+            <p className="text-[10px] leading-relaxed">
+              {typeof cancelError.error === "string" ? cancelError.error : "Failed to cancel deal"}
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            type="submit"
+            disabled={isPending || !customer.flatId}
+            variant="destructive"
+            size="sm"
+            className="h-9 flex-1 rounded-none text-[9px] font-bold uppercase tracking-widest"
+          >
+            {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Cancel Deal"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="h-9 rounded-none px-4 text-[9px] font-bold uppercase tracking-widest"
+          >
+            Keep Active
+          </Button>
+        </div>
+      </form>
+
       <Dialog open={hasShortfallDetails} onOpenChange={(open) => { if (!open) reset() }}>
-        <DialogContent className="max-w-md rounded-none border-border p-0 gap-0">
-          <DialogHeader className="px-8 pt-8 pb-4 border-b border-border">
-            <DialogTitle className="text-2xl font-serif tracking-tight">Fund Needed to Cancel Booking</DialogTitle>
+        <DialogContent className="max-w-md gap-0 rounded-none border-border p-0">
+          <DialogHeader className="border-b border-border px-8 pb-4 pt-8">
+            <DialogTitle className="text-2xl font-serif tracking-tight">Fund Needed to Cancel Deal</DialogTitle>
           </DialogHeader>
-          <div className="px-8 py-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 px-8 py-6">
             <div className="border border-amber-500/20 bg-amber-500/5 p-4">
-              <p className="text-sm font-serif text-foreground">This booking cannot be cancelled yet because the site does not have enough balance to refund the customer.</p>
+              <p className="text-sm font-serif text-foreground">
+                This deal cannot be cancelled yet because the site does not have enough balance to refund the customer.
+              </p>
               <p className="mt-2 text-[10px] text-muted-foreground">
                 Add the missing fund to this site, then try the cancellation again.
               </p>
             </div>
 
-            <div className="border border-border divide-y divide-border">
+            <div className="divide-y divide-border border border-border">
               <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Refund Required</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Refund Required</span>
                 <span className="text-sm font-serif text-foreground">{formatINR(cancelError?.refundAmount ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Available Site Fund</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Available Site Fund</span>
                 <span className="text-sm font-serif text-foreground">{formatINR(cancelError?.availableFund ?? 0)}</span>
               </div>
-              <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
-                <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Need to Add</span>
+              <div className="flex items-center justify-between bg-muted/30 px-4 py-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Need to Add</span>
                 <span className="text-lg font-serif text-primary">{formatINR(cancelError?.shortfall ?? 0)}</span>
               </div>
             </div>
           </div>
-          <div className="px-8 pb-8 flex gap-3">
-            <Button variant="outline" onClick={() => reset()} className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest">
+          <div className="flex gap-3 px-8 pb-8">
+            <Button variant="outline" onClick={() => reset()} className="h-11 flex-1 rounded-none text-[10px] font-bold uppercase tracking-widest">
               Close
             </Button>
-            <Button onClick={handleGoToAddFund} className="flex-1 rounded-none h-11 text-[10px] font-bold uppercase tracking-widest gap-2">
-              <IndianRupee className="w-4 h-4" /> Add Fund
+            <Button onClick={handleGoToAddFund} className="h-11 flex-1 gap-2 rounded-none text-[10px] font-bold uppercase tracking-widest">
+              <IndianRupee className="h-4 w-4" /> Add Fund
             </Button>
           </div>
         </DialogContent>
@@ -249,8 +325,6 @@ function CancelConfirm({
     </div>
   )
 }
-
-// ── Main Panel ──────────────────────────────────────
 
 export function CustomerProfile({
   customer,
@@ -266,16 +340,19 @@ export function CustomerProfile({
   const [mode, setMode] = useState<"view" | "edit" | "cancel">("view")
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
-  const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({ 
+  const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({
     onSuccess: () => {
       setIsPaymentModalOpen(false)
       onClose()
-    }
+    },
   })
   const { data: paymentHistoryData } = useCustomerPayments(customer.id)
   const { data: siteData } = useSite(siteId)
 
   const paymentHistory = (paymentHistoryData?.data?.payments ?? []) as CustomerPaymentHistoryItem[]
+  const receiptPayments = paymentHistory.filter(
+    (payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT",
+  )
   const fallbackCreatedAt = paymentHistory.reduce<string | undefined>((earliest, payment) => {
     const paymentDate = new Date(payment.createdAt)
     if (Number.isNaN(paymentDate.getTime())) return earliest
@@ -285,186 +362,248 @@ export function CustomerProfile({
     return paymentDate < earliestDate ? payment.createdAt : earliest
   }, undefined)
   const displayCreatedAt = customer.createdAt || fallbackCreatedAt
+  const isCancelled = customer.dealStatus === "CANCELLED"
+  const isSold = customer.flatStatus === "SOLD"
+  const statusLabel = isCancelled ? "CANCELLED" : (customer.flatStatus ?? "ACTIVE")
+  const flatDisplayName = getFlatDisplayName(customer)
+  const floorDisplayName = getFloorDisplayName(customer)
+  const canEdit = !isCancelled && Boolean(customer.flatId)
+  const canCancel = !isCancelled && Boolean(customer.flatId)
+  const canAddPayment = !isCancelled && customer.remaining > 0
+  const canOpenReceipt = !isCancelled
 
   const pct = customer.sellingPrice > 0
     ? Math.min(100, (customer.amountPaid / customer.sellingPrice) * 100)
     : customer.remaining <= 0
       ? 100
       : 0
-  const isSold = customer.flatStatus === "SOLD"
-
-  const flatDisplayName = customer.customFlatId || `Flat ${customer.flatNumber}`
-  const floorDisplayName = customer.floorName || `Floor ${customer.floorNumber}`
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="flex-1 bg-black/20" onClick={onClose} />
-      <div className="w-full max-w-md bg-background border-l border-border flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300 overflow-y-auto">
-
-        {/* Header */}
-        <div className="px-8 pt-8 pb-5 border-b border-border">
-          <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-2">Customer Profile</p>
+      <div className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-300">
+        <div className="border-b border-border px-8 pb-5 pt-8">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">Customer Profile</p>
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-2xl font-serif tracking-tight text-foreground">{customer.name}</h2>
-              <div className="flex items-center gap-3 mt-2">
-                <span className={cn(
-                  "px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase",
-                  isSold ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
-                )}>
-                  {customer.flatStatus}
+              <div className="mt-2 flex items-center gap-3">
+                <span
+                  className={cn(
+                    "px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest",
+                    isCancelled
+                      ? "bg-red-500/10 text-red-500"
+                      : isSold
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-amber-500/10 text-amber-600",
+                  )}
+                >
+                  {statusLabel}
                 </span>
                 <span className="text-[9px] font-bold tracking-widest text-muted-foreground/40">
                   {flatDisplayName} · {floorDisplayName}
                 </span>
               </div>
             </div>
-            <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground transition-colors">
-              <X className="w-5 h-5" />
+            <button onClick={onClose} className="text-muted-foreground/40 transition-colors hover:text-foreground">
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <div className="px-8 py-6 flex-1 flex flex-col gap-6">
-
-          {/* Contact Info */}
+        <div className="flex flex-1 flex-col gap-6 px-8 py-6">
           <div className="flex flex-col gap-3">
-            <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Contact</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">Contact</p>
             <div className="flex flex-col gap-2">
               {customer.phone && (
                 <div className="flex items-center gap-2 text-sm text-foreground">
-                  <Phone className="w-3.5 h-3.5 text-muted-foreground/40" /> {customer.phone}
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground/40" /> {customer.phone}
                 </div>
               )}
               {customer.email && (
                 <div className="flex items-center gap-2 text-sm text-foreground">
-                  <Mail className="w-3.5 h-3.5 text-muted-foreground/40" /> {customer.email}
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground/40" /> {customer.email}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Property Info */}
           <div className="flex flex-col gap-3">
-            <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Property</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">Property</p>
             <div className="grid grid-cols-2 gap-3">
               {siteName && (
                 <div className="flex items-center gap-2 text-sm text-foreground">
-                  <Building2 className="w-3.5 h-3.5 text-muted-foreground/40" /> {siteName}
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground/40" /> {siteName}
                 </div>
               )}
               <div className="flex items-center gap-2 text-sm text-foreground">
-                <Layers className="w-3.5 h-3.5 text-muted-foreground/40" /> {floorDisplayName}
+                <Layers className="h-3.5 w-3.5 text-muted-foreground/40" /> {floorDisplayName}
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground">
-                <Hash className="w-3.5 h-3.5 text-muted-foreground/40" /> {flatDisplayName}
+                <Hash className="h-3.5 w-3.5 text-muted-foreground/40" /> {flatDisplayName}
               </div>
               <div className="flex items-center gap-2 text-sm text-foreground">
-                <CreditCard className="w-3.5 h-3.5 text-muted-foreground/40" /> {formatDate(displayCreatedAt)}
+                <CreditCard className="h-3.5 w-3.5 text-muted-foreground/40" /> {formatDate(displayCreatedAt)}
               </div>
             </div>
           </div>
 
-          {/* Payment Breakdown */}
+          {isCancelled && (
+            <div className="flex flex-col gap-3 border border-red-500/20 bg-red-500/5 p-4">
+              <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-red-500/70">Cancellation Audit</p>
+              <div className="grid grid-cols-2 gap-3 text-sm text-foreground">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Cancelled On</p>
+                  <p className="mt-1">{formatDate(customer.cancelledAt)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Released From</p>
+                  <p className="mt-1">{customer.cancelledFromFlatStatus ?? "\u2014"}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Reason</p>
+                  <p className="mt-1 leading-relaxed">{customer.cancellationReason || "\u2014"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-4">
-            {/* Visually Striking Remaining Balance Hero */}
-            <div className={cn(
-              "flex flex-col items-center justify-center py-8 border",
-              customer.remaining > 0 
-                ? "bg-red-500/5 border-red-500/20" 
-                : "bg-emerald-500/5 border-emerald-500/20"
-            )}>
-              <span className={cn(
-                "text-[10px] font-bold tracking-[0.3em] uppercase mb-2",
-                customer.remaining > 0 ? "text-red-500/70" : "text-emerald-600/70"
-              )}>
-                {customer.remaining > 0 ? "Remaining Balance" : "Fully Paid"}
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center border py-8",
+                isCancelled
+                  ? "border-amber-500/20 bg-amber-500/5"
+                  : customer.remaining > 0
+                    ? "border-red-500/20 bg-red-500/5"
+                    : "border-emerald-500/20 bg-emerald-500/5",
+              )}
+            >
+              <span
+                className={cn(
+                  "mb-2 text-[10px] font-bold uppercase tracking-[0.3em]",
+                  isCancelled
+                    ? "text-amber-600/70"
+                    : customer.remaining > 0
+                      ? "text-red-500/70"
+                      : "text-emerald-600/70",
+                )}
+              >
+                {isCancelled ? "Net Paid After Refunds" : customer.remaining > 0 ? "Remaining Balance" : "Fully Paid"}
               </span>
-              <span className={cn(
-                "text-5xl font-sans font-bold tracking-tighter",
-                customer.remaining > 0 ? "text-red-500" : "text-emerald-600"
-              )}>
-                {formatINR(customer.remaining)}
+              <span
+                className={cn(
+                  "text-5xl font-sans font-bold tracking-tighter",
+                  isCancelled
+                    ? "text-amber-600"
+                    : customer.remaining > 0
+                      ? "text-red-500"
+                      : "text-emerald-600",
+                )}
+              >
+                {formatINR(isCancelled ? customer.amountPaid : customer.remaining)}
               </span>
             </div>
 
-            <div className="border border-border divide-y divide-border">
+            <div className="divide-y divide-border border border-border">
               <div className="flex justify-between px-4 py-3">
-                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Selling Price</span>
                 <span className="text-sm font-serif">{formatINR(customer.sellingPrice)}</span>
               </div>
               <div className="flex justify-between px-4 py-3">
-                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Booking Amount</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Booking Amount</span>
                 <span className="text-sm font-serif">{formatINR(customer.bookingAmount)}</span>
               </div>
               <div className="flex justify-between px-4 py-3">
-                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Total Paid</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Total Paid</span>
                 <span className="text-sm font-serif text-emerald-600">{formatINR(customer.amountPaid)}</span>
               </div>
             </div>
 
-            {/* Progress bar */}
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Payment Progress</span>
-                <span className="text-[9px] font-bold tracking-widest text-primary">{pct.toFixed(1)}%</span>
+            {!isCancelled && (
+              <div>
+                <div className="mb-1 flex justify-between">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">Payment Progress</span>
+                  <span className="text-[9px] font-bold tracking-widest text-primary">{pct.toFixed(1)}%</span>
+                </div>
+                <div className="h-2 overflow-hidden bg-muted">
+                  <div className={cn("h-full transition-all", isSold ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground/60">
+                  Follow-up collections only need the newly received amount. The agreement value above stays linked to this record.
+                </p>
               </div>
-              <div className="h-2 bg-muted overflow-hidden">
-                <div className={cn("h-full transition-all", isSold ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
-              </div>
-              <p className="mt-2 text-[10px] text-muted-foreground/60">
-                Follow-up collections only need the newly received amount. The agreement value above stays linked to this record.
-              </p>
-            </div>
+            )}
           </div>
 
-          {/* Action Forms */}
-          {mode === "edit" && <EditForm customer={customer} siteId={siteId} onClose={() => setMode("view")} />}
-          {mode === "cancel" && <CancelConfirm customer={customer} siteId={siteId} onClose={() => setMode("view")} onDone={onClose} onNavigateToAddFund={onClose} />}
+          {mode === "edit" && canEdit && <EditForm customer={customer} siteId={siteId} onClose={() => setMode("view")} />}
+          {mode === "cancel" && canCancel && (
+            <CancelConfirm
+              customer={customer}
+              siteId={siteId}
+              onClose={() => setMode("view")}
+              onDone={onClose}
+              onNavigateToAddFund={onClose}
+            />
+          )}
         </div>
 
-        {isPaymentModalOpen && (
+        {isPaymentModalOpen && canAddPayment && (
           <RecordPaymentModal
             title={`Customer: ${customer.name}`}
             totalAmount={customer.sellingPrice}
             currentlyPaid={customer.amountPaid}
             entityType="customer-booking"
             entityId={customer.id}
-            onSubmit={(amount, note) => recordPayment({ customerId: customer.id, data: { amount, note } })}
+            onSubmit={(amount, note) => recordPayment({ customerId: customer.id, siteId, data: { amount, note } })}
             onClose={() => setIsPaymentModalOpen(false)}
             isPending={isPaying}
           />
         )}
 
-        {isReceiptModalOpen && (
+        {isReceiptModalOpen && canOpenReceipt && (
           <ReceiptEditor
             customer={{ ...customer, siteName }}
+            siteId={siteId}
             siteAddress={siteData?.data?.site?.address}
-            payments={paymentHistory}
+            payments={receiptPayments}
             onClose={() => setIsReceiptModalOpen(false)}
           />
         )}
 
-        {/* Footer Actions */}
         {mode === "view" && (
-          <div className="px-8 py-5 border-t border-border grid grid-cols-2 gap-3">
-            {customer.remaining > 0 && (
-              <Button onClick={() => setIsPaymentModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
-                <IndianRupee className="w-3.5 h-3.5" /> Add Due Payment
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
-              <Download className="w-3.5 h-3.5" /> Receipt
-            </Button>
-            <Button variant="outline" onClick={() => setMode("edit")} className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5">
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </Button>
-            {customer.flatStatus === "BOOKED" && (
-              <Button variant="outline" onClick={() => setMode("cancel")}
-                className="h-11 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 text-red-500 border-red-500/30 hover:bg-red-500/5"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Cancel Booking
-              </Button>
+          <div className="border-t border-border px-8 py-5">
+            {isCancelled ? (
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                This deal is cancelled and read-only.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {canAddPayment && (
+                  <Button onClick={() => setIsPaymentModalOpen(true)} className="h-11 gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest">
+                    <IndianRupee className="h-3.5 w-3.5" /> Add Due Payment
+                  </Button>
+                )}
+                {canOpenReceipt && (
+                  <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest">
+                    <Download className="h-3.5 w-3.5" /> Receipt
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button variant="outline" onClick={() => setMode("edit")} className="h-11 gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest">
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMode("cancel")}
+                    className="h-11 gap-1.5 rounded-none border-red-500/30 text-[9px] font-bold uppercase tracking-widest text-red-500 hover:bg-red-500/5"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Cancel Deal
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -74,11 +74,11 @@ export default function CustomersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(undefined);
   const { data, isLoading } = useAllCustomers(statusFilter);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<(Customer & { siteId: string; siteName: string }) | null>(null);
+  const [selected, setSelected] = useState<(Customer & { siteId: string | null; siteName: string | null }) | null>(null);
 
   const allCustomers = useMemo(() => {
     const raw = (data as any)?.data?.customers ?? [];
-    return raw as (Customer & { siteId: string; siteName: string | null })[];
+    return raw as (Customer & { siteId: string | null; siteName: string | null })[];
   }, [data]);
 
   const filtered = useMemo(() => {
@@ -98,7 +98,8 @@ export default function CustomersPage() {
     return { totalReceivable, totalReceived, totalRemaining };
   }, [filtered]);
 
-  const handleSelectCustomer = useCallback((customer: Customer & { siteId: string; siteName: string | null }) => {
+  const handleSelectCustomer = useCallback((customer: Customer & { siteId: string | null; siteName: string | null }) => {
+    if (!customer.siteId) return;
     setSelected(customer as any);
   }, []);
 
@@ -211,16 +212,22 @@ export default function CustomersPage() {
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{(c as any).siteName ?? '—'}</span>
                       <span className="text-muted-foreground/30">·</span>
-                      <span className="shrink-0 flex items-center gap-1 font-bold">F{c.floorNumber} <ChevronRight className="w-2 h-2" /> {c.flatNumber}</span>
+                      <span className="shrink-0 flex items-center gap-1 font-bold">
+                        F{c.floorNumber ?? '—'} <ChevronRight className="w-2 h-2" /> {c.customFlatId ?? c.flatNumber ?? '—'}
+                      </span>
                     </div>
 
                     {/* Status Badge */}
                     <div className="lg:col-span-1 flex items-center lg:block">
                       <span className={cn(
                         'px-2.5 py-1 text-[11px] font-bold tracking-widest uppercase inline-block',
-                        c.flatStatus === 'SOLD' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
+                        c.dealStatus === 'CANCELLED'
+                          ? 'bg-red-500/10 text-red-500'
+                          : c.flatStatus === 'SOLD'
+                            ? 'bg-emerald-500/10 text-emerald-600'
+                            : 'bg-amber-500/10 text-amber-600'
                       )}>
-                        {c.flatStatus}
+                        {c.dealStatus === 'CANCELLED' ? 'CANCELLED' : c.flatStatus}
                       </span>
                     </div>
 
@@ -252,7 +259,7 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {selected && (
+      {selected?.siteId && (
         <CustomerProfile
           customer={selected}
           siteId={selected.siteId}

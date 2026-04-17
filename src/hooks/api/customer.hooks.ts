@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { customerService } from '@/services/customer.service';
-import { UpdateCustomerInput } from '@/schemas/customer.schema';
+import { CancelDealInput, UpdateCustomerInput } from '@/schemas/customer.schema';
 
 export const useAllCustomers = (status?: string) => {
   return useQuery({
@@ -39,7 +39,7 @@ export const useUpdateCustomer = (options?: { onSuccess?: () => void }) => {
 export const useRecordCustomerPayment = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ customerId, data }: { customerId: string; data: { amount: number; note?: string } }) =>
+    mutationFn: ({ customerId, siteId, data }: { customerId: string; siteId?: string; data: { amount: number; note?: string } }) =>
       customerService.recordPayment(customerId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });
@@ -48,6 +48,9 @@ export const useRecordCustomerPayment = (options?: { onSuccess?: () => void }) =
       queryClient.invalidateQueries({ queryKey: ['floors'] });
       queryClient.invalidateQueries({ queryKey: ['site'] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
+      if (variables.siteId) {
+        queryClient.invalidateQueries({ queryKey: ['site-report', variables.siteId] });
+      }
       queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
@@ -62,17 +65,18 @@ export const useCustomerPayments = (customerId: string) => {
   });
 };
 
-export const useCancelBooking = (options?: { onSuccess?: () => void }) => {
+export const useCancelDeal = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ siteId, flatId, customerId }: { siteId: string; flatId: string; customerId: string }) =>
-      customerService.cancelBooking(siteId, flatId, customerId),
+    mutationFn: ({ siteId, flatId, customerId, data }: { siteId: string; flatId: string; customerId: string; data: CancelDealInput }) =>
+      customerService.cancelDeal(siteId, flatId, customerId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });
       queryClient.invalidateQueries({ queryKey: ['allCustomers'] });
-      queryClient.removeQueries({ queryKey: ['customerPayments', variables.customerId] });
+      queryClient.invalidateQueries({ queryKey: ['customerPayments', variables.customerId] });
       queryClient.invalidateQueries({ queryKey: ['floors'] });
       queryClient.invalidateQueries({ queryKey: ['site'] });
+      queryClient.invalidateQueries({ queryKey: ['site-report', variables.siteId] });
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();

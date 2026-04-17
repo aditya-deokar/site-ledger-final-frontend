@@ -14,6 +14,8 @@ function formatDate(iso: string) { return new Date(iso).toLocaleDateString("en-I
 interface PaymentRecord {
   id: string
   amount: number
+  direction?: 'IN' | 'OUT'
+  movementType?: 'CUSTOMER_PAYMENT' | 'CUSTOMER_REFUND'
   paymentDate?: string
   note: string | null
   createdAt: string
@@ -232,9 +234,21 @@ export function RecordPaymentModal({
                 history.map((pay) => (
                   <div key={pay.id} className="p-4 bg-background border border-border group hover:border-primary/30 transition-all">
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-sm font-bold text-emerald-600 font-sans">{formatINR(pay.amount)}</span>
+                      <span
+                        className={cn(
+                          "text-sm font-bold font-sans",
+                          pay.direction === 'OUT' ? "text-red-500" : "text-emerald-600",
+                        )}
+                      >
+                        {pay.direction === 'OUT' ? '-' : ''}{formatINR(pay.amount)}
+                      </span>
                       <span className="text-[8px] font-bold text-muted-foreground/40 uppercase group-hover:text-primary/50 transition-colors">#{pay.id.slice(-4)}</span>
                     </div>
+                    {pay.movementType && (
+                      <div className="mb-2 text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                        {pay.movementType === 'CUSTOMER_REFUND' ? 'Refund' : 'Payment'}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-[9px] text-muted-foreground mb-1.5">
                       <Calendar className="w-3 h-3 opacity-40 shrink-0" />
                       <span className="font-bold tracking-tight">{formatDate(pay.paymentDate ?? pay.createdAt)}</span>

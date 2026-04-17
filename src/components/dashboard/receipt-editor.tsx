@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
-import { Customer } from "@/schemas/customer.schema"
+import { Customer, CustomerPaymentHistoryItem } from "@/schemas/customer.schema"
 import { Download, X, Plus, Trash2, IndianRupee } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RecordPaymentModal } from "./record-payment-modal"
@@ -102,17 +102,16 @@ interface ReceiptEditorProps {
     carpetArea?: string | null
     ratePerSqft?: string | null
   }
+  siteId?: string
   siteAddress?: string
-  payments: Array<{
-    id: string
-    amount: number
-    note: string | null
-    createdAt: string
-  }>
+  payments: CustomerPaymentHistoryItem[]
   onClose: () => void
 }
 
-export function ReceiptEditor({ customer, siteAddress, payments, onClose }: ReceiptEditorProps) {
+export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose }: ReceiptEditorProps) {
+  const receiptPayments = payments.filter(
+    (payment) => payment.direction === 'IN' && payment.movementType === 'CUSTOMER_PAYMENT',
+  )
   const stableReceiptNumber = buildReceiptNumber(customer.id, customer.createdAt)
   const [isLedgerPaymentModalOpen, setIsLedgerPaymentModalOpen] = useState(false)
   const {
@@ -138,7 +137,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
       totalAmount: customer.sellingPrice,
       amountInWords: convertToIndianWords(customer.sellingPrice),
       registrationDate: customer.createdAt.split('T')[0],
-      payments: payments.map(p => ({
+      payments: receiptPayments.map(p => ({
         id: p.id,
         date: p.createdAt.split('T')[0],
         amount: p.amount,
@@ -172,7 +171,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   }, [totalWithTax, setValue, watchedTotalAmount, watchedTaxes])
 
   useEffect(() => {
-    const syncedPayments = payments.map((payment) => ({
+    const syncedPayments = receiptPayments.map((payment) => ({
       id: payment.id,
       date: payment.createdAt.split('T')[0],
       amount: payment.amount,
@@ -196,7 +195,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
     if (needsSync) {
       setValue('payments', syncedPayments)
     }
-  }, [payments, watchedPayments, setValue])
+  }, [receiptPayments, watchedPayments, setValue])
 
   useEffect(() => {
     if (siteAddress && !watchedSiteAddress) {
@@ -772,7 +771,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
           }}
           onSubmit={(amount, note) => {
             recordPayment(
-              { customerId: customer.id, data: { amount, note } },
+              { customerId: customer.id, siteId, data: { amount, note } },
               {
                 onSuccess: (response: any) => {
                   const payment = response?.data?.payment

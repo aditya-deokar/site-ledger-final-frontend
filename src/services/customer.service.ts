@@ -1,8 +1,14 @@
 import api from '@/lib/axios';
-import { UpdateCustomerInput, SiteCustomersResponse } from '@/schemas/customer.schema';
+import {
+  AllCustomersResponse,
+  CancelDealInput,
+  CustomerPaymentsResponse,
+  SiteCustomersResponse,
+  UpdateCustomerInput,
+} from '@/schemas/customer.schema';
 
 export const customerService = {
-  getAllCustomers: (status?: string) =>
+  getAllCustomers: (status?: string): Promise<AllCustomersResponse> =>
     api.get('/customers', { params: status ? { status } : {} }),
 
   getSiteCustomers: (siteId: string): Promise<SiteCustomersResponse> =>
@@ -17,9 +23,9 @@ export const customerService = {
   recordPayment: (customerId: string, data: { amount: number; note?: string }) =>
     api.patch(`/customers/${customerId}/payment`, data),
 
-  getPayments: (customerId: string) =>
+  getPayments: (customerId: string): Promise<CustomerPaymentsResponse> =>
     api.get(`/customers/${customerId}/payments`),
 
-  cancelBooking: (siteId: string, flatId: string, customerId: string) =>
-    api.delete(`/sites/${siteId}/flats/${flatId}/customer/${customerId}`),
+  cancelDeal: (siteId: string, flatId: string, customerId: string, data: CancelDealInput) =>
+    api.patch(`/sites/${siteId}/flats/${flatId}/customer/${customerId}/cancel`, data),
 };
