@@ -142,13 +142,11 @@
     @apply border-border outline-primary/50;
   }
   html {
-    font-size: 17px;
-    --app-zoom: 0.75;
-    zoom: var(--app-zoom);
+    font-size: 16px;
   }
   html, body, #root, #__next {
-    min-height: calc(100vh / var(--app-zoom));
-    height: auto;
+    min-height: 100%;
+    height: 100%;
   }
   body {
     @apply bg-background text-foreground font-sans;

@@ -12,7 +12,7 @@ import { Header } from './header';
 
 function DashboardShellLoading() {
   return (
-    <div className="flex min-h-[calc(100vh/var(--app-zoom))] items-center justify-center bg-gray-50 px-6 dark:bg-black">
+    <div className="flex min-h-dvh items-center justify-center bg-gray-50 px-6 dark:bg-black">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center border border-border bg-background">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -46,11 +46,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-[calc(100vh/var(--app-zoom))] overflow-hidden bg-gray-50 dark:bg-black font-sans">
+      <div className="flex min-h-dvh overflow-hidden bg-gray-50 dark:bg-black font-sans">
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0">
           <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-10 lg:pb-10 lg:pt-8">
+          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-7">
             {children}
           </main>
         </div>

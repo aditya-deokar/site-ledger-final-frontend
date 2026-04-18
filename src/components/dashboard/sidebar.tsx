@@ -97,11 +97,11 @@ export function Sidebar() {
       )}
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-[calc(100vh/var(--app-zoom))] flex-col border-r border-sidebar-border bg-sidebar transition-[transform] duration-300 ease-out will-change-transform",
+        "fixed inset-y-0 left-0 z-50 flex h-dvh flex-col border-r border-sidebar-border bg-sidebar transition-[transform] duration-300 ease-out will-change-transform",
         "w-64 translate-x-0 lg:relative lg:z-auto",
         "lg:transition-[width,transform] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] lg:will-change-[width]",
         !open && "max-lg:-translate-x-full",
-        isDesktopCompact ? "lg:w-20" : "lg:w-64"
+        isDesktopCompact ? "lg:w-20" : "lg:w-60"
       )}>
         {/* Logo & Branding */}
         <div className={cn("relative px-4 pt-5 pb-3", desktopTransition, isDesktopCompact ? "lg:px-2 lg:pt-12 lg:pb-0" : "lg:pt-5 lg:pb-4")}>
@@ -139,7 +139,7 @@ export function Sidebar() {
               <div className={cn(
                 "flex flex-col gap-0.5 pr-2",
                 labelTransition,
-                isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[10rem] lg:translate-x-0 lg:opacity-100"
+                isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-40 lg:translate-x-0 lg:opacity-100"
               )}>
                 <span className="text-xl font-serif tracking-tight text-sidebar-foreground whitespace-nowrap">
                   SiteLedger
@@ -183,7 +183,7 @@ export function Sidebar() {
                   "group flex items-center text-[10px] font-bold uppercase tracking-widest transition-[padding,background-color,color] duration-300 ease-out",
                   isDesktopCompact
                     ? `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
-                    : "h-12 gap-2 px-3 pr-4",
+                    : "h-11 gap-2 px-2.5 pr-3.5",
                   isActive
                     ? isDesktopCompact
                       ? "bg-primary/10 text-primary"
@@ -196,7 +196,7 @@ export function Sidebar() {
                 </span>
                 <span className={cn(
                   labelTransition,
-                  isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[12rem] lg:translate-x-0 lg:opacity-100"
+                  isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-48 lg:translate-x-0 lg:opacity-100"
                 )}>
                   {item.label}
                 </span>
@@ -205,41 +205,64 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className={cn("border-t border-sidebar-border px-4 py-4", desktopTransition, isDesktopCompact && "lg:px-2")}>
-          <div className={cn("flex", isDesktopCompact ? "justify-center" : "justify-start")}>
-            <span className={cn("flex items-center justify-center", isDesktopCompact ? compactSlotClass : expandedSlotClass)}>
-              <ModeToggle />
-            </span>
-          </div>
-        </div>
+        {isDesktopCompact ? (
+          <>
+            <div className={cn("border-t border-sidebar-border px-4 py-4", desktopTransition, "lg:px-2")}>
+              <div className="flex justify-center">
+                <span className={cn("flex items-center justify-center", compactSlotClass)}>
+                  <ModeToggle />
+                </span>
+              </div>
+            </div>
 
-        {/* Bottom Nav */}
-        <div className={cn("flex flex-col gap-1 border-t border-sidebar-border px-4 py-4", desktopTransition, isDesktopCompact && "lg:items-center lg:px-2")}>
-          {bottomItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={handleNavigation}
-              title={isDesktopCompact ? item.label : undefined}
-              className={cn(
-                "flex items-center text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-[padding,background-color,color] duration-300 ease-out",
-                isDesktopCompact
-                  ? `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
-                  : "h-12 gap-2 px-3 pr-4"
-              )}
-            >
-              <span className={cn("flex shrink-0 items-center justify-center", isDesktopCompact ? compactSlotClass : expandedSlotClass)}>
-                <item.icon className="h-4 w-4 shrink-0 text-red-400 dark:text-red-500/50" />
+            {/* Bottom Nav */}
+            <div className={cn("flex flex-col gap-1 border-t border-sidebar-border px-4 py-4", desktopTransition, "lg:items-center lg:px-2")}>
+              {bottomItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={handleNavigation}
+                  title={item.label}
+                  className={cn(
+                    "flex items-center text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-[padding,background-color,color] duration-300 ease-out",
+                    `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
+                  )}
+                >
+                  <span className={cn("flex shrink-0 items-center justify-center", compactSlotClass)}>
+                    <item.icon className="h-4 w-4 shrink-0 text-red-400 dark:text-red-500/50" />
+                  </span>
+                  <span className={cn(labelTransition, "lg:max-w-0 lg:translate-x-1 lg:opacity-0")}>
+                    {item.label}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className={cn("border-t border-sidebar-border px-4 py-4", desktopTransition)}>
+            <div className="flex items-center justify-between gap-3">
+              <span className={cn("flex items-center justify-center", expandedSlotClass)}>
+                <ModeToggle />
               </span>
-              <span className={cn(
-                labelTransition,
-                isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[8rem] lg:translate-x-0 lg:opacity-100"
-              )}>
-                {item.label}
-              </span>
-            </Link>
-          ))}
-        </div>
+
+              {bottomItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={handleNavigation}
+                  className="flex h-10 items-center gap-2 rounded-md px-3 text-[10px] font-bold uppercase tracking-widest text-red-500 transition-[background-color,color] duration-300 ease-out hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:text-red-300"
+                >
+                  <span className={cn("flex shrink-0 items-center justify-center", expandedSlotClass)}>
+                    <item.icon className="h-4 w-4 shrink-0 text-red-400 dark:text-red-500/50" />
+                  </span>
+                  <span className={cn(labelTransition, "lg:max-w-32 lg:translate-x-0 lg:opacity-100")}>
+                    {item.label}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
     </>
   )
