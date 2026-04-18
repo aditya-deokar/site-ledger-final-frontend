@@ -11,7 +11,7 @@ import {
   Building2,
   UserCircle,
   LogOut,
-  PanelLeft,
+  Menu,
   Users2,
   UserCheck,
   X
@@ -20,6 +20,8 @@ import {
 import Image from "next/image"
 import logo from "@/assets/logo.png"
 import { ModeToggle } from "@/components/mode-toggle"
+
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "site-ledger-sidebar-collapsed"
 
 // ── Sidebar Context (for hamburger toggle) ──────────
 type SidebarCtx = {
@@ -40,10 +42,20 @@ export const useSidebar = () => useContext(SidebarContext)
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false
+    }
+
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"
+  })
   const toggle = useCallback(() => setOpen(o => !o), [])
   const close = useCallback(() => setOpen(false), [])
   const toggleCollapsed = useCallback(() => setCollapsed((value) => !value), [])
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed))
+  }, [collapsed])
 
   return (
     <SidebarContext.Provider value={{ open, collapsed, toggle, close, toggleCollapsed }}>
@@ -67,36 +79,15 @@ const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]
 export function Sidebar() {
   const pathname = usePathname()
   const { open, collapsed, close, toggleCollapsed } = useSidebar()
-  const [hoverExpanded, setHoverExpanded] = useState(false)
-  const [suspendHoverExpand, setSuspendHoverExpand] = useState(false)
-  const isDesktopCompact = collapsed && !hoverExpanded
-
-  useEffect(() => {
-    if (!collapsed) {
-      setHoverExpanded(false)
-      setSuspendHoverExpand(false)
-    }
-  }, [collapsed])
-
-  const handleMouseEnter = useCallback(() => {
-    if (collapsed && !suspendHoverExpand) {
-      setHoverExpanded(true)
-    }
-  }, [collapsed, suspendHoverExpand])
-
-  const handleMouseLeave = useCallback(() => {
-    setHoverExpanded(false)
-    setSuspendHoverExpand(false)
-  }, [])
+  const isDesktopCompact = collapsed
+  const desktopTransition = "lg:transition-[width,padding,gap,transform] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)]"
+  const labelTransition = "overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ease-out"
+  const compactSlotClass = "lg:h-12 lg:w-12"
+  const expandedSlotClass = "h-10 w-10"
 
   const handleNavigation = useCallback(() => {
     close()
-
-    if (collapsed) {
-      setHoverExpanded(false)
-      setSuspendHoverExpand(true)
-    }
-  }, [close, collapsed])
+  }, [close])
 
   return (
     <>
@@ -106,38 +97,80 @@ export function Sidebar() {
       )}
 
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 flex h-[calc(100vh/var(--app-zoom))] flex-col border-r border-sidebar-border bg-sidebar transition-[transform] duration-300 ease-out will-change-transform",
         "w-64 translate-x-0 lg:relative lg:z-auto",
+        "lg:transition-[width,transform] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)] lg:will-change-[width]",
         !open && "max-lg:-translate-x-full",
         isDesktopCompact ? "lg:w-20" : "lg:w-64"
-      )}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      >
+      )}>
         {/* Logo & Branding */}
-        <div className={cn("flex items-center justify-between gap-3 p-6 pb-8", isDesktopCompact && "lg:px-4 lg:py-8")}>
-          <Link href="/" className={cn("group flex min-w-0 items-center gap-4 px-2", isDesktopCompact && "lg:justify-center lg:px-0")} onClick={handleNavigation}>
-            <Image
-              src={logo}
-              alt="SiteLedger Logo"
-              width={32}
-              height={32}
-              className={cn("shrink-0", isDesktopCompact && "lg:h-8 lg:w-8")}
-            />
-            <div className={cn("flex flex-col gap-0.5 overflow-hidden pl-1 pr-2", isDesktopCompact && "lg:hidden")}>
-              <span className="text-xl font-serif tracking-tight text-sidebar-foreground group-hover:text-primary transition-colors whitespace-nowrap">
-                SiteLedger
+        <div className={cn("relative px-4 pt-5 pb-3", desktopTransition, isDesktopCompact ? "lg:px-2 lg:pt-12 lg:pb-0" : "lg:pt-5 lg:pb-4")}>
+          {isDesktopCompact && (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-pressed={collapsed}
+              className="absolute top-2 left-1/2 z-10 hidden h-10 w-10 -translate-x-1/2 items-center justify-center text-sidebar-foreground/80 transition-colors duration-200 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:inline-flex"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          )}
+
+          <div className={cn("flex items-center", isDesktopCompact ? "justify-center" : "justify-between gap-3")}>
+            <Link
+              href="/"
+              className={cn(
+                "group flex min-w-0 items-center gap-3",
+                isDesktopCompact ? "lg:flex-col lg:justify-center lg:gap-0" : "flex-1"
+              )}
+              onClick={handleNavigation}
+            >
+              <span className={cn("flex shrink-0 items-center justify-center", isDesktopCompact ? "lg:h-10 lg:w-10" : expandedSlotClass)}>
+                <Image
+                  src={logo}
+                  alt="SiteLedger Logo"
+                  width={32}
+                  height={32}
+                  className={cn("shrink-0", isDesktopCompact && "lg:h-8 lg:w-8")}
+                />
               </span>
-            </div>
-          </Link>
-          {/* Close button on mobile */}
-          <button onClick={close} className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors lg:hidden">
-            <X className="w-5 h-5" />
-          </button>
+              <div className={cn(
+                "flex flex-col gap-0.5 pr-2",
+                labelTransition,
+                isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[10rem] lg:translate-x-0 lg:opacity-100"
+              )}>
+                <span className="text-xl font-serif tracking-tight text-sidebar-foreground whitespace-nowrap">
+                  SiteLedger
+                </span>
+              </div>
+            </Link>
+
+            {!isDesktopCompact && (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-pressed={collapsed}
+                className="hidden h-10 w-10 shrink-0 items-center justify-center text-sidebar-foreground/80 transition-colors duration-200 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:inline-flex"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+
+            <button
+              onClick={close}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors lg:hidden"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className={cn("flex flex-1 flex-col gap-1 px-4 overflow-y-auto scrollbar-none", isDesktopCompact && "lg:px-3")}>
+        <nav className={cn("flex flex-1 flex-col gap-1 px-4 overflow-y-auto scrollbar-none", desktopTransition, isDesktopCompact ? "lg:items-center lg:px-2 lg:pt-0" : "pt-1")}>
           {menuItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
@@ -147,48 +180,41 @@ export function Sidebar() {
                 onClick={handleNavigation}
                 title={isDesktopCompact ? item.label : undefined}
                 className={cn(
-                  "group flex items-center gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-widest transition-all",
-                  isDesktopCompact && "lg:justify-center lg:px-2",
+                  "group flex items-center text-[10px] font-bold uppercase tracking-widest transition-[padding,background-color,color] duration-300 ease-out",
+                  isDesktopCompact
+                    ? `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
+                    : "h-12 gap-2 px-3 pr-4",
                   isActive
-                    ? "bg-primary/10 text-primary border-r-2 border-primary"
+                    ? isDesktopCompact
+                      ? "bg-primary/10 text-primary"
+                      : "bg-primary/10 text-primary border-r-2 border-primary"
                     : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 )}
               >
-                <item.icon className={cn("w-4 h-4", isActive ? "text-primary" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60")} />
-                <span className={cn(isDesktopCompact && "lg:hidden")}>{item.label}</span>
+                <span className={cn("flex shrink-0 items-center justify-center", isDesktopCompact ? compactSlotClass : expandedSlotClass)}>
+                  <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60")} />
+                </span>
+                <span className={cn(
+                  labelTransition,
+                  isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[12rem] lg:translate-x-0 lg:opacity-100"
+                )}>
+                  {item.label}
+                </span>
               </Link>
             )
           })}
         </nav>
 
-        <div className={cn("border-t border-sidebar-border p-4", isDesktopCompact && "lg:px-3")}>
-          <div className={cn("flex items-center gap-2", isDesktopCompact ? "justify-center lg:flex-col" : "justify-between")}>
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className={cn(
-                "hidden border border-sidebar-border bg-sidebar-accent/50 text-sidebar-foreground/70 transition-colors hover:border-primary/30 hover:text-sidebar-foreground lg:flex",
-                isDesktopCompact ? "h-10 w-10 items-center justify-center" : "h-10 flex-1 items-center justify-center gap-2 px-3"
-              )}
-            >
-              <PanelLeft className="h-4 w-4" />
-              {!isDesktopCompact && (
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">
-                  {collapsed ? "Expand" : "Collapse"}
-                </span>
-              )}
-            </button>
-
-            <div className={cn("flex", isDesktopCompact ? "justify-center" : "ml-auto")}>
+        <div className={cn("border-t border-sidebar-border px-4 py-4", desktopTransition, isDesktopCompact && "lg:px-2")}>
+          <div className={cn("flex", isDesktopCompact ? "justify-center" : "justify-start")}>
+            <span className={cn("flex items-center justify-center", isDesktopCompact ? compactSlotClass : expandedSlotClass)}>
               <ModeToggle />
-            </div>
+            </span>
           </div>
         </div>
 
         {/* Bottom Nav */}
-        <div className={cn("flex flex-col gap-1 border-t border-sidebar-border p-4", isDesktopCompact && "lg:px-3")}>
+        <div className={cn("flex flex-col gap-1 border-t border-sidebar-border px-4 py-4", desktopTransition, isDesktopCompact && "lg:items-center lg:px-2")}>
           {bottomItems.map((item) => (
             <Link
               key={item.label}
@@ -196,12 +222,21 @@ export function Sidebar() {
               onClick={handleNavigation}
               title={isDesktopCompact ? item.label : undefined}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-all",
-                isDesktopCompact && "lg:justify-center lg:px-2"
+                "flex items-center text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/20 transition-[padding,background-color,color] duration-300 ease-out",
+                isDesktopCompact
+                  ? `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
+                  : "h-12 gap-2 px-3 pr-4"
               )}
             >
-              <item.icon className="w-4 h-4 text-red-400 dark:text-red-500/50" />
-              <span className={cn(isDesktopCompact && "lg:hidden")}>{item.label}</span>
+              <span className={cn("flex shrink-0 items-center justify-center", isDesktopCompact ? compactSlotClass : expandedSlotClass)}>
+                <item.icon className="h-4 w-4 shrink-0 text-red-400 dark:text-red-500/50" />
+              </span>
+              <span className={cn(
+                labelTransition,
+                isDesktopCompact ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0" : "lg:max-w-[8rem] lg:translate-x-0 lg:opacity-100"
+              )}>
+                {item.label}
+              </span>
             </Link>
           ))}
         </div>

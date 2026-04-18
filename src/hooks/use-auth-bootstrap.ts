@@ -11,8 +11,22 @@ import {
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
+function getInitialAuthStatus(): AuthStatus {
+  const accessToken = getStoredAccessToken();
+
+  if (accessToken && !isTokenExpiringSoon(accessToken, 5_000)) {
+    return 'authenticated';
+  }
+
+  if (!accessToken && !getStoredRefreshToken()) {
+    return 'unauthenticated';
+  }
+
+  return 'loading';
+}
+
 export function useAuthBootstrap() {
-  const [status, setStatus] = useState<AuthStatus>('loading');
+  const [status, setStatus] = useState<AuthStatus>(getInitialAuthStatus);
 
   useEffect(() => {
     let cancelled = false;
