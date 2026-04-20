@@ -28,6 +28,12 @@ function formatDate(iso: string) {
   }).toUpperCase()
 }
 
+function getCurrentDateTimeLocalInput() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
 // ── Add Expense Panel ─────────────────────────────────
 function AddExpensePanel({
   siteId,
@@ -44,7 +50,7 @@ function AddExpensePanel({
 
   const { register, handleSubmit, watch, control, formState: { errors } } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
-    defaultValues: { type: "GENERAL", amount: 0, amountPaid: 0, paymentDate: undefined, reason: '', vendorId: '', description: '' },
+    defaultValues: { type: "GENERAL", amount: 0, amountPaid: 0, paymentDate: getCurrentDateTimeLocalInput(), reason: '', vendorId: '', description: '' },
   })
 
   const expenseType = watch("type")

@@ -26,6 +26,7 @@ export interface Flat {
   id: string;
   flatNumber: number | null;
   customFlatId: string | null;
+  unitType: string | null;
   status: 'AVAILABLE' | 'BOOKED' | 'SOLD';
   flatType: 'CUSTOMER' | 'EXISTING_OWNER';
   customer: FlatCustomer | null;
@@ -50,6 +51,7 @@ export type CreateFloorInput = z.infer<typeof createFloorSchema>;
 
 export const createFlatSchema = z.object({
   customFlatId: z.string().min(1, 'Flat ID is required'),
+  unitType: z.string().trim().min(1, 'Unit type is required').optional(),
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
 });
 export type CreateFlatInput = z.input<typeof createFlatSchema>;

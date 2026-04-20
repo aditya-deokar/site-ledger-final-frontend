@@ -15,6 +15,11 @@ import { Loader2, Plus, X, Phone, ArrowDownLeft, ArrowUpRight } from "lucide-rea
 
 function formatINR(n: number) { return "₹" + n.toLocaleString("en-IN") }
 function formatDate(iso: string) { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() }
+function getCurrentDateTimeLocalInput() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
 
 const COLORS = ["bg-teal-600","bg-blue-600","bg-amber-500","bg-rose-600","bg-violet-600","bg-emerald-600"]
 function ac(n: string) { return COLORS[(n.charCodeAt(0) + (n.charCodeAt(1) || 0)) % COLORS.length] }
@@ -43,7 +48,16 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
   const { mutate: retTx, isPending: returning } = useReturnInvestment({ onSuccess: () => { setMode(null); setApiError(null) } })
   const [payTx, setPayTx] = useState<Transaction | null>(null)
   const { mutate: updatePayment, isPending: updatingPay } = useUpdateInvestorPayment(investor.id, { onSuccess: () => setPayTx(null) })
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<TransactionInput>({ resolver: zodResolver(transactionSchema) })
+  const getTxDefaults = (): Partial<TransactionInput> => ({
+    amount: 0,
+    amountPaid: 0,
+    paymentDate: getCurrentDateTimeLocalInput(),
+    note: "",
+  })
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<TransactionInput>({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: getTxDefaults(),
+  })
 
   const txs: Transaction[] = data?.data?.transactions ?? []
   const total = data?.data?.totalInvested ?? investor.totalInvested
@@ -57,7 +71,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
     : null
 
   const handleSetMode = (m: "invest" | "return") => {
-    reset()
+    reset(getTxDefaults())
     setMode(m)
     // Pre-fill return amount with equity return from total profit
     if (m === "return" && calculatedReturn != null && calculatedReturn > 0) {
@@ -137,7 +151,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
             })} className="mt-4 border border-border p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Return Investment"}</p>
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset() }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
                   Back
                 </Button>
               </div>
@@ -201,7 +215,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 <Button type="submit" disabled={adding || returning} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "return" ? "bg-red-500 hover:bg-red-600" : "")}>
                   {(adding || returning) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Return Capital"}
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset() }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
               </div>
             </form>
           )}

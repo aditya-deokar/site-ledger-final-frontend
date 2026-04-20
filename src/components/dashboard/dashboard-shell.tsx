@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Loader2 } from 'lucide-react';
@@ -31,16 +31,21 @@ function DashboardShellLoading() {
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const { isLoading, isAuthenticated } = useAuthBootstrap();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, mounted]);
 
-  if (isLoading || !isAuthenticated) {
+  if (!mounted || isLoading || !isAuthenticated) {
     return <DashboardShellLoading />;
   }
 
