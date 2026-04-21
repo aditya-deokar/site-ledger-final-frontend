@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Plus, Mail, Phone, ArrowUpRight, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getApiErrorMessage, getApiErrorStatus } from '@/lib/api-error';
 import { CompanyWithdrawal, Partner } from '@/schemas/company.schema';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -348,13 +350,22 @@ function WithdrawalLedger({ withdrawals }: { withdrawals: CompanyWithdrawal[] })
 }
 
 export default function CompanyPage() {
-  const { data: companyData, isLoading } = useCompany();
-  const { data: withdrawalsData, isLoading: withdrawalsLoading } = useWithdrawals();
+  const router = useRouter();
+  const { data: companyData, isLoading, error: companyError } = useCompany();
+  const companyExists = !!companyData?.data?.company;
+  const companyMissing = getApiErrorStatus(companyError) === 404;
+  const { data: withdrawalsData, isLoading: withdrawalsLoading } = useWithdrawals({ enabled: companyExists });
   const [addOpen, setAddOpen] = useState(false);
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [editCompanyOpen, setEditCompanyOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [localPartners, setLocalPartners] = useState<Partner[]>([]);
+
+  useEffect(() => {
+    if (companyMissing) {
+      router.replace('/setup-company');
+    }
+  }, [companyMissing, router]);
 
   // Sync local partners with API data
   useEffect(() => {
@@ -409,6 +420,35 @@ export default function CompanyPage() {
     return (
       <DashboardShell>
         <CompanySkeleton />
+      </DashboardShell>
+    );
+  }
+
+  if (companyMissing) {
+    return (
+      <DashboardShell>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="text-center space-y-3">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Redirecting to company setup...</p>
+          </div>
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <DashboardShell>
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="max-w-md space-y-3 border border-border bg-background p-6 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">Company Unavailable</p>
+            <h1 className="text-2xl font-serif">We couldn&apos;t load your company profile.</h1>
+            <p className="text-sm text-muted-foreground">
+              {getApiErrorMessage(companyError, 'Something went wrong while loading your company details.')}
+            </p>
+          </div>
+        </div>
       </DashboardShell>
     );
   }

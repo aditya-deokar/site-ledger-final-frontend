@@ -11,7 +11,7 @@ export type PartnerInput = z.infer<typeof partnerInputSchema>;
 
 export const createCompanySchema = z.object({
   name: z.string().min(1, 'Company name is required'),
-  address: z.string().min(1, 'Company address is required'),
+  address: z.string().optional(),
 });
 
 export const updateCompanySchema = z.object({

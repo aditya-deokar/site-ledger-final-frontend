@@ -15,3 +15,11 @@ export function getApiErrorMessage(error: unknown, fallback = 'Request failed.')
 
   return fallback;
 }
+
+export function getApiErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('status' in error)) {
+    return undefined;
+  }
+
+  return typeof error.status === 'number' ? error.status : undefined;
+}

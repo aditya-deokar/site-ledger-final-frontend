@@ -16,11 +16,12 @@ export const useCreateCompany = () => {
   });
 };
 
-export const useCompany = () => {
+export const useCompany = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['company'],
     queryFn: () => companyService.getCompany(),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 
@@ -116,11 +117,12 @@ export const useWithdrawFund = (options?: { onSuccess?: () => void }) => {
   });
 };
 
-export const useWithdrawals = () => {
+export const useWithdrawals = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['company-withdrawals'],
     queryFn: () => companyService.getWithdrawals(),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 
