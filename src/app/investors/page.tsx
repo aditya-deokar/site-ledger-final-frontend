@@ -8,7 +8,7 @@ import {
   useInvestors, useCreateInvestor, useUpdateInvestor, useDeleteInvestor,
   useTransactions, useAddTransaction, useReturnInvestment, usePayInterest, useUpdateInvestorPayment,
 } from '@/hooks/api/investor.hooks';
-import { useSites } from '@/hooks/api/site.hooks';
+import { useSite, useSites } from '@/hooks/api/site.hooks';
 import {
   createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput,
   transactionSchema, TransactionInput, Investor, Transaction,
@@ -31,14 +31,16 @@ function formatDate(iso: string) {
 const AVATAR_COLORS = ['bg-teal-600','bg-blue-600','bg-amber-500','bg-rose-600','bg-violet-600','bg-emerald-600'];
 function avatarColor(name: string) { return AVATAR_COLORS[(name.charCodeAt(0) + (name.charCodeAt(1) || 0)) % AVATAR_COLORS.length]; }
 function initials(name: string) { const p = name.trim().split(' '); return (p[0][0] + (p[1]?.[0] || '')).toUpperCase(); }
-function formatTransactionKind(kind: Transaction['kind']) {
+function formatTransactionKind(kind: Transaction['kind'], investorType?: Investor['type']) {
   switch (kind) {
     case 'PRINCIPAL_IN':
       return 'Principal In';
     case 'PRINCIPAL_OUT':
-      return 'Principal Out';
+      if (!investorType) return 'Payout';
+      return investorType === 'EQUITY' ? 'Capital Return' : 'Principal Out';
     case 'INTEREST':
-      return 'Interest';
+      if (!investorType) return 'Interest / Profit Share';
+      return investorType === 'EQUITY' ? 'Profit Share' : 'Interest';
     default:
       return kind;
   }
@@ -101,7 +103,7 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
             investorType === 'EQUITY' ? 'border-primary/20 bg-primary/5 text-muted-foreground' : 'border-amber-500/20 bg-amber-500/5 text-muted-foreground'
           )}>
             {investorType === 'EQUITY'
-              ? 'Equity investors are attached to a site. Create the investor here, then use Ledger & Actions later to add capital or returns without creating a duplicate record.'
+              ? 'Equity investors are attached to a site. Create the investor here, then use Ledger & Actions later to add capital or record profit share without creating a duplicate record.'
               : 'Fixed-rate investors stay at company level. Create the investor once, then use Ledger & Actions to add capital, return principal, or record interest payments.'}
           </div>
 
@@ -197,7 +199,7 @@ function UpdateInvestorForm({ investor, onClose }: { investor: Investor; onClose
             investor.type === 'EQUITY' ? 'border-primary/20 bg-primary/5' : 'border-amber-500/20 bg-amber-500/5'
           )}>
             {investor.type === 'EQUITY'
-              ? 'This investor stays attached to their current site. Use Ledger & Actions to add more capital or record returns.'
+              ? 'This investor stays attached to their current site. Use Ledger & Actions to add more capital or record profit share.'
               : 'Fixed-rate ledger actions remain available from Ledger & Actions. The cadence selector below is still informational only.'}
           </div>
 
@@ -265,6 +267,7 @@ function UpdateInvestorForm({ investor, onClose }: { investor: Investor; onClose
 // ── Transaction History Modal ───────────────────────
 function TransactionModal({ investor, onClose }: { investor: Investor; onClose: () => void }) {
   const { data, isLoading } = useTransactions(investor.id);
+  const { data: investorSiteData, isLoading: isSiteLoading } = useSite(investor.siteId ?? '');
   const [addMode, setAddMode] = useState<'invest' | 'return' | 'interest' | null>(null);
   const { mutate: addTx, isPending: addingTx } = useAddTransaction({ onSuccess: () => setAddMode(null) });
   const { mutate: returnTx, isPending: returningTx } = useReturnInvestment({ onSuccess: () => setAddMode(null) });
@@ -280,9 +283,34 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
   const transactions: Transaction[] = data?.data?.transactions ?? [];
   const totalInvested = data?.data?.totalInvested ?? investor.totalInvested;
   const totalReturned = data?.data?.totalReturned ?? investor.totalReturned;
-  const interestPaid = data?.data?.interestPaid ?? investor.interestPaid;
+  const equityProfitTransactions = investor.type === 'EQUITY'
+    ? transactions.filter((transaction) => transaction.kind === 'INTEREST')
+    : [];
+  const interestPaid = investor.type === 'EQUITY'
+    ? equityProfitTransactions.reduce((sum, transaction) => sum + transaction.amountPaid, 0)
+    : data?.data?.interestPaid ?? investor.interestPaid;
   const outstandingPrincipal = data?.data?.outstandingPrincipal ?? investor.outstandingPrincipal;
   const isPending = addingTx || returningTx || payingInterest;
+  const siteProfit = Math.max(investorSiteData?.data?.site?.totalProfit ?? 0, 0);
+  const estimatedProfitShare = investor.type === 'EQUITY'
+    ? Math.round(((investor.equityPercentage ?? 0) / 100) * siteProfit)
+    : 0;
+  const recordedProfitShare = investor.type === 'EQUITY'
+    ? equityProfitTransactions.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0)
+    : 0;
+  const pendingProfitShare = investor.type === 'EQUITY'
+    ? equityProfitTransactions.reduce((sum, transaction) => sum + Math.max(transaction.remaining, 0), 0)
+    : 0;
+  const hasOpenProfitShare = investor.type === 'EQUITY'
+    ? equityProfitTransactions.some((transaction) => transaction.paymentStatus !== 'COMPLETED')
+    : false;
+  const availableProfitShareToRecord = investor.type === 'EQUITY'
+    ? Math.max(estimatedProfitShare - recordedProfitShare, 0)
+    : 0;
+  const canRecordProfitShare = investor.type === 'EQUITY'
+    ? !isLoading && !isSiteLoading && totalInvested > 0 && availableProfitShareToRecord > 0 && !hasOpenProfitShare
+    : false;
+  const principalReturned = Math.max(totalReturned - interestPaid, 0);
 
   const calculateInterest = () => {
     const rate = investor.fixedRate ?? 0;
@@ -291,6 +319,23 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
     const monthly = Math.round(annual / 12);
     const daily = Math.round(annual / 365);
     setCalcResult({ annual, monthly, daily });
+  };
+
+  const openAddMode = (nextMode: 'invest' | 'return' | 'interest') => {
+    if (nextMode === 'interest' && investor.type === 'EQUITY' && !canRecordProfitShare) {
+      return;
+    }
+
+    setAddMode(nextMode);
+    setApiError(null);
+    setCalcResult(null);
+
+    if (nextMode === 'interest' && investor.type === 'EQUITY') {
+      reset({ amount: availableProfitShareToRecord, note: '' });
+      return;
+    }
+
+    reset({ amount: undefined, note: '' });
   };
 
   const onSubmit = (formData: TransactionInput) => {
@@ -313,7 +358,9 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
               {investor.type === 'EQUITY' ? `Equity · ${investor.siteName}` : `Fixed Rate · ${investor.fixedRate}% p.a.`}
             </p>
             <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
-              Add capital, principal returns, or interest from here. Follow-up payments stay inside each ledger row, so you only enter the new amount instead of re-entering the full transaction value.
+              {investor.type === 'EQUITY'
+                ? 'Add capital or record profit share from here. Equity payouts should come from profit, not principal return.'
+                : 'Add capital, principal returns, or interest from here. Follow-up payments stay inside each ledger row, so you only enter the new amount instead of re-entering the full transaction value.'}
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground/40 hover:text-foreground"><X className="w-5 h-5" /></button>
@@ -340,7 +387,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
                 <div key={t.id} className="grid grid-cols-6 gap-4 px-4 py-4 items-center">
                   <span className="text-[11px] font-bold tracking-widest text-muted-foreground">{formatDate(t.createdAt)}</span>
                   <span className={cn('inline-flex w-fit px-2 py-1 text-[9px] font-bold tracking-widest uppercase border', transactionKindClasses(t.kind))}>
-                    {formatTransactionKind(t.kind)}
+                    {formatTransactionKind(t.kind, investor.type)}
                   </span>
                   <span className={cn(
                     'text-base font-sans font-bold',
@@ -373,7 +420,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-4 border border-border p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">
-                  {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? 'Interest Payment' : 'Return Principal'}
+                  {addMode === 'invest' ? 'New Investment' : addMode === 'interest' ? investor.type === 'EQUITY' ? 'Profit Share Payout' : 'Interest Payment' : 'Return Principal'}
                 </p>
                 <Button
                   type="button"
@@ -389,6 +436,27 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
               {apiError && (
                 <div className="bg-red-500/10 border border-red-500/20 p-3 text-[10px] font-bold text-red-500">
                   {apiError}
+                </div>
+              )}
+
+              {addMode === 'interest' && investor.type === 'EQUITY' && (
+                <div className="border border-primary/20 bg-primary/5 p-3 flex flex-col gap-2">
+                  <p className="text-[9px] font-bold tracking-widest uppercase text-primary">
+                    Profit Share {investor.equityPercentage ?? 0}% of {formatINR(siteProfit)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Estimated share: <span className="font-bold text-foreground">{formatINR(estimatedProfitShare)}</span> · Recorded: <span className="font-bold text-foreground">{formatINR(recordedProfitShare)}</span> · Paid: <span className="font-bold text-foreground">{formatINR(interestPaid)}</span> · Pending: <span className="font-bold text-primary">{formatINR(pendingProfitShare)}</span>
+                  </p>
+                  {!totalInvested && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Profit share stays disabled until investor capital has actually been paid into the site.
+                    </p>
+                  )}
+                  {hasOpenProfitShare && (
+                    <p className="text-[10px] text-muted-foreground">
+                      There is already an open profit-share row. Use its Partial/Pending status button to record the remaining payment.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -444,7 +512,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
                     addMode === 'return' ? 'bg-red-500 hover:bg-red-600' : addMode === 'interest' ? 'bg-amber-500 hover:bg-amber-600' : ''
                   )}
                 >
-                  {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : addMode === 'invest' ? 'Confirm Investment' : addMode === 'interest' ? 'Pay Interest' : 'Return Principal'}
+                  {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : addMode === 'invest' ? 'Confirm Investment' : addMode === 'interest' ? investor.type === 'EQUITY' ? 'Record Profit Share' : 'Pay Interest' : 'Return Principal'}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setAddMode(null); reset(); setCalcResult(null); setApiError(null); }}
                   className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4"
@@ -461,19 +529,33 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
               <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1">Total Invested</p>
               <p className="text-xl font-sans font-bold text-primary">{formatINR(totalInvested)}</p>
             </div>
+            {investor.type === 'FIXED_RATE' && (
+              <div>
+                <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Principal Returned</p>
+                <p className="text-xl font-sans font-bold text-red-500">{formatINR(principalReturned)}</p>
+              </div>
+            )}
             <div>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-red-500/60 mb-1">Total Returned</p>
-              <p className="text-xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
+              <p className="text-[11px] font-bold tracking-widest uppercase text-amber-600/70 mb-1">{investor.type === 'EQUITY' ? 'Profit Paid' : 'Interest Paid'}</p>
+              <p className="text-xl font-sans font-bold text-amber-600">{formatINR(interestPaid)}</p>
             </div>
             {investor.type === 'FIXED_RATE' && (
               <>
                 <div>
-                  <p className="text-[11px] font-bold tracking-widest uppercase text-amber-600/70 mb-1">Interest Paid</p>
-                  <p className="text-xl font-sans font-bold text-amber-600">{formatINR(interestPaid)}</p>
-                </div>
-                <div>
                   <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Outstanding Principal</p>
                   <p className="text-xl font-sans font-bold text-foreground">{formatINR(outstandingPrincipal)}</p>
+                </div>
+              </>
+            )}
+            {investor.type === 'EQUITY' && (
+              <>
+                <div>
+                  <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Pending Payout</p>
+                  <p className="text-xl font-sans font-bold text-foreground">{formatINR(pendingProfitShare)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1">Available To Record</p>
+                  <p className="text-xl font-sans font-bold text-foreground">{formatINR(availableProfitShareToRecord)}</p>
                 </div>
               </>
             )}
@@ -486,29 +568,40 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
           <div className="flex flex-col gap-3 lg:items-end">
             {!addMode && !investor.isClosed && (
               <p className="max-w-md text-[10px] leading-relaxed text-muted-foreground">
-                Use Add Capital for new investor money, Return Principal after paying capital back, and Record Interest only for fixed-rate payouts.
+                {investor.type === 'EQUITY'
+                  ? 'Use Add Capital for new investor money. Record Profit Share only after capital is actually paid into the site, and finish any remaining payout from the same row.'
+                  : 'Use Add Capital for new investor money, Return Principal after paying capital back, and Record Interest for fixed-rate payouts.'}
               </p>
             )}
             <div className="flex flex-wrap gap-2">
             {!addMode && !investor.isClosed && (
               <>
-                <Button size="sm" onClick={() => setAddMode('invest')}
+                <Button size="sm" onClick={() => openAddMode('invest')}
                   className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"
                 >
                   <ArrowDownLeft className="w-3 h-3" /> Add Capital
                 </Button>
                 {investor.type === 'FIXED_RATE' && (
-                  <Button size="sm" variant="outline" onClick={() => setAddMode('interest')}
+                  <Button size="sm" variant="outline" onClick={() => openAddMode('interest')}
                     className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5"
                   >
                     <ArrowUpRight className="w-3 h-3" /> Record Interest
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => setAddMode('return')}
-                  className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
-                >
-                  <ArrowUpRight className="w-3 h-3" /> {investor.type === 'FIXED_RATE' ? 'Return Principal / Close' : 'Return Capital'}
-                </Button>
+                {investor.type === 'FIXED_RATE' ? (
+                  <Button size="sm" variant="outline" onClick={() => openAddMode('return')}
+                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"
+                  >
+                    <ArrowUpRight className="w-3 h-3" /> Return Principal / Close
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => openAddMode('interest')}
+                    disabled={!canRecordProfitShare}
+                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5 disabled:text-muted-foreground/40 disabled:border-border disabled:hover:bg-transparent"
+                  >
+                    <ArrowUpRight className="w-3 h-3" /> Record Profit Share
+                  </Button>
+                )}
               </>
             )}
             </div>
@@ -519,7 +612,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
 
       {payTx && (
         <RecordPaymentModal
-          title={`${investor.name} — ${formatTransactionKind(payTx.kind)}`}
+          title={`${investor.name} - ${formatTransactionKind(payTx.kind, investor.type)}`}
           totalAmount={Math.abs(payTx.amount)}
           currentlyPaid={payTx.amountPaid}
           entityType="investor-transaction"
@@ -581,9 +674,11 @@ export default function InvestorsPage() {
   }
 
   const totalInvested = investors.reduce((s, i) => s + i.totalInvested, 0);
-  const totalReturned = investors.reduce((s, i) => s + i.totalReturned, 0);
+  const totalPrincipalReturned = investors.reduce((sum, investor) => sum + Math.max(investor.totalReturned - investor.interestPaid, 0), 0);
   const totalInterestPaid = investors.reduce((s, i) => s + i.interestPaid, 0);
-  const totalOutstanding = investors.reduce((s, i) => s + i.outstandingPrincipal, 0);
+  const totalOutstanding = investors
+    .filter((investor) => investor.type === 'FIXED_RATE')
+    .reduce((sum, investor) => sum + investor.outstandingPrincipal, 0);
 
   const tabs = [
     { key: undefined, label: 'All' },
@@ -649,10 +744,10 @@ export default function InvestorsPage() {
           </div>
           <div>
             <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Principal Returned</p>
-            <p className="text-2xl sm:text-3xl font-sans font-bold text-red-500">{formatINR(totalReturned)}</p>
+            <p className="text-2xl sm:text-3xl font-sans font-bold text-red-500">{formatINR(totalPrincipalReturned)}</p>
           </div>
           <div>
-            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Interest Paid</p>
+            <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Yield / Profit Paid</p>
             <p className="text-2xl sm:text-3xl font-sans font-bold text-amber-600">{formatINR(totalInterestPaid)}</p>
           </div>
           <div>
@@ -716,13 +811,13 @@ export default function InvestorsPage() {
                 <div className="col-span-2">
                   <p className="font-sans font-bold text-base lg:text-lg tracking-tight text-foreground">{formatINR(inv.totalInvested)}</p>
                   <p className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-widest mt-0.5">Invested</p>
-                  {inv.totalReturned > 0 && (
-                    <p className="text-[11px] font-bold text-red-500 uppercase tracking-widest mt-1">Returned: {formatINR(inv.totalReturned)}</p>
+                  {Math.max(inv.totalReturned - inv.interestPaid, 0) > 0 && (
+                    <p className="text-[11px] font-bold text-red-500 uppercase tracking-widest mt-1">Principal Returned: {formatINR(Math.max(inv.totalReturned - inv.interestPaid, 0))}</p>
                   )}
-                  {inv.type === 'FIXED_RATE' && (
-                    <p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest mt-1">Interest: {formatINR(inv.interestPaid)}</p>
+                  {inv.interestPaid > 0 && (
+                    <p className="text-[11px] font-bold text-amber-600 uppercase tracking-widest mt-1">{inv.type === 'EQUITY' ? 'Profit Paid' : 'Interest'}: {formatINR(inv.interestPaid)}</p>
                   )}
-                  {inv.outstandingPrincipal > 0 && (
+                  {inv.type === 'FIXED_RATE' && inv.outstandingPrincipal > 0 && (
                     <p className="text-[11px] font-bold text-primary uppercase tracking-widest mt-1">Outstanding: {formatINR(inv.outstandingPrincipal)}</p>
                   )}
                 </div>

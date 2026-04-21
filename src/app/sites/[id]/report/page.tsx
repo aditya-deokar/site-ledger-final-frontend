@@ -302,7 +302,7 @@ function InvestorTable({ rows }: { rows: SiteReportInvestorRow[] }) {
       <table className="min-w-full divide-y divide-border text-sm">
         <thead className="bg-muted/25">
           <tr className="text-left">
-            {['Investor', 'Equity', 'Invested', 'Returned', 'Outstanding', 'Status'].map((heading) => (
+            {['Investor', 'Equity', 'Capital Committed', 'Profit Paid', 'Status'].map((heading) => (
               <th key={heading} className="px-4 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">
                 {heading}
               </th>
@@ -319,7 +319,6 @@ function InvestorTable({ rows }: { rows: SiteReportInvestorRow[] }) {
               <td className="px-4 py-3 text-foreground">{row.equityPercentage ? `${row.equityPercentage}%` : '-'}</td>
               <td className="px-4 py-3 font-medium text-foreground">{formatINR(row.totalInvested)}</td>
               <td className="px-4 py-3 text-muted-foreground/90">{formatINR(row.totalReturned)}</td>
-              <td className="px-4 py-3 text-primary">{formatINR(row.outstandingPrincipal)}</td>
               <td className="px-4 py-3">
                 <span className={cn(
                   'inline-flex items-center px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em]',
@@ -678,7 +677,7 @@ export default function SiteReportPage() {
           <ExpenseTable rows={report.expenses} />
         </Section>
 
-        <Section eyebrow="Equity View" title="Investor Register" subtitle="Site-linked investors, principal received, money returned, and outstanding principal still attached to this project.">
+        <Section eyebrow="Equity View" title="Investor Register" subtitle="Site-linked equity investors, capital committed to the project, and profit share paid out so far.">
           <InvestorTable rows={report.investors} />
         </Section>
 

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useSiteInvestors, useCreateInvestor, useUpdateInvestor, useTransactions, useAddTransaction, useReturnInvestment, useUpdateInvestorPayment } from "@/hooks/api/investor.hooks"
+import { useSiteInvestors, useCreateInvestor, useUpdateInvestor, useTransactions, useAddTransaction, usePayInterest, useUpdateInvestorPayment } from "@/hooks/api/investor.hooks"
 import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { useSite } from "@/hooks/api/site.hooks"
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput, transactionSchema, TransactionInput, Transaction } from "@/schemas/investor.schema"
@@ -29,9 +29,9 @@ function formatTransactionKind(kind: Transaction["kind"]) {
     case "PRINCIPAL_IN":
       return "Principal In"
     case "PRINCIPAL_OUT":
-      return "Principal Out"
+      return "Capital Return"
     case "INTEREST":
-      return "Interest"
+      return "Profit Share"
     default:
       return kind
   }
@@ -42,10 +42,10 @@ type SiteInvestor = { id: string; name: string; phone: string | null; equityPerc
 // ── Transaction Modal ──────────────────────────────
 function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; onClose: () => void; totalProfit?: number }) {
   const { data, isLoading } = useTransactions(investor.id)
-  const [mode, setMode] = useState<"invest" | "return" | null>(null)
+  const [mode, setMode] = useState<"invest" | "profit" | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const { mutate: addTx, isPending: adding } = useAddTransaction({ onSuccess: () => { setMode(null); setApiError(null) } })
-  const { mutate: retTx, isPending: returning } = useReturnInvestment({ onSuccess: () => { setMode(null); setApiError(null) } })
+  const { mutate: payProfit, isPending: payingProfit } = usePayInterest({ onSuccess: () => { setMode(null); setApiError(null) } })
   const [payTx, setPayTx] = useState<Transaction | null>(null)
   const { mutate: updatePayment, isPending: updatingPay } = useUpdateInvestorPayment(investor.id, { onSuccess: () => setPayTx(null) })
   const getTxDefaults = (): Partial<TransactionInput> => ({
@@ -61,33 +61,37 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
   const txs: Transaction[] = data?.data?.transactions ?? []
   const total = data?.data?.totalInvested ?? investor.totalInvested
-  const totalReturned = data?.data?.totalReturned ?? investor.totalReturned ?? 0
-  const outstandingPrincipal = data?.data?.outstandingPrincipal ?? Math.max(total - totalReturned, 0)
+  const profitShareTxs = txs.filter((tx) => tx.kind === "INTEREST")
+  const profitPaid = profitShareTxs.reduce((sum, tx) => sum + tx.amountPaid, 0)
+  const recordedProfitShare = profitShareTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
+  const pendingProfitShare = profitShareTxs.reduce((sum, tx) => sum + Math.max(tx.remaining, 0), 0)
+  const hasOpenProfitShare = profitShareTxs.some((tx) => tx.paymentStatus !== "COMPLETED")
+  const hasInvestedCapital = total > 0
 
-  // Auto-calculate equity return: equityPercentage% of totalProfit (sum of customers' sellingPrice)
   const equityPct = investor.equityPercentage ?? 0
-  const calculatedReturn = totalProfit != null && equityPct > 0
-    ? Math.round((equityPct / 100) * totalProfit)
-    : null
+  const siteProfit = Math.max(totalProfit ?? 0, 0)
+  const estimatedProfitShare = equityPct > 0 ? Math.round((equityPct / 100) * siteProfit) : 0
+  const availableProfitShareToRecord = Math.max(estimatedProfitShare - recordedProfitShare, 0)
+  const canRecordProfitShare = !isLoading && hasInvestedCapital && availableProfitShareToRecord > 0 && !hasOpenProfitShare
 
-  const handleSetMode = (m: "invest" | "return") => {
+  const handleSetMode = (m: "invest" | "profit") => {
+    if (m === "profit" && !canRecordProfitShare) return
     reset(getTxDefaults())
     setMode(m)
-    // Pre-fill return amount with equity return from total profit
-    if (m === "return" && calculatedReturn != null && calculatedReturn > 0) {
-      setTimeout(() => setValue("amount", calculatedReturn), 0)
+    if (m === "profit" && availableProfitShareToRecord > 0) {
+      setTimeout(() => setValue("amount", availableProfitShareToRecord), 0)
     }
   }
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background border border-border max-w-lg w-full max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="bg-background border border-border w-full max-w-[1100px] min-h-[72vh] max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200">
         <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start gap-4">
           <div>
             <h3 className="text-xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Add capital for new money coming in, and use Return Capital only when principal is being paid back.
+              Add capital for new money coming in. Equity investors are paid through profit share, not capital return.
             </p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
@@ -112,12 +116,14 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                     "inline-flex w-fit px-2 py-1 text-[8px] font-bold tracking-widest uppercase border",
                     t.kind === "PRINCIPAL_IN"
                       ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
-                      : "text-red-500 bg-red-500/10 border-red-500/20"
+                      : t.kind === "INTEREST"
+                        ? "text-amber-600 bg-amber-500/10 border-amber-500/20"
+                        : "text-red-500 bg-red-500/10 border-red-500/20"
                   )}>
                     {formatTransactionKind(t.kind)}
                   </span>
                   <div className="flex flex-col">
-                    <span className={cn("text-sm font-sans font-bold", t.kind === "PRINCIPAL_IN" ? "text-emerald-600" : "text-red-500")}>{formatINR(Math.abs(t.amount))}</span>
+                    <span className={cn("text-sm font-sans font-bold", t.kind === "PRINCIPAL_IN" ? "text-emerald-600" : t.kind === "INTEREST" ? "text-amber-600" : "text-red-500")}>{formatINR(Math.abs(t.amount))}</span>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[10px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
@@ -147,10 +153,10 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 paymentDate: d.paymentDate ? new Date(d.paymentDate).toISOString() : undefined,
               }
               if (mode === "invest") addTx({ investorId: investor.id, data: payload }, { onError })
-              else retTx({ investorId: investor.id, data: payload }, { onError })
+              else payProfit({ investorId: investor.id, data: payload }, { onError })
             })} className="mt-4 border border-border p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Return Investment"}</p>
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Profit Share Payout"}</p>
                 <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
                   Back
                 </Button>
@@ -162,27 +168,37 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 </div>
               )}
 
-              {/* Auto-calculate hint for return mode */}
-              {mode === "return" && calculatedReturn != null && calculatedReturn > 0 && totalProfit != null && (
+              {mode === "profit" && (
                 <div className="bg-primary/5 border border-primary/10 p-3 text-[10px] text-muted-foreground flex flex-col gap-1.5">
                   <div>
-                    <span className="font-bold text-foreground">{equityPct}%</span> of total profit (<span className="font-bold text-foreground">{formatINR(totalProfit)}</span>) = <span className="font-bold text-primary">{formatINR(calculatedReturn)}</span>
-                    <button type="button" onClick={() => setValue("amount", calculatedReturn)} className="ml-2 text-primary font-bold underline">Use this</button>
+                    <span className="font-bold text-foreground">{equityPct}%</span> of site profit (<span className="font-bold text-foreground">{formatINR(siteProfit)}</span>) = <span className="font-bold text-primary">{formatINR(estimatedProfitShare)}</span>
+                    {availableProfitShareToRecord > 0 && (
+                      <button type="button" onClick={() => setValue("amount", availableProfitShareToRecord)} className="ml-2 text-primary font-bold underline">Use available amount</button>
+                    )}
                   </div>
+                  <div>
+                    Recorded <span className="font-bold text-foreground">{formatINR(recordedProfitShare)}</span> · Paid <span className="font-bold text-foreground">{formatINR(profitPaid)}</span> · Pending <span className="font-bold text-primary">{formatINR(pendingProfitShare)}</span>
+                  </div>
+                  {!hasInvestedCapital && (
+                    <div>Profit share stays disabled until this investor's capital has actually been paid into the site.</div>
+                  )}
+                  {hasOpenProfitShare && (
+                    <div>There is already an open profit-share row. Use the existing Partial/Pending row to record the remaining payment.</div>
+                  )}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">
-                    {mode === "invest" ? "Capital Amount" : "Principal to Return"}
+                    {mode === "invest" ? "Capital Amount" : "Profit Share Amount"}
                   </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                     <Input
                       type="number"
                       min={0}
-                      placeholder={mode === "invest" ? "Capital amount" : "Return amount"}
+                      placeholder={mode === "invest" ? "Capital amount" : "Profit payout amount"}
                       className="h-10 pl-8 bg-muted border-none rounded-none text-sm"
                       {...register("amount", { valueAsNumber: true })}
                     />
@@ -212,8 +228,8 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={adding || returning} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "return" ? "bg-red-500 hover:bg-red-600" : "")}>
-                  {(adding || returning) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Return Capital"}
+                <Button type="submit" disabled={adding || payingProfit} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "profit" ? "bg-amber-500 hover:bg-amber-600" : "")}>
+                  {(adding || payingProfit) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Record Profit Share"}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
               </div>
@@ -226,30 +242,34 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Invested</p>
               <p className="text-lg font-serif text-primary">{formatINR(total)}</p>
             </div>
-            {totalReturned > 0 && (
-              <div>
-                <p className="text-[9px] font-bold tracking-widest uppercase text-red-500/60">Total Returned</p>
-                <p className="text-lg font-serif text-red-500">{formatINR(totalReturned)}</p>
-              </div>
-            )}
-            {outstandingPrincipal > 0 && (
-              <div>
-                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Outstanding</p>
-                <p className="text-lg font-serif text-foreground">{formatINR(outstandingPrincipal)}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-[9px] font-bold tracking-widest uppercase text-amber-600/70">Profit Paid</p>
+              <p className="text-lg font-serif text-amber-600">{formatINR(profitPaid)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{hasOpenProfitShare ? "Pending Payout" : "Available To Record"}</p>
+              <p className="text-lg font-serif text-foreground">{formatINR(hasOpenProfitShare ? pendingProfitShare : availableProfitShareToRecord)}</p>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-3">
             {!mode && !investor.isClosed && (
               <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
-                Use the status chip inside each row for follow-up payments later. You do not need to recreate the original transaction.
+                Use Add Capital for incoming equity. Profit Share turns on only after invested capital is actually paid in, and once recorded the remaining payout must be finished from that same row.
               </p>
             )}
             <div className="flex gap-2">
               {!mode && !investor.isClosed && (
                 <>
                   <Button size="sm" onClick={() => handleSetMode("invest")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"><ArrowDownLeft className="w-3 h-3" /> Add Capital</Button>
-                  <Button size="sm" variant="outline" onClick={() => handleSetMode("return")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"><ArrowUpRight className="w-3 h-3" /> Return Capital</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!canRecordProfitShare}
+                    onClick={() => handleSetMode("profit")}
+                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5 disabled:text-muted-foreground/40 disabled:border-border disabled:hover:bg-transparent"
+                  >
+                    <ArrowUpRight className="w-3 h-3" /> Record Profit Share
+                  </Button>
                 </>
               )}
               {!mode && investor.isClosed && (
@@ -306,7 +326,7 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
           <input type="hidden" {...register("type")} />
           <input type="hidden" {...register("siteId")} />
           <div className="border border-primary/20 bg-primary/5 p-4 text-[11px] leading-relaxed text-muted-foreground">
-            This creates the investor profile for <strong className="text-foreground">{siteName}</strong>. Use Ledger & Actions later whenever you want to add remaining capital or record a return.
+            This creates the investor profile for <strong className="text-foreground">{siteName}</strong>. Use Ledger & Actions later whenever you want to add more capital or record profit share.
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Investor Full Name</Label>
@@ -358,7 +378,7 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
             <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1">Total Capital Committed</p>
             <p className="text-3xl font-serif text-foreground tracking-tight">{formatINR(totalInvested)}</p>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-              Create the investor once, then use Ledger & Actions to add more capital or record returns without opening another investor record.
+              Create the investor once, then use Ledger & Actions to add more capital or record profit share without opening another investor record.
             </p>
           </div>
           <Button onClick={() => setAddOpen(true)} className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-6">
@@ -402,7 +422,7 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
                   <p className="font-serif text-sm tracking-tight text-foreground">{formatINR(inv.totalInvested)}</p>
                   <p className="text-[9px] text-muted-foreground/40 uppercase tracking-widest">Invested</p>
                   {inv.totalReturned > 0 && (
-                    <p className="text-[9px] text-red-500 uppercase tracking-widest mt-0.5">Returned: {formatINR(inv.totalReturned)}</p>
+                    <p className="text-[9px] text-amber-600 uppercase tracking-widest mt-0.5">Profit Paid: {formatINR(inv.totalReturned)}</p>
                   )}
                 </div>
                 <div className="col-span-3 text-right">

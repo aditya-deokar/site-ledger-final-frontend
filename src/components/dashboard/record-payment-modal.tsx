@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Loader2, ArrowRight, History, Calendar, FileText } from "lucide-react"
+import { X, Loader2, ArrowRight, Calendar, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,7 +58,6 @@ export function RecordPaymentModal({
   const [note, setNote] = useState("")
   const [history, setHistory] = useState<PaymentRecord[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
 
   // Fetch Payment History
   useEffect(() => {
@@ -108,10 +107,7 @@ export function RecordPaymentModal({
   return (
     <div className="fixed inset-0 z-60 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className={cn(
-        "relative flex h-[min(100dvh,92rem)] w-full flex-col overflow-hidden border border-border bg-background shadow-2xl transition-all duration-300 sm:max-h-[90vh] sm:rounded-none md:flex-row",
-        showHistory ? "max-w-5xl" : "max-w-xl"
-      )}>
+      <div className="relative flex h-[min(100dvh,92rem)] w-full max-w-6xl flex-col overflow-hidden border border-border bg-background shadow-2xl sm:max-h-[90vh] sm:rounded-none md:flex-row">
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           {/* Header */}
@@ -188,15 +184,7 @@ export function RecordPaymentModal({
               />
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-border">
-              <button 
-                type="button" 
-                onClick={() => setShowHistory(!showHistory)} 
-                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary hover:opacity-80 transition-all"
-              >
-                <History className="w-4 h-4" />
-                {showHistory ? "Hide Ledger" : `View Ledger (${history.length})`}
-              </button>
+            <div className="flex items-center justify-end pt-4 border-t border-border">
               <div className="flex gap-2">
                 <button type="button" onClick={onClose} className="text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-all px-4 py-2">
                   Cancel
@@ -214,61 +202,59 @@ export function RecordPaymentModal({
         </div>
 
         {/* Side Ledger (History) */}
-        {showHistory && (
-          <div className="w-full border-t border-border bg-muted/30 md:w-96 md:border-l md:border-t-0 flex flex-col">
-            <div className="p-6 border-b border-border bg-background">
-              <h4 className="text-[10px] font-bold tracking-[0.3em] uppercase text-foreground">Payment History</h4>
-              <p className="text-[9px] text-muted-foreground mt-1 font-bold italic">Audit trail of all previous installments</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {loadingHistory ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary/40" />
-                  <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Loading Ledger...</p>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/30">No previous payments</p>
-                </div>
-              ) : (
-                history.map((pay) => (
-                  <div key={pay.id} className="p-4 bg-background border border-border group hover:border-primary/30 transition-all">
-                    <div className="flex justify-between items-start mb-2">
-                      <span
-                        className={cn(
-                          "text-sm font-bold font-sans",
-                          pay.direction === 'OUT' ? "text-red-500" : "text-emerald-600",
-                        )}
-                      >
-                        {pay.direction === 'OUT' ? '-' : ''}{formatINR(pay.amount)}
-                      </span>
-                      <span className="text-[8px] font-bold text-muted-foreground/40 uppercase group-hover:text-primary/50 transition-colors">#{pay.id.slice(-4)}</span>
-                    </div>
-                    {pay.movementType && (
-                      <div className="mb-2 text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                        {pay.movementType === 'CUSTOMER_REFUND' ? 'Refund' : 'Payment'}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-[9px] text-muted-foreground mb-1.5">
-                      <Calendar className="w-3 h-3 opacity-40 shrink-0" />
-                      <span className="font-bold tracking-tight">{formatDate(pay.paymentDate ?? pay.createdAt)}</span>
-                    </div>
-                    {pay.note && (
-                      <div className="flex items-start gap-2 text-[9px] text-foreground/70 bg-muted/50 p-1.5 rounded-sm">
-                        <FileText className="w-3 h-3 opacity-40 shrink-0 mt-0.5" />
-                        <p className="italic leading-relaxed">{pay.note}</p>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="p-4 border-t border-border bg-background/50 flex justify-between items-center">
-              <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Subtotal Paid</span>
-              <span className="text-[11px] font-bold text-primary font-sans">{formatINR(currentlyPaid)}</span>
-            </div>
+        <div className="w-full border-t border-border bg-muted/30 md:w-[28rem] md:border-l md:border-t-0 flex flex-col">
+          <div className="p-6 border-b border-border bg-background">
+            <h4 className="text-[10px] font-bold tracking-[0.3em] uppercase text-foreground">Payment History</h4>
+            <p className="text-[9px] text-muted-foreground mt-1 font-bold italic">Audit trail of all previous installments</p>
           </div>
-        )}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {loadingHistory ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-primary/40" />
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Loading Ledger...</p>
+              </div>
+            ) : history.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/30">No previous payments</p>
+              </div>
+            ) : (
+              history.map((pay) => (
+                <div key={pay.id} className="p-4 bg-background border border-border group hover:border-primary/30 transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <span
+                      className={cn(
+                        "text-sm font-bold font-sans",
+                        pay.direction === 'OUT' ? "text-red-500" : "text-emerald-600",
+                      )}
+                    >
+                      {pay.direction === 'OUT' ? '-' : ''}{formatINR(pay.amount)}
+                    </span>
+                    <span className="text-[8px] font-bold text-muted-foreground/40 uppercase group-hover:text-primary/50 transition-colors">#{pay.id.slice(-4)}</span>
+                  </div>
+                  {pay.movementType && (
+                    <div className="mb-2 text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                      {pay.movementType === 'CUSTOMER_REFUND' ? 'Refund' : 'Payment'}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-[9px] text-muted-foreground mb-1.5">
+                    <Calendar className="w-3 h-3 opacity-40 shrink-0" />
+                    <span className="font-bold tracking-tight">{formatDate(pay.paymentDate ?? pay.createdAt)}</span>
+                  </div>
+                  {pay.note && (
+                    <div className="flex items-start gap-2 text-[9px] text-foreground/70 bg-muted/50 p-1.5 rounded-sm">
+                      <FileText className="w-3 h-3 opacity-40 shrink-0 mt-0.5" />
+                      <p className="italic leading-relaxed">{pay.note}</p>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="p-4 border-t border-border bg-background/50 flex justify-between items-center">
+            <span className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Subtotal Paid</span>
+            <span className="text-[11px] font-bold text-primary font-sans">{formatINR(currentlyPaid)}</span>
+          </div>
+        </div>
       </div>
     </div>
   )
