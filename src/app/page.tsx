@@ -34,7 +34,7 @@ export default function RootPage() {
     }
 
     if (companyData?.data?.company) {
-      router.replace('/dashboard');
+      router.replace('/navigator');
       return;
     }
 

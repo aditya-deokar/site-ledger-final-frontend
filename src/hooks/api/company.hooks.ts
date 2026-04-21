@@ -11,7 +11,7 @@ export const useCreateCompany = () => {
     mutationFn: (data: CreateCompanyInput) => companyService.createCompany(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
-      router.push('/dashboard');
+      router.push('/navigator');
     },
   });
 };

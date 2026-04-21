@@ -460,10 +460,10 @@ export default function SiteDetailPage() {
             {siteId ? errorMessage : 'The site link is missing a valid site id.'}
           </p>
           <Link
-            href="/dashboard"
+            href="/navigator"
             className="inline-flex h-10 items-center justify-center rounded-none border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
           >
-            Back to Dashboard
+            Back to Navigator
           </Link>
         </div>
       </DashboardShell>

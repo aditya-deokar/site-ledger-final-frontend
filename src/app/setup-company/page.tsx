@@ -18,10 +18,10 @@ function SetupCompanyForm() {
   const { data: companyData, isLoading: isCheckingCompany } = useCompany();
   const { mutate: createCompany, isPending, error } = useCreateCompany();
 
-  // If company already exists, skip setup and go to dashboard
+  // If company already exists, skip setup and go to navigator
   useEffect(() => {
     if (companyData?.data?.company) {
-      router.replace('/dashboard');
+      router.replace('/navigator');
     }
   }, [companyData, router]);
 

@@ -69,7 +69,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 }
 
 const menuItems = [
-  { icon: LayoutGrid, label: "Dashboard", href: "/dashboard" },
+  { icon: LayoutGrid, label: "Navigator", href: "/navigator" },
   { icon: Building, label: "Company & Partners", href: "/company" },
   { icon: Building2, label: "Site Management", href: "/sites" },
   { icon: Contact2, label: "Customers", href: "/customers" },
