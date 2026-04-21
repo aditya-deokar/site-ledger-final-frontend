@@ -7,14 +7,16 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   BarChart3,
-  Users,
+  IndianRupee,
   LayoutGrid,
   Building2,
-  UserCircle,
+  TrendingUp,
   LogOut,
   Menu,
-  Users2,
-  UserCheck,
+  Contact2,
+  Building,
+  BriefcaseBusiness,
+  Wrench,
   X,
 } from "lucide-react"
 
@@ -68,12 +70,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
 const menuItems = [
   { icon: LayoutGrid, label: "Dashboard", href: "/dashboard" },
-  { icon: Users2, label: "Company & Partners", href: "/company" },
+  { icon: Building, label: "Company & Partners", href: "/company" },
   { icon: Building2, label: "Site Management", href: "/sites" },
-  { icon: UserCheck, label: "Customers", href: "/customers" },
-  { icon: UserCircle, label: "Investors", href: "/investors" },
-  { icon: Users, label: "Vendors", href: "/vendors" },
-  { icon: BarChart3, label: "Expenses", href: "/expenses" },
+  { icon: Contact2, label: "Customers", href: "/customers" },
+  { icon: BriefcaseBusiness, label: "Employees", href: "/employees" },
+  { icon: TrendingUp, label: "Investors", href: "/investors" },
+  { icon: Wrench, label: "Vendors", href: "/vendors" },
+  { icon: IndianRupee, label: "Expenses", href: "/expenses" },
 ]
 
 const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]

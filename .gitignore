@@ -48,3 +48,12 @@ receipt_implementation_plan.md
 
 # Actionable Fixes
 react-query-caching-fix.md
+
+# Local planning/tool-output artifacts
+AGENTS.md
+CLAUDE.md
+IMPLEMENTATION_PLAN_*.md
+ts-output*.txt
+
+# Kiro specs and configuration
+.kiro/

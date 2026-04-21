@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Building2, Users, TrendingUp, Wrench, Pencil, Hammer,
-  ChevronLeft, ArrowUpRight, UserPlus, Building, Loader2, Contact2, IndianRupee
+  ChevronLeft, ArrowUpRight, UserPlus, Building, Loader2, Contact2, IndianRupee, BriefcaseBusiness, CalendarDays, Eye, Trash2
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,11 +17,15 @@ import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, us
 import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
+import { useCreateEmployee, useDeleteEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
+import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
 import { createSiteSchema, CreateSiteInput, bookFlatSchema, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput } from '@/schemas/investor.schema';
 import { createVendorSchema, CreateVendorInput, updateVendorSchema, UpdateVendorInput } from '@/schemas/vendor.schema';
 import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, cancelDealSchema } from '@/schemas/customer.schema';
+import { createEmployeeSchema, CreateEmployeeInput, UpdateEmployeeInput } from '@/schemas/employee.schema';
+import type { AttendanceStatus } from '@/schemas/attendance.schema';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 
@@ -101,6 +105,17 @@ const CATEGORIES: CategoryDef[] = [
       { id: 'cancel-deal', label: 'Cancel Deal', shortcut: '3', icon: Hammer },
     ],
   },
+  {
+    id: 'employees', label: 'Employees', shortcut: '6', icon: BriefcaseBusiness,
+    color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30',
+    actions: [
+      { id: 'add-employee', label: 'Add Employee', shortcut: '1', icon: UserPlus },
+      { id: 'view-employee-details', label: 'View Employee Details', shortcut: '2', icon: Eye },
+      { id: 'edit-employee', label: 'Edit Employee', shortcut: '3', icon: Pencil },
+      { id: 'delete-employee', label: 'Delete Employee', shortcut: '4', icon: Trash2 },
+      { id: 'mark-employee-attendance', label: 'Take Attendance', shortcut: '5', icon: CalendarDays },
+    ],
+  },
 ];
 
 const ACTIONS_NEEDING_SELECTOR = [
@@ -108,7 +123,9 @@ const ACTIONS_NEEDING_SELECTOR = [
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
   'edit-vendor', 'delete-vendor',
-  'edit-customer', 'record-payment', 'cancel-deal'
+  'edit-customer', 'record-payment', 'cancel-deal',
+  'view-employee-details', 'edit-employee', 'delete-employee',
+  'mark-employee-attendance'
 ];
 
 const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
@@ -314,6 +331,20 @@ function formatShortDate(value?: string | null) {
   const dateValue = new Date(value);
   if (Number.isNaN(dateValue.getTime())) return '-';
   return dateValue.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function toDateInputValue(value?: string | null) {
+  if (!value) return getTodayDateInputValue();
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return getTodayDateInputValue();
+  return dateValue.toISOString().slice(0, 10);
+}
+
+function employeeStatusLabel(status?: 'active' | 'inactive' | 'terminated') {
+  if (status === 'active') return 'Active';
+  if (status === 'inactive') return 'Inactive';
+  if (status === 'terminated') return 'Terminated';
+  return '-';
 }
 
 function getFlatDisplayId(flat: Flat) {
@@ -1894,6 +1925,333 @@ function EntitySelector({
   );
 }
 
+function AddEmployeeForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const { mutate, isPending, error } = useCreateEmployee({
+    onSuccess: () => {
+      reset();
+      toast.success('Employee added');
+      onSuccess();
+    },
+  });
+
+  const { register, handleSubmit, reset, setFocus, formState: { errors } } = useForm<CreateEmployeeInput>({
+    resolver: zodResolver(createEmployeeSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      address: '',
+      designation: '',
+      department: '',
+      dateOfJoining: getTodayDateInputValue(),
+      salary: 0,
+      status: 'active',
+    },
+  });
+
+  useEffect(() => {
+    setTimeout(() => setFocus('name'), 50);
+  }, [setFocus]);
+
+  return (
+    <FormShell title="Add Employee" onBack={onBack} isPending={isPending} submitLabel="Create Employee" formId="add-employee-form">
+      <form id="add-employee-form" onSubmit={handleSubmit((values) => mutate(values))} className="flex flex-col gap-6">
+        {error && <FormError msg={getApiErrorMessage(error, 'Failed to create employee')} />}
+
+        <div className="border border-border bg-muted/20 p-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Employee ID is auto-generated on create.
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Employee Name" error={errors.name?.message}>
+            <input placeholder="Enter employee name" className={INPUT_CLS} {...register('name')} />
+          </Field>
+          <Field label="Phone" error={errors.phone?.message}>
+            <input placeholder="+91 XXXXX XXXXX" className={INPUT_CLS} {...register('phone')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Email" error={errors.email?.message}>
+            <input placeholder="employee@email.com" className={INPUT_CLS} {...register('email')} />
+          </Field>
+          <Field label="Designation" error={errors.designation?.message}>
+            <input placeholder="e.g. Technician" className={INPUT_CLS} {...register('designation')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Department" error={errors.department?.message}>
+            <input placeholder="e.g. Operations" className={INPUT_CLS} {...register('department')} />
+          </Field>
+          <Field label="Date Of Joining" error={errors.dateOfJoining?.message}>
+            <input type="date" className={INPUT_CLS} {...register('dateOfJoining')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Salary (INR)" error={errors.salary?.message}>
+            <input type="number" min={0} step={0.01} className={INPUT_CLS} {...register('salary', { valueAsNumber: true })} />
+          </Field>
+          <Field label="Status" error={errors.status?.message}>
+            <select className={INPUT_CLS} {...register('status')}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="terminated">Terminated</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Address" error={errors.address?.message}>
+          <input placeholder="Employee address" className={INPUT_CLS} {...register('address')} />
+        </Field>
+      </form>
+    </FormShell>
+  );
+}
+
+function EditEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { mutate, isPending, error } = useUpdateEmployee({
+    onSuccess: () => {
+      toast.success('Employee updated');
+      onSuccess();
+    },
+  });
+
+  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<CreateEmployeeInput>({
+    resolver: zodResolver(createEmployeeSchema),
+    defaultValues: {
+      name: entity?.name ?? '',
+      email: entity?.email ?? '',
+      phone: entity?.phone ?? '',
+      address: entity?.address ?? '',
+      designation: entity?.designation ?? '',
+      department: entity?.department ?? '',
+      dateOfJoining: toDateInputValue(entity?.dateOfJoining),
+      salary: entity?.salary ?? 0,
+      status: entity?.status ?? 'active',
+    },
+  });
+
+  useEffect(() => {
+    setTimeout(() => setFocus('name'), 50);
+  }, [setFocus]);
+
+  return (
+    <FormShell title={`Edit Employee: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Save Employee" formId="edit-employee-form">
+      <form
+        id="edit-employee-form"
+        onSubmit={handleSubmit((values) => mutate({ id: entity.id, data: values as UpdateEmployeeInput }))}
+        className="flex flex-col gap-6"
+      >
+        {error && <FormError msg={getApiErrorMessage(error, 'Failed to update employee')} />}
+
+        <div className="border border-border bg-muted/20 p-3">
+          <p className={LABEL_CLS}>Employee ID</p>
+          <p className="mt-1 text-sm font-bold uppercase tracking-widest">{entity?.employeeId || '-'}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Employee Name" error={errors.name?.message}>
+            <input className={INPUT_CLS} {...register('name')} />
+          </Field>
+          <Field label="Phone" error={errors.phone?.message}>
+            <input className={INPUT_CLS} {...register('phone')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Email" error={errors.email?.message}>
+            <input className={INPUT_CLS} {...register('email')} />
+          </Field>
+          <Field label="Designation" error={errors.designation?.message}>
+            <input className={INPUT_CLS} {...register('designation')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Department" error={errors.department?.message}>
+            <input className={INPUT_CLS} {...register('department')} />
+          </Field>
+          <Field label="Date Of Joining" error={errors.dateOfJoining?.message}>
+            <input type="date" className={INPUT_CLS} {...register('dateOfJoining')} />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Salary (INR)" error={errors.salary?.message}>
+            <input type="number" min={0} step={0.01} className={INPUT_CLS} {...register('salary', { valueAsNumber: true })} />
+          </Field>
+          <Field label="Status" error={errors.status?.message}>
+            <select className={INPUT_CLS} {...register('status')}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="terminated">Terminated</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Address" error={errors.address?.message}>
+          <input className={INPUT_CLS} {...register('address')} />
+        </Field>
+      </form>
+    </FormShell>
+  );
+}
+
+function EmployeeDetailsForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const details = [
+    { label: 'System ID', value: entity?.id || '-' },
+    { label: 'Employee ID', value: entity?.employeeId || '-' },
+    { label: 'Name', value: entity?.name || '-' },
+    { label: 'Email', value: entity?.email || '-' },
+    { label: 'Phone', value: entity?.phone || '-' },
+    { label: 'Address', value: entity?.address || '-' },
+    { label: 'Designation', value: entity?.designation || '-' },
+    { label: 'Department', value: entity?.department || '-' },
+    { label: 'Date Of Joining', value: formatShortDate(entity?.dateOfJoining) },
+    { label: 'Salary', value: typeof entity?.salary === 'number' ? formatINR(entity.salary) : '-' },
+    { label: 'Status', value: employeeStatusLabel(entity?.status) },
+    { label: 'Photo URL', value: entity?.photo || '-' },
+    { label: 'Created At', value: formatShortDate(entity?.createdAt) },
+    { label: 'Updated At', value: formatShortDate(entity?.updatedAt) },
+  ];
+
+  return (
+    <FormShell title={`Employee Details: ${entity?.name}`} onBack={onBack} isPending={false} submitLabel="Done" formId="view-employee-details-form">
+      <form
+        id="view-employee-details-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSuccess();
+        }}
+        className="flex flex-col gap-3"
+      >
+        <div className="border border-border bg-muted/20 divide-y divide-border/70">
+          {details.map((item) => (
+            <div key={item.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 px-4 py-3">
+              <p className={LABEL_CLS}>{item.label}</p>
+              <p className="text-[11px] font-bold tracking-wide break-all">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </form>
+    </FormShell>
+  );
+}
+
+const markEmployeeAttendanceSchema = z.object({
+  date: z.string().trim().min(1, 'Date is required'),
+  status: z.enum(['present', 'absent', 'half_day']),
+  checkInTime: z.string().trim().optional(),
+  checkOutTime: z.string().trim().optional(),
+  reasonOfAbsenteeism: z.string().trim().optional(),
+});
+
+type MarkEmployeeAttendanceInput = z.infer<typeof markEmployeeAttendanceSchema>;
+
+function toIsoDate(dateValue: string) {
+  return new Date(`${dateValue}T00:00:00`).toISOString();
+}
+
+function toIsoDateTime(dateValue: string, timeValue?: string) {
+  if (!timeValue) return undefined;
+  return new Date(`${dateValue}T${timeValue}:00`).toISOString();
+}
+
+function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { mutate, isPending, error } = useMarkAttendance({
+    onSuccess: () => {
+      toast.success('Attendance recorded');
+      onSuccess();
+    },
+  });
+
+  const { register, handleSubmit, watch, setFocus, setValue, formState: { errors } } = useForm<MarkEmployeeAttendanceInput>({
+    resolver: zodResolver(markEmployeeAttendanceSchema),
+    defaultValues: {
+      date: getTodayDateInputValue(),
+      status: 'present',
+      checkInTime: '',
+      checkOutTime: '',
+      reasonOfAbsenteeism: '',
+    },
+  });
+
+  const status = watch('status') as AttendanceStatus;
+
+  useEffect(() => {
+    setTimeout(() => setFocus('date'), 50);
+  }, [setFocus]);
+
+  return (
+    <FormShell title={`Take Attendance: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Mark Attendance" formId="mark-attendance-form">
+      <form
+        id="mark-attendance-form"
+        onSubmit={handleSubmit((data) => {
+          mutate({
+            employeeId: entity.id,
+            date: toIsoDate(data.date),
+            status: data.status,
+            checkInTime: toIsoDateTime(data.date, data.checkInTime),
+            checkOutTime: toIsoDateTime(data.date, data.checkOutTime),
+            reasonOfAbsenteeism: data.reasonOfAbsenteeism || undefined,
+          });
+        })}
+        className="flex flex-col gap-6"
+      >
+        {error && <FormError msg={getApiErrorMessage(error, 'Failed to mark attendance')} />}
+
+        <div className="border border-border bg-muted/20 p-3">
+          <p className={LABEL_CLS}>Employee</p>
+          <p className="mt-1 text-sm font-bold uppercase tracking-widest">{entity?.name}</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">{entity?.employeeId}</p>
+        </div>
+
+        <Field label="Attendance Date" error={errors.date?.message}>
+          <input type="date" className={INPUT_CLS} {...register('date')} />
+        </Field>
+
+        <input type="hidden" {...register('status')} />
+        <Field label="Status" error={errors.status?.message}>
+          <KeyToggle
+            options={['present', 'absent', 'half_day']}
+            value={status}
+            onChange={(value) => {
+              setValue('status', value as AttendanceStatus, { shouldValidate: true });
+            }}
+            renderOption={(option, selected) => (
+              <div className={cn(
+                'border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
+                selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/30',
+              )}>
+                {option === 'present' ? 'Present' : option === 'absent' ? 'Absent' : 'Half Day'}
+              </div>
+            )}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Check-In Time">
+            <input type="time" className={INPUT_CLS} {...register('checkInTime')} />
+          </Field>
+          <Field label="Check-Out Time">
+            <input type="time" className={INPUT_CLS} {...register('checkOutTime')} />
+          </Field>
+        </div>
+
+        <Field label="Reason (optional)">
+          <input
+            placeholder="Reason for absence / remark"
+            className={INPUT_CLS}
+            {...register('reasonOfAbsenteeism')}
+          />
+        </Field>
+      </form>
+    </FormShell>
+  );
+}
+
 function SiteQuickPickerSelector({
   sites,
   loading,
@@ -2076,6 +2434,7 @@ export default function CommandCenter() {
   const { data: inData, isLoading: inLoading } = useInvestors(undefined, undefined);
   const { data: veData, isLoading: veLoading } = useVendors();
   const { data: cuData, isLoading: cuLoading } = useAllCustomers();
+  const { data: emData, isLoading: emLoading } = useEmployees();
   const { data: siteCustomersData, isLoading: siteCustomersLoading } = useSiteCustomers(
     phase === 'sub-selector' && selectedAction === 'record-payment' && selectedEntity?.id ? selectedEntity.id : ''
   );
@@ -2085,6 +2444,7 @@ export default function CommandCenter() {
   const { mutate: deletePartnerMutate, isPending: isDeletePartnerPending } = useDeletePartner();
   const { mutate: deleteInvestorMutate, isPending: isDeleteInvestorPending } = useDeleteInvestor();
   const { mutate: deleteVendorMutate, isPending: isDeleteVendorPending } = useDeleteVendor();
+  const { mutate: deleteEmployeeMutate, isPending: isDeleteEmployeePending } = useDeleteEmployee();
 
   const selectorItems = ((): any[] => {
     if (!selectedCategory) return [];
@@ -2094,6 +2454,7 @@ export default function CommandCenter() {
     if (selectedCategory.id === 'investors') return inData?.data?.investors ?? [];
     if (selectedCategory.id === 'vendors') return veData?.data?.vendors ?? [];
     if (selectedCategory.id === 'customers') return cuData?.data?.customers ?? [];
+    if (selectedCategory.id === 'employees') return emData?.data?.employees ?? [];
     return [];
   })();
 
@@ -2102,7 +2463,7 @@ export default function CommandCenter() {
     return [];
   })();
 
-  const selectorLoading = ssLoading || coLoading || inLoading || veLoading || cuLoading;
+  const selectorLoading = ssLoading || coLoading || inLoading || veLoading || cuLoading || emLoading;
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
 
@@ -2124,9 +2485,9 @@ export default function CommandCenter() {
         e.preventDefault();
         setPhase('actions');
         setActIdx(0);
-      } else if (['1', '2', '3', '4', '5'].includes(e.key)) {
-        const idx = parseInt(e.key) - 1;
-        if (idx < CATEGORIES.length) {
+      } else {
+        const idx = Number.parseInt(e.key, 10) - 1;
+        if (!Number.isNaN(idx) && idx >= 0 && idx < CATEGORIES.length) {
           setCatIdx(idx);
           setPhase('actions');
           setActIdx(0);
@@ -2362,6 +2723,20 @@ export default function CommandCenter() {
       );
     }
 
+    if (selectedAction === 'delete-employee') {
+      return (
+        <ActionConfirmForm
+          {...props}
+          title="Delete Employee"
+          message={`Remove "${selectedEntity?.name}" from employee records?`}
+          submitLabel="Delete Employee"
+          destructive
+          isPending={isDeleteEmployeePending}
+          onConfirm={() => deleteEmployeeMutate(selectedEntity.id, { onSuccess: () => { toast.success('Employee deleted'); handleFormSuccess(); } })}
+        />
+      );
+    }
+
     switch (selectedAction) {
       case 'create-site': return <CreateSiteForm {...props} />;
       case 'add-site-expense': return <AddSiteExpenseForm {...props} site={selectedEntity} />;
@@ -2376,6 +2751,10 @@ export default function CommandCenter() {
       case 'edit-customer': return <EditCustomerForm {...props} entity={selectedEntity} />;
       case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} />;
       case 'cancel-deal': return <CancelDealForm {...props} entity={selectedEntity} />;
+      case 'add-employee': return <AddEmployeeForm {...props} />;
+      case 'view-employee-details': return <EmployeeDetailsForm {...props} entity={selectedEntity} />;
+      case 'edit-employee': return <EditEmployeeForm {...props} entity={selectedEntity} />;
+      case 'mark-employee-attendance': return <MarkEmployeeAttendanceForm {...props} entity={selectedEntity} />;
       default: return null;
     }
   }
@@ -2454,7 +2833,7 @@ export default function CommandCenter() {
               <div className="mt-4 flex items-center justify-center gap-6 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">
                 <span>Up/Down Navigate</span>
                 <span>Enter Select</span>
-                <span>1-5 Jump</span>
+                <span>1-{CATEGORIES.length} Jump</span>
               </div>
             </div>
           )}
