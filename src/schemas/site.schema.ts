@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paymentModeSchema } from './customer.schema';
 
 export const bookFlatSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -6,6 +7,8 @@ export const bookFlatSchema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   sellingPrice: z.number().min(0, 'Required'),
   bookingAmount: z.number().min(0),
+  paymentMode: paymentModeSchema.optional(),
+  referenceNumber: z.string().optional().or(z.literal('')),
 });
 export type BookFlatInput = z.infer<typeof bookFlatSchema>;
 

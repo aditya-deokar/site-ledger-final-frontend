@@ -40,6 +40,19 @@ function formatINR(n: number) {
 }
 
 // ── Add Floor Panel ───────────────────────────────────
+function getBookingReferenceLabel(paymentMode?: BookFlatInput["paymentMode"]) {
+  switch (paymentMode) {
+    case "CHEQUE":
+      return "Cheque Number"
+    case "BANK_TRANSFER":
+      return "Bank Transfer Ref / UTR"
+    case "UPI":
+      return "UPI Transaction ID"
+    default:
+      return "Reference Number"
+  }
+}
+
 function getFloorDisplayName(floor: Pick<Floor, "floorName" | "floorNumber">) {
   return floor.floorName || `Floor ${floor.floorNumber}`
 }
@@ -69,6 +82,22 @@ const bookFlatWithSelectionSchema = bookFlatSchema.extend({
       code: z.ZodIssueCode.custom,
       path: ["customUnitType"],
       message: "Enter a custom unit type",
+    })
+  }
+
+  if (data.bookingAmount > 0 && !data.paymentMode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["paymentMode"],
+      message: "Select the payment mode for the booking amount",
+    })
+  }
+
+  if (data.bookingAmount > 0 && data.paymentMode && data.paymentMode !== "CASH" && !data.referenceNumber?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["referenceNumber"],
+      message: "Reference number is required for non-cash booking payments",
     })
   }
 })
@@ -881,6 +910,8 @@ function BookFlatPanel({
       email: "",
       sellingPrice: 0,
       bookingAmount: 0,
+      paymentMode: "CASH",
+      referenceNumber: "",
     },
   })
 
@@ -985,7 +1016,14 @@ function BookFlatPanel({
   const isExistingOwner = effectiveFlatType === "EXISTING_OWNER"
   const sellingPrice = watch("sellingPrice") || 0
   const bookingAmount = watch("bookingAmount") || 0
+  const bookingPaymentMode = watch("paymentMode") || "CASH"
   const remaining = Number(sellingPrice) - Number(bookingAmount)
+
+  useEffect(() => {
+    if (Number(bookingAmount) <= 0 || bookingPaymentMode === "CASH") {
+      setValue("referenceNumber", "", { shouldValidate: true })
+    }
+  }, [bookingAmount, bookingPaymentMode, setValue])
 
   const onSubmit = async (data: BookFlatWithSelectionInput) => {
     if (!selectedFloor) {
@@ -1052,6 +1090,8 @@ function BookFlatPanel({
         email: data.email || undefined,
         sellingPrice: data.sellingPrice,
         bookingAmount: data.bookingAmount,
+        paymentMode: data.bookingAmount > 0 ? data.paymentMode : undefined,
+        referenceNumber: data.bookingAmount > 0 ? data.referenceNumber?.trim() || undefined : undefined,
       },
     })
   }
@@ -1292,7 +1332,48 @@ function BookFlatPanel({
                 <p className="text-[10px] text-muted-foreground/60">
                   Future payments can be added later from the profile. You will not need to enter the total amount again.
                 </p>
+                {errors.bookingAmount && <p className="text-[10px] text-destructive">{errors.bookingAmount.message}</p>}
               </div>
+
+              {Number(bookingAmount) > 0 && (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Mode</Label>
+                    <select
+                      value={bookingPaymentMode}
+                      onChange={(event) => setValue("paymentMode", event.target.value as BookFlatInput["paymentMode"], { shouldValidate: true })}
+                      className="h-11 rounded-none border border-input bg-muted px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="CASH">Cash</option>
+                      <option value="CHEQUE">Cheque</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                      <option value="UPI">UPI</option>
+                    </select>
+                    {errors.paymentMode && <p className="text-[10px] text-destructive">{errors.paymentMode.message}</p>}
+                  </div>
+
+                  {bookingPaymentMode !== "CASH" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                        {getBookingReferenceLabel(bookingPaymentMode)}
+                      </Label>
+                      <Input
+                        placeholder={getBookingReferenceLabel(bookingPaymentMode)}
+                        className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
+                        {...register("referenceNumber")}
+                      />
+                      {errors.referenceNumber && <p className="text-[10px] text-destructive">{errors.referenceNumber.message}</p>}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Reference Number</Label>
+                      <div className="flex h-11 items-center border border-dashed border-border bg-muted/40 px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                        Cash payment does not require a reference number.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Summary */}
               <div className="border border-border divide-y divide-border mt-2">

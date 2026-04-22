@@ -620,7 +620,7 @@ function TransactionModal({ investor, onClose }: { investor: Investor; onClose: 
           investorId={investor.id}
           isPending={updatingPayment}
           onClose={() => setPayTx(null)}
-          onSubmit={(amount, note) => {
+          onSubmit={({ amount, note }) => {
             updatePayment({ transactionId: payTx.id, data: { amount, note } })
           }}
         />

@@ -8,6 +8,7 @@ import { z } from "zod"
 import {
   Customer,
   CustomerPaymentHistoryItem,
+  RecordPaymentInput,
   UpdateCustomerInput,
   updateCustomerSchema,
 } from "@/schemas/customer.schema"
@@ -549,16 +550,16 @@ export function CustomerProfile({
         </div>
 
         {isPaymentModalOpen && canAddPayment && (
-          <RecordPaymentModal
-            title={`Customer: ${customer.name}`}
-            totalAmount={customer.sellingPrice}
-            currentlyPaid={customer.amountPaid}
-            entityType="customer-booking"
-            entityId={customer.id}
-            onSubmit={(amount, note) => recordPayment({ customerId: customer.id, siteId, data: { amount, note } })}
-            onClose={() => setIsPaymentModalOpen(false)}
-            isPending={isPaying}
-          />
+        <RecordPaymentModal
+          title={`Customer: ${customer.name}`}
+          totalAmount={customer.sellingPrice}
+          currentlyPaid={customer.amountPaid}
+          entityType="customer-booking"
+          entityId={customer.id}
+          onSubmit={(paymentInput: RecordPaymentInput) => recordPayment({ customerId: customer.id, siteId, data: paymentInput })}
+          onClose={() => setIsPaymentModalOpen(false)}
+          isPending={isPaying}
+        />
         )}
 
         {isReceiptModalOpen && canOpenReceipt && (
@@ -586,7 +587,7 @@ export function CustomerProfile({
                 )}
                 {canOpenReceipt && (
                   <Button variant="outline" onClick={() => setIsReceiptModalOpen(true)} className="h-11 gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest">
-                    <Download className="h-3.5 w-3.5" /> Receipt
+                    <Download className="h-3.5 w-3.5" /> Receipt / Statement
                   </Button>
                 )}
                 {canEdit && (

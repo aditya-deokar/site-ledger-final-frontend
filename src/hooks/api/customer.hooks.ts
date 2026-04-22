@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { customerService } from '@/services/customer.service';
-import { CancelDealInput, UpdateCustomerInput } from '@/schemas/customer.schema';
+import { CancelDealInput, RecordPaymentInput, UpdateCustomerInput } from '@/schemas/customer.schema';
 
 export const useAllCustomers = (status?: string) => {
   return useQuery({
@@ -39,7 +39,7 @@ export const useUpdateCustomer = (options?: { onSuccess?: () => void }) => {
 export const useRecordCustomerPayment = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ customerId, siteId, data }: { customerId: string; siteId?: string; data: { amount: number; note?: string } }) =>
+    mutationFn: ({ customerId, siteId, data }: { customerId: string; siteId?: string; data: RecordPaymentInput }) =>
       customerService.recordPayment(customerId, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['siteCustomers'] });

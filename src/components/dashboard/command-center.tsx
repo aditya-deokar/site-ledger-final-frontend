@@ -19,11 +19,11 @@ import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@
 import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
 import { useCreateEmployee, useDeleteEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
 import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
-import { createSiteSchema, CreateSiteInput, bookFlatSchema, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
+import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput } from '@/schemas/investor.schema';
 import { createVendorSchema, CreateVendorInput, updateVendorSchema, UpdateVendorInput } from '@/schemas/vendor.schema';
-import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, cancelDealSchema } from '@/schemas/customer.schema';
+import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, RecordPaymentInput, cancelDealSchema } from '@/schemas/customer.schema';
 import { createEmployeeSchema, CreateEmployeeInput, UpdateEmployeeInput } from '@/schemas/employee.schema';
 import type { AttendanceStatus } from '@/schemas/attendance.schema';
 import { getApiErrorMessage } from '@/lib/api-error';
@@ -1158,20 +1158,69 @@ function EditCustomerForm({ entity, onSuccess, onBack }: { entity: any; onSucces
 
 function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useRecordCustomerPayment({ onSuccess: () => { toast.success('Payment recorded'); onSuccess(); } });
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<{ amount: number; note?: string }>({
-    defaultValues: { amount: 0, note: '' },
+  type RecordPaymentFormValues = {
+    amount: number;
+    note?: string;
+    paymentMode: RecordPaymentInput['paymentMode'];
+    referenceNumber?: string;
+  };
+
+  const { register, handleSubmit, setError, clearErrors, setFocus, setValue, watch, formState: { errors } } = useForm<RecordPaymentFormValues>({
+    defaultValues: { amount: 0, note: '', paymentMode: 'CASH', referenceNumber: '' },
   });
   useEffect(() => { setTimeout(() => setFocus('amount'), 50); }, [setFocus]);
+  const paymentMode = watch('paymentMode') ?? 'CASH';
+
+  useEffect(() => {
+    if (paymentMode === 'CASH') {
+      setValue('referenceNumber', undefined);
+      clearErrors('referenceNumber');
+    }
+  }, [clearErrors, paymentMode, setValue]);
 
   return (
     <FormShell title={`Record Payment: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Record Payment" formId="record-payment-form">
-      <form id="record-payment-form" onSubmit={handleSubmit((d) => mutate({ customerId: entity.id, siteId: entity.siteId, data: d }))} className="flex flex-col gap-6">
+      <form
+        id="record-payment-form"
+        onSubmit={handleSubmit((values) => {
+          const parsed = recordPaymentSchema.safeParse(values);
+          if (!parsed.success) {
+            const issue = parsed.error.issues[0];
+            const issuePath = issue?.path?.[0];
+            if (typeof issuePath === 'string') {
+              setError(issuePath as keyof RecordPaymentFormValues, { type: 'manual', message: issue.message });
+            }
+            return;
+          }
+
+          clearErrors();
+          mutate({ customerId: entity.id, siteId: entity.siteId, data: parsed.data });
+        })}
+        className="flex flex-col gap-6"
+      >
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to record payment')} />}
         <Field label="Amount Paid (INR)" error={errors.amount?.message}>
           <input type="number" className={INPUT_CLS} {...register('amount', { valueAsNumber: true })} />
         </Field>
-        <Field label="Note / Reference">
-          <input placeholder="Payment details..." className={INPUT_CLS} {...register('note')} />
+        <Field label="Payment Mode" error={errors.paymentMode?.message}>
+          <select className={INPUT_CLS} {...register('paymentMode')}>
+            <option value="CASH">Cash</option>
+            <option value="CHEQUE">Cheque</option>
+            <option value="BANK_TRANSFER">Bank Transfer</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </Field>
+        {paymentMode !== 'CASH' && (
+          <Field label="Reference Number" error={errors.referenceNumber?.message}>
+            <input
+              placeholder={paymentMode === 'CHEQUE' ? 'Cheque number' : paymentMode === 'UPI' ? 'UPI transaction ID' : 'Bank transfer ref / UTR'}
+              className={INPUT_CLS}
+              {...register('referenceNumber')}
+            />
+          </Field>
+        )}
+        <Field label="Note">
+          <input placeholder="Optional accounting note..." className={INPUT_CLS} {...register('note')} />
         </Field>
       </form>
     </FormShell>
@@ -1228,9 +1277,38 @@ const bookFlatFlowSchema = bookFlatSchema.extend({
       message: 'Enter a custom unit type',
     });
   }
+
+  if (data.bookingAmount > 0 && !data.paymentMode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['paymentMode'],
+      message: 'Select the payment mode for the booking amount',
+    });
+  }
+
+  if (data.bookingAmount > 0 && data.paymentMode && data.paymentMode !== 'CASH' && !data.referenceNumber?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['referenceNumber'],
+      message: 'Reference number is required for non-cash booking payments',
+    });
+  }
 });
 
 type BookFlatFlowInput = z.input<typeof bookFlatFlowSchema>;
+
+function getBookingReferenceLabel(paymentMode?: BookFlatInput['paymentMode']) {
+  switch (paymentMode) {
+    case 'CHEQUE':
+      return 'Cheque Number';
+    case 'BANK_TRANSFER':
+      return 'Bank Transfer Ref / UTR';
+    case 'UPI':
+      return 'UPI Transaction ID';
+    default:
+      return 'Reference Number';
+  }
+}
 
 function BookFlatForm({
   site,
@@ -1277,6 +1355,8 @@ function BookFlatForm({
       email: '',
       sellingPrice: 0,
       bookingAmount: 0,
+      paymentMode: 'CASH',
+      referenceNumber: '',
     },
   });
 
@@ -1287,6 +1367,7 @@ function BookFlatForm({
   const flatType = watch('flatType') || 'CUSTOMER';
   const sellingPrice = Number(watch('sellingPrice') || 0);
   const bookingAmount = Number(watch('bookingAmount') || 0);
+  const bookingPaymentMode = watch('paymentMode') || 'CASH';
   const remaining = Math.max(0, sellingPrice - bookingAmount);
 
   const selectedExistingCustomer = availableCustomers.find((customer: any) => customer.id === selectedExistingCustomerId);
@@ -1318,6 +1399,12 @@ function BookFlatForm({
     onFloorChange?.(Number.isFinite(floorNumber) && floorNumber > 0 ? floorNumber : null);
     return () => onFloorChange?.(null);
   }, [floorNumber, onFloorChange]);
+
+  useEffect(() => {
+    if (bookingAmount <= 0 || bookingPaymentMode === 'CASH') {
+      setValue('referenceNumber', '', { shouldValidate: true });
+    }
+  }, [bookingAmount, bookingPaymentMode, setValue]);
 
   const onSubmit = async (data: BookFlatFlowInput) => {
     const normalizedFlatId = data.customFlatId.trim().toLowerCase();
@@ -1387,6 +1474,8 @@ function BookFlatForm({
         email: data.email || undefined,
         sellingPrice: data.sellingPrice,
         bookingAmount: data.bookingAmount,
+        paymentMode: data.bookingAmount > 0 ? data.paymentMode : undefined,
+        referenceNumber: data.bookingAmount > 0 ? data.referenceNumber?.trim() || undefined : undefined,
       },
     });
 
@@ -1527,6 +1616,34 @@ function BookFlatForm({
           </Field>
         </div>
 
+        {bookingAmount > 0 && (
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Payment Mode" error={errors.paymentMode?.message}>
+              <select
+                className={INPUT_CLS}
+                value={bookingPaymentMode}
+                onChange={(event) => setValue('paymentMode', event.target.value as BookFlatInput['paymentMode'], { shouldValidate: true })}
+              >
+                <option value="CASH">Cash</option>
+                <option value="CHEQUE">Cheque</option>
+                <option value="BANK_TRANSFER">Bank Transfer</option>
+                <option value="UPI">UPI</option>
+              </select>
+            </Field>
+            {bookingPaymentMode !== 'CASH' ? (
+              <Field label={getBookingReferenceLabel(bookingPaymentMode)} error={errors.referenceNumber?.message}>
+                <input className={INPUT_CLS} placeholder={getBookingReferenceLabel(bookingPaymentMode)} {...register('referenceNumber')} />
+              </Field>
+            ) : (
+              <Field label="Reference Number">
+                <div className="flex h-12 items-center border border-dashed border-border bg-muted px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                  Cash payment does not require a reference number.
+                </div>
+              </Field>
+            )}
+          </div>
+        )}
+
         <div className="border border-border divide-y divide-border">
           <div className="flex justify-between items-center px-4 py-3">
             <span className={LABEL_CLS}>Selected Floor</span>
@@ -1544,6 +1661,7 @@ function BookFlatForm({
 function ActionConfirmForm({
   title,
   message,
+  errorMessage,
   onConfirm,
   onBack,
   isPending,
@@ -1552,6 +1670,7 @@ function ActionConfirmForm({
 }: {
   title: string;
   message: string;
+  errorMessage?: string;
   onConfirm: () => void;
   onBack: () => void;
   isPending: boolean;
@@ -1564,6 +1683,7 @@ function ActionConfirmForm({
         <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest leading-relaxed">
           {message}
         </p>
+        {errorMessage && <FormError msg={errorMessage} />}
       </div>
       <form id="confirm-form" onSubmit={(e) => { e.preventDefault(); onConfirm(); }} />
     </FormShell>
@@ -2440,7 +2560,7 @@ export default function CommandCenter() {
   );
 
   const { mutate: toggleSiteMutate, isPending: isToggleSitePending } = useToggleSite();
-  const { mutate: deleteSiteMutate, isPending: isDeleteSitePending } = useDeleteSite();
+  const { mutate: deleteSiteMutate, isPending: isDeleteSitePending, error: deleteSiteError } = useDeleteSite();
   const { mutate: deletePartnerMutate, isPending: isDeletePartnerPending } = useDeletePartner();
   const { mutate: deleteInvestorMutate, isPending: isDeleteInvestorPending } = useDeleteInvestor();
   const { mutate: deleteVendorMutate, isPending: isDeleteVendorPending } = useDeleteVendor();
@@ -2671,7 +2791,8 @@ export default function CommandCenter() {
         <ActionConfirmForm
           {...props}
           title="Delete Site"
-          message={`CRITICAL: This will permanently delete "${selectedEntity?.name}" and all associated data. This action cannot be undone.`}
+          message={`Delete "${selectedEntity?.name}" only if it has no financial or operational history. Once any real activity exists, archive it instead.`}
+          errorMessage={deleteSiteError ? getApiErrorMessage(deleteSiteError, 'Unable to delete this site.') : undefined}
           submitLabel="Delete Site"
           destructive
           isPending={isDeleteSitePending}

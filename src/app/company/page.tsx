@@ -340,7 +340,7 @@ function WithdrawalLedger({ withdrawals }: { withdrawals: CompanyWithdrawal[] })
           entityId={selectedWithdrawal.id}
           isPending={isPending}
           onClose={() => setSelectedWithdrawal(null)}
-          onSubmit={(amount, note) => {
+          onSubmit={({ amount, note }) => {
             recordPayment({ id: selectedWithdrawal.id, data: { amount, note } });
           }}
         />

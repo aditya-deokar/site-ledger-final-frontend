@@ -432,7 +432,7 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
           siteId={siteId}
           isPending={updatingPayment}
           onClose={() => setPayExpense(null)}
-          onSubmit={(amount, note) => {
+          onSubmit={({ amount, note }) => {
             updatePayment({ expenseId: payExpense.id, data: { amount, note } })
           }}
         />

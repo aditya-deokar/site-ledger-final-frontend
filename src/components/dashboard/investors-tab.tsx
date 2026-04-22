@@ -292,7 +292,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           investorId={investor.id}
           isPending={updatingPay}
           onClose={() => setPayTx(null)}
-          onSubmit={(amount, note) => {
+          onSubmit={({ amount, note }) => {
             updatePayment({ transactionId: payTx.id, data: { amount, note } })
           }}
         />

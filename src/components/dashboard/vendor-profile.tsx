@@ -369,7 +369,7 @@ function PaymentBridge({ siteId, expenseId, title, totalAmount, currentlyPaid, o
       siteId={siteId}
       isPending={isPending}
       onClose={onClose}
-      onSubmit={(amount, note) => {
+      onSubmit={({ amount, note }) => {
         updatePayment({ expenseId, data: { amount, note } })
       }}
     />

@@ -3,6 +3,7 @@ import {
   AllCustomersResponse,
   CancelDealInput,
   CustomerPaymentsResponse,
+  RecordPaymentInput,
   SiteCustomersResponse,
   UpdateCustomerInput,
 } from '@/schemas/customer.schema';
@@ -20,7 +21,7 @@ export const customerService = {
   updateCustomer: (siteId: string, flatId: string, customerId: string, data: UpdateCustomerInput) =>
     api.put(`/sites/${siteId}/flats/${flatId}/customer/${customerId}`, data),
 
-  recordPayment: (customerId: string, data: { amount: number; note?: string }) =>
+  recordPayment: (customerId: string, data: RecordPaymentInput) =>
     api.patch(`/customers/${customerId}/payment`, data),
 
   getPayments: (customerId: string): Promise<CustomerPaymentsResponse> =>

@@ -26,6 +26,7 @@ import { Loader2, MoreVertical, ArrowRight, Layers, Grid3x3, Banknote, Wallet, P
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getApiErrorMessage } from '@/lib/api-error';
 
 function SitesSkeleton() {
   return (
@@ -83,8 +84,7 @@ function DeleteSiteDialog({
   site: Site;
   onClose: () => void;
 }) {
-  const [keepCustomers, setKeepCustomers] = useState(false);
-  const { mutate: deleteSite, isPending } = useDeleteSite({ onSuccess: onClose });
+  const { mutate: deleteSite, isPending, error } = useDeleteSite({ onSuccess: onClose });
 
   return (
     <AlertDialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -98,24 +98,23 @@ function DeleteSiteDialog({
               Delete &ldquo;{site.name}&rdquo;?
             </AlertDialogTitle>
             <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest">
-              This action is permanent and cannot be undone.
+              Delete is only for unused sites. Used sites should be archived.
             </p>
           </div>
         </AlertDialogHeader>
 
-        <div className="px-8 pb-6">
-          <label className="flex items-center gap-3 cursor-pointer p-4 bg-muted border border-border hover:border-primary/30 transition-colors">
-            <input
-              type="checkbox"
-              checked={keepCustomers}
-              onChange={(e) => setKeepCustomers(e.target.checked)}
-              className="accent-primary w-4 h-4"
-            />
-            <div>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-foreground">Keep customer records</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Customer financial history will be preserved at company level</p>
+        <div className="px-8 pb-6 space-y-4">
+          <div className="p-4 bg-muted border border-border">
+            <p className="text-[11px] font-bold tracking-widest uppercase text-foreground">Delete only if unused</p>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+              A site can be permanently deleted only if it has no financial or operational history. Once any real activity exists, the site should only be archived.
+            </p>
+          </div>
+          {error && (
+            <div className="border border-red-500/30 bg-red-500/10 p-4 text-[10px] font-medium text-red-600 leading-relaxed">
+              {getApiErrorMessage(error, 'Unable to delete this site.')}
             </div>
-          </label>
+          )}
         </div>
 
         <AlertDialogFooter className="p-8 pt-0 flex gap-4 sm:space-x-4">
@@ -123,7 +122,7 @@ function DeleteSiteDialog({
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={(e) => { e.preventDefault(); deleteSite({ id: site.id, keepCustomers }); }}
+            onClick={(e) => { e.preventDefault(); deleteSite({ id: site.id }); }}
             disabled={isPending}
             className="flex-1 rounded-none bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase tracking-widest h-12 disabled:opacity-60"
           >
