@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/services/site.service';
-import { CreateSiteInput, BookFlatInput, CreateExpenseInput, CreateFloorInput, CreateFlatInput } from '@/schemas/site.schema';
+import { CreateSiteInput, BookFlatInput, CreateExpenseInput, CreateFloorInput, CreateFlatInput, UpdateFlatDetailsInput } from '@/schemas/site.schema';
 
 export const useSites = (options?: { showArchived?: 'true' | 'only'; enabled?: boolean } | 'true' | 'only') => {
   const showArchived = typeof options === 'string' ? options : options?.showArchived;
@@ -82,6 +82,58 @@ export const useFloors = (siteId: string) => {
   });
 };
 
+export const useWings = (siteId: string) => {
+  return useQuery({
+    queryKey: ['wings', siteId],
+    queryFn: () => siteService.getWings(siteId),
+    retry: false,
+    enabled: !!siteId,
+  });
+};
+
+export const useCreateWing = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) => siteService.createWing(siteId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wings', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useUpdateWing = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ wingId, data }: { wingId: string; data: { name: string } }) =>
+      siteService.updateWing(siteId, wingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wings', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useDeleteWing = (siteId: string, options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (wingId: string) => siteService.deleteWing(siteId, wingId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wings', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['floors', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['site', siteId] });
+      queryClient.invalidateQueries({ queryKey: ['sites'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
 export const useCreateFloor = (siteId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -139,7 +191,7 @@ export const useCreateFlat = (siteId: string, options?: { onSuccess?: () => void
 export const useUpdateFlatDetails = (siteId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ flatId, data }: { flatId: string; data: CreateFlatInput }) =>
+    mutationFn: ({ flatId, data }: { flatId: string; data: UpdateFlatDetailsInput }) =>
       siteService.updateFlatDetails(siteId, flatId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floors', siteId] });

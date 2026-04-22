@@ -36,6 +36,8 @@ export interface Floor {
   id: string;
   floorNumber: number;
   floorName: string | null;
+  wingId?: string | null;
+  wingName?: string | null;
   flats: Flat[];
 }
 
@@ -46,6 +48,7 @@ export interface FloorsResponse {
 
 export const createFloorSchema = z.object({
   floorName: z.string().min(1, 'Floor name is required'),
+  wingId: z.string().optional(),
 });
 export type CreateFloorInput = z.infer<typeof createFloorSchema>;
 
@@ -55,6 +58,14 @@ export const createFlatSchema = z.object({
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
 });
 export type CreateFlatInput = z.input<typeof createFlatSchema>;
+
+export const updateFlatDetailsSchema = z.object({
+  customFlatId: z.string().min(1, 'Flat ID is required'),
+  unitType: z.string().trim().min(1, 'Unit type is required').optional(),
+  floorId: z.string().min(1, 'Floor is required').optional(),
+  flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
+});
+export type UpdateFlatDetailsInput = z.input<typeof updateFlatDetailsSchema>;
 
 // ── Expenses ──────────────────────────────────────────
 
@@ -98,8 +109,27 @@ export const createSiteSchema = z.object({
   projectType: z.enum(['NEW_CONSTRUCTION', 'REDEVELOPMENT']).optional().default('NEW_CONSTRUCTION'),
   totalFloors: z.number().int('Total floors must be a whole number').min(1, 'Total floors must be at least 1').optional(),
   totalFlats: z.number().int('Total flats must be a whole number').min(1, 'Total flats must be at least 1').optional(),
+  hasMultipleWings: z.boolean().optional().default(false),
+  wings: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, 'Wing name is required'),
+        floorCount: z.number().int('Floor count must be a whole number').min(1, 'Each wing needs at least 1 floor'),
+      }),
+    )
+    .optional(),
 }).superRefine((data, ctx) => {
-  if (data.totalFlats && !data.totalFloors) {
+  const hasWings = (data.wings?.length ?? 0) > 0;
+
+  if (data.hasMultipleWings && !hasWings) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['wings'],
+      message: 'Add at least one wing when multiple wings is enabled.',
+    });
+  }
+
+  if (!hasWings && data.totalFlats && !data.totalFloors) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['totalFloors'],
@@ -108,6 +138,22 @@ export const createSiteSchema = z.object({
   }
 });
 export type CreateSiteInput = z.input<typeof createSiteSchema>;
+
+export interface Wing {
+  id: string;
+  siteId: string;
+  name: string;
+  code: string | null;
+  isActive: boolean;
+  floorsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WingsResponse {
+  ok: boolean;
+  data: { wings: Wing[] };
+}
 
 export interface Site {
   id: string;

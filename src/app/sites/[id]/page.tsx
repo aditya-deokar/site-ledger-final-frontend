@@ -7,6 +7,7 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { FloorsFlatsTab } from '@/components/dashboard/floors-flats-tab';
 import { ExpensesTab } from '@/components/dashboard/expenses-tab';
 import { InvestorsTab } from '@/components/dashboard/investors-tab';
+import { CustomerProfile } from '@/components/dashboard/customer-profile';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
@@ -20,14 +21,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft } from 'lucide-react';
+import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function formatINR(n: number) {
   return '₹' + n.toLocaleString('en-IN');
 }
 
-// ── Add Fund Dialog ───────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Add Fund Dialog ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onClose: () => void; defaultAmount?: number }) {
   const [amount, setAmount] = useState(defaultAmount && defaultAmount > 0 ? String(defaultAmount) : '');
   const [note, setNote] = useState('');
@@ -107,7 +108,7 @@ function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onC
             )}
             {amount && Number(amount) > 0 && canAddFullAmount && (
               <p className="text-[10px] text-emerald-600 font-medium">
-                ✓ This will transfer money from company to site
+                This will transfer money from company to site
               </p>
             )}
           </div>
@@ -138,7 +139,7 @@ function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onC
   );
 }
 
-// ── Pull Fund Dialog ─────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Pull Fund Dialog ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 function PullFundDialog({ siteId, remainingFund, onClose }: { siteId: string; remainingFund: number; onClose: () => void }) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -213,7 +214,7 @@ function PullFundDialog({ siteId, remainingFund, onClose }: { siteId: string; re
   );
 }
 
-// ── Fund History Dialog ──────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Fund History Dialog ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 function FundHistoryPanel({ siteId }: { siteId: string }) {
   const { data, isLoading } = useFundHistory(siteId);
   const history = data?.data?.history || [];
@@ -317,7 +318,7 @@ function FundDeploymentChart({ allocated, expenses }: { allocated: number; expen
   );
 }
 
-// ── Inventory Bar ────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Inventory Bar ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 function InventoryBar({ available, booked, sold, total }: { available: number; booked: number; sold: number; total: number }) {
   const pctOf = (n: number) => total > 0 ? `${(n / total) * 100}%` : '0%';
   return (
@@ -328,11 +329,11 @@ function InventoryBar({ available, booked, sold, total }: { available: number; b
     </div>
   );
 }
-
-function ExistingOwnersTab({ siteId }: { siteId: string }) {
+function ExistingOwnersTab({ siteId, siteName }: { siteId: string; siteName?: string }) {
   const { data, isLoading } = useSiteCustomers(siteId)
   const customers = (data?.data?.customers ?? []) as any[]
   const owners = customers.filter((c) => c.customerType === 'EXISTING_OWNER')
+  const [selectedOwner, setSelectedOwner] = useState<any | null>(null)
 
   if (isLoading) {
     return (
@@ -358,50 +359,81 @@ function ExistingOwnersTab({ siteId }: { siteId: string }) {
         </div>
       ) : (
         <div className="border border-border divide-y divide-border overflow-hidden">
+          <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
+            <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Customer</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Site / Flat</div>
+            <div className="col-span-1 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Remaining</div>
+          </div>
+
           {owners.map((c) => (
-            <div
+            <button
               key={c.id}
+              onClick={() => setSelectedOwner(c)}
               className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/20 transition-colors items-center text-left"
             >
-              <div className="lg:col-span-4 flex flex-col gap-2">
-                <span className="w-fit px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full">
-                  OWNER
+              <div className="lg:col-span-3 min-w-0">
+                <p className="font-serif text-base tracking-tight text-foreground truncate">{c.name}</p>
+                {c.phone && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
+                    <Phone className="w-3 h-3" /> {c.phone}
+                  </span>
+                )}
+              </div>
+
+              <div className="lg:col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{siteName ?? '-'}</span>
+                <span className="text-muted-foreground/30">|</span>
+                <span className="shrink-0 flex items-center gap-1 font-bold">
+                  F{c.floorNumber ?? '-'} <ChevronRight className="w-2 h-2" /> {c.customFlatId ?? c.flatNumber ?? '-'}
                 </span>
-                <div>
-                  <p className="font-serif text-lg font-bold text-foreground truncate">{c.name}</p>
-                  <p className="text-sm text-muted-foreground/60 mt-1">{c.phone ?? '—'}</p>
+              </div>
+
+              <div className="lg:col-span-1 flex items-center lg:block">
+                <span className="px-2.5 py-1 text-[11px] font-bold tracking-widest uppercase inline-block bg-violet-500/10 text-violet-700">
+                  {c.dealStatus === 'CANCELLED' ? 'CANCELLED' : 'EXISTING OWNER'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 lg:contents gap-4 pt-2 lg:pt-0 border-t border-border/50 lg:border-none">
+                <div className="lg:col-span-2">
+                  <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1">Selling</p>
+                  <span className="text-base lg:text-lg font-sans font-bold text-foreground">{formatINR(c.sellingPrice)}</span>
+                </div>
+                <div className="lg:col-span-2">
+                  <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1">Paid</p>
+                  <span className="text-base lg:text-lg font-sans font-bold text-emerald-600">{formatINR(c.amountPaid)}</span>
+                  <div className="mt-1 h-1 bg-muted overflow-hidden w-full lg:w-20">
+                    <div className="h-full bg-primary" style={{ width: `${c.sellingPrice > 0 ? Math.min(100, (c.amountPaid / c.sellingPrice) * 100) : 0}%` }} />
+                  </div>
+                </div>
+                <div className="lg:col-span-2 lg:text-right">
+                  <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1 text-left">Remaining</p>
+                  <span className={cn('text-base lg:text-lg font-sans font-bold', c.remaining > 0 ? 'text-red-500' : 'text-emerald-600')}>
+                    {formatINR(c.remaining)}
+                  </span>
                 </div>
               </div>
-
-              <div className="lg:col-span-2">
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</p>
-                <p className="text-base font-serif text-foreground">{c.customFlatId ?? c.flatId ?? '—'}</p>
-                <p className="text-sm text-muted-foreground/70 mt-1 truncate">{c.floorName ?? `Floor ${c.floorNumber}`}</p>
-              </div>
-
-              <div className="lg:col-span-2">
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</p>
-                <p className="text-base font-serif text-foreground">{c.sellingPrice > 0 ? formatINR(c.sellingPrice) : '—'}</p>
-              </div>
-
-              <div className="lg:col-span-2">
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount Paid</p>
-                <p className="text-base font-serif text-foreground">{formatINR(c.amountPaid)}</p>
-              </div>
-
-              <div className="lg:col-span-2 lg:text-right">
-                <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Remaining</p>
-                <p className="text-base font-serif font-bold text-foreground">{formatINR(c.remaining)}</p>
-              </div>
-            </div>
+            </button>
           ))}
         </div>
+      )}
+
+      {selectedOwner && (
+        <CustomerProfile
+          customer={selectedOwner}
+          siteId={siteId}
+          siteName={siteName}
+          onClose={() => setSelectedOwner(null)}
+        />
       )}
     </div>
   )
 }
-
-// ── Page ─────────────────────────────────────────────
+// ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Page ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
 export default function SiteDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
   const pathname = usePathname();
@@ -669,7 +701,7 @@ export default function SiteDetailPage() {
 
         {activeTab === 'investors' && <InvestorsTab siteId={site.id} siteName={site.name} />}
 
-        {activeTab === 'existingOwners' && isRedevelopment && <ExistingOwnersTab siteId={site.id} />}
+        {activeTab === 'existingOwners' && isRedevelopment && <ExistingOwnersTab siteId={site.id} siteName={site.name} />}
 
       </div>
 

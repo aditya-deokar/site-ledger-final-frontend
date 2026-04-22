@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { bookFlatSchema, BookFlatInput, Floor, Flat, createFloorSchema, CreateFloorInput, createFlatSchema, CreateFlatInput } from "@/schemas/site.schema"
+import { bookFlatSchema, BookFlatInput, Floor, Flat, Wing, createFloorSchema, CreateFloorInput, createFlatSchema, CreateFlatInput, updateFlatDetailsSchema, UpdateFlatDetailsInput } from "@/schemas/site.schema"
 import { CustomerProfile } from "@/components/dashboard/customer-profile"
 import {
   useFloors,
+  useWings,
   useBookFlat,
   useCreateFloor,
   useCreateFlat,
@@ -47,29 +48,54 @@ function getFlatDisplayName(flat: Pick<Flat, "customFlatId" | "flatNumber">) {
   return flat.customFlatId || `Flat ${flat.flatNumber}`
 }
 
+function getFlatTypeLabel(flatType: Flat["flatType"]) {
+  return flatType === "EXISTING_OWNER" ? "Existing Owner" : "Customer"
+}
+
+type WingOption = Pick<Wing, "id" | "name">
+const UNASSIGNED_WING_FILTER_ID = "__UNASSIGNED__"
+const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const
+const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const
+
 const bookFlatWithSelectionSchema = bookFlatSchema.extend({
   floorId: z.string().min(1, "Select a floor"),
-  flatId: z.string().min(1, "Select an available unit"),
+  unitTypePreset: z.enum(UNIT_TYPE_PICK_OPTIONS),
+  customUnitType: z.string().trim().optional(),
+  flatName: z.string().trim().min(1, "Flat name is required"),
+  flatType: z.enum(["CUSTOMER", "EXISTING_OWNER"]).default("CUSTOMER"),
+}).superRefine((data, ctx) => {
+  if (data.unitTypePreset === "CUSTOM" && !data.customUnitType?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["customUnitType"],
+      message: "Enter a custom unit type",
+    })
+  }
 })
 
-type BookFlatWithSelectionInput = BookFlatInput & {
-  floorId: string
-  flatId: string
-}
+type BookFlatWithSelectionInput = z.input<typeof bookFlatWithSelectionSchema>
 
 function AddFloorPanel({
   siteId,
+  wings,
   onClose,
 }: {
   siteId: string
+  wings: WingOption[]
   onClose: () => void
 }) {
   const { mutate: createFloor, isPending, error } = useCreateFloor(siteId, { onSuccess: onClose })
+  const hasWings = wings.length > 0
 
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateFloorInput>({
+  const { register, handleSubmit, watch, setError, clearErrors, formState: { errors } } = useForm<CreateFloorInput>({
     resolver: zodResolver(createFloorSchema),
-    defaultValues: { floorName: '' },
+    defaultValues: {
+      floorName: '',
+      wingId: hasWings ? wings[0]?.id : undefined,
+    },
   })
+  const selectedWingId = watch("wingId") ?? ""
+  const wingRegister = register("wingId")
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -85,13 +111,49 @@ function AddFloorPanel({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit((data) => createFloor(data))} className="flex flex-col flex-1">
+        <form
+          onSubmit={handleSubmit((data) => {
+            if (hasWings && !data.wingId) {
+              setError("wingId", { type: "manual", message: "Select a wing" })
+              return
+            }
+
+            clearErrors("wingId")
+            createFloor({ floorName: data.floorName, wingId: data.wingId || undefined })
+          })}
+          className="flex flex-col flex-1"
+        >
           <div className="px-8 py-6 flex flex-col gap-6 flex-1">
             {error && (
               <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
                 {typeof error === "string" ? error : "Failed to add floor"}
               </div>
             )}
+
+            {hasWings && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Wing</Label>
+                <NativeSelect
+                  value={selectedWingId}
+                  onChange={(event) => {
+                    wingRegister.onChange(event)
+                    clearErrors("wingId")
+                  }}
+                  className="w-full"
+                  name={wingRegister.name}
+                  onBlur={wingRegister.onBlur}
+                  ref={wingRegister.ref}
+                >
+                  {wings.map((wing) => (
+                    <NativeSelectOption key={wing.id} value={wing.id}>
+                      {wing.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                {errors.wingId && <p className="text-[10px] text-destructive">{errors.wingId.message}</p>}
+              </div>
+            )}
+
             <div className="flex flex-col gap-1.5">
               <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Floor Name</Label>
               <Input
@@ -404,31 +466,87 @@ function DeleteFloorDialog({
 function EditFlatDialog({
   siteId,
   flat,
-  floorName,
+  floors,
+  wings,
   projectType,
   onClose,
 }: {
   siteId: string
   flat: Flat
-  floorName: string
+  floors: Floor[]
+  wings: WingOption[]
   projectType: 'NEW_CONSTRUCTION' | 'REDEVELOPMENT'
   onClose: () => void
 }) {
   const { mutate: updateFlat, isPending, error } = useUpdateFlatDetails(siteId, { onSuccess: onClose })
   const flatDisplayName = getFlatDisplayName(flat)
   const formId = `edit-flat-form-${flat.id}`
-  const canChangeFlatType = flat.status === "AVAILABLE" && !flat.customer
-  const flatTypeLabel = flat.flatType === "EXISTING_OWNER" ? "Existing Owner Flat" : "Customer Flat"
+  const currentFloor = floors.find((floorItem) => floorItem.flats.some((flatItem) => flatItem.id === flat.id)) ?? null
+  const hasWingSelection = wings.length > 0 && floors.some((floorItem) => Boolean(floorItem.wingId))
+  const hasUnassignedFloors = floors.some((floorItem) => !floorItem.wingId)
+  const wingOptions = hasWingSelection
+    ? [
+        ...wings.filter((wing) => floors.some((floorItem) => floorItem.wingId === wing.id)),
+        ...(hasUnassignedFloors ? [{ id: UNASSIGNED_WING_FILTER_ID, name: "Unassigned" }] : []),
+      ]
+    : []
+  const initialWingId = hasWingSelection
+    ? currentFloor?.wingId ?? (hasUnassignedFloors ? UNASSIGNED_WING_FILTER_ID : wingOptions[0]?.id ?? "")
+    : ""
+  const [selectedWingId, setSelectedWingId] = useState(initialWingId)
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateFlatInput>({
-    resolver: zodResolver(createFlatSchema),
+  const selectableFloors = useMemo(() => {
+    if (!hasWingSelection) return floors
+    if (selectedWingId === UNASSIGNED_WING_FILTER_ID) {
+      return floors.filter((floorItem) => !floorItem.wingId)
+    }
+    return floors.filter((floorItem) => floorItem.wingId === selectedWingId)
+  }, [floors, hasWingSelection, selectedWingId])
+
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<UpdateFlatDetailsInput>({
+    resolver: zodResolver(updateFlatDetailsSchema),
     defaultValues: {
       customFlatId: flat.customFlatId ?? "",
+      unitType: flat.unitType ?? "",
+      floorId: currentFloor?.id ?? "",
       flatType: flat.flatType,
     },
   })
 
+  const floorId = watch("floorId") ?? ""
+  const selectedFloor = selectableFloors.find((floorItem) => floorItem.id === floorId) ?? null
   const selectedFlatType = watch("flatType")
+  const unitType = watch("unitType") ?? ""
+  const currentFloorLabel = currentFloor ? getFloorDisplayName(currentFloor) : "No floor assigned"
+  const currentWingLabel = currentFloor?.wingName ?? "Unassigned"
+  const flatTypeLabel = flat.flatType === "EXISTING_OWNER" ? "Existing Owner Flat" : "Customer Flat"
+
+  useEffect(() => {
+    if (!hasWingSelection) return
+
+    if (!selectedWingId || !wingOptions.some((wing) => wing.id === selectedWingId)) {
+      setSelectedWingId(initialWingId)
+    }
+  }, [hasWingSelection, initialWingId, selectedWingId, wingOptions])
+
+  useEffect(() => {
+    if (!selectableFloors.length) {
+      setValue("floorId", "", { shouldValidate: true })
+      return
+    }
+
+    if (!floorId || !selectableFloors.some((floorItem) => floorItem.id === floorId)) {
+      const fallbackFloorId =
+        (currentFloor && selectableFloors.some((floorItem) => floorItem.id === currentFloor.id) ? currentFloor.id : undefined)
+        ?? selectableFloors[0]?.id
+        ?? ""
+      setValue("floorId", fallbackFloorId, { shouldValidate: true })
+    }
+  }, [currentFloor, floorId, selectableFloors, setValue])
+
+  const applyUnitTypeValue = (nextValue: string) => {
+    setValue("unitType", nextValue, { shouldValidate: true })
+  }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
@@ -444,9 +562,9 @@ function EditFlatDialog({
               flatId: flat.id,
               data: {
                 ...data,
-                flatType: canChangeFlatType
-                  ? (projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType)
-                  : flat.flatType,
+                unitType: data.unitType?.trim() || undefined,
+                floorId: data.floorId || undefined,
+                flatType: projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType,
               },
             })
           )}
@@ -469,9 +587,79 @@ function EditFlatDialog({
             <p className="text-[10px] text-muted-foreground/50 mt-1 italic">This ID must remain unique within this site</p>
           </div>
 
+          {hasWingSelection && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Wing</Label>
+              <NativeSelect
+                value={selectedWingId}
+                onChange={(event) => {
+                  setSelectedWingId(event.target.value)
+                }}
+                className="w-full"
+              >
+                {wingOptions.map((wing) => (
+                  <NativeSelectOption key={wing.id} value={wing.id}>
+                    {wing.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Floor</Label>
+            <NativeSelect
+              value={floorId}
+              onChange={(event) => setValue("floorId", event.target.value, { shouldValidate: true })}
+              className="w-full"
+            >
+              {selectableFloors.map((floorItem) => (
+                <NativeSelectOption key={floorItem.id} value={floorItem.id}>
+                  {getFloorDisplayName(floorItem)}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            {errors.floorId && <p className="text-[10px] text-destructive">{errors.floorId.message}</p>}
+            {selectableFloors.length === 0 && (
+              <p className="text-[10px] text-muted-foreground/60">No floors available in the selected wing.</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Unit Type</Label>
+            <Input
+              value={unitType}
+              onChange={(event) => applyUnitTypeValue(event.target.value)}
+              placeholder="Type or pick e.g. 2BHK, Shop, Office"
+              className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
+            />
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {COMMON_UNIT_TYPES.map((option) => {
+                const isSelected = unitType.trim().toLowerCase() === option.toLowerCase()
+
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => applyUnitTypeValue(option)}
+                    className={cn(
+                      "h-7 px-2.5 border text-[10px] font-bold tracking-widest uppercase transition-colors",
+                      isSelected
+                        ? "border-primary/50 bg-primary/10 text-foreground"
+                        : "border-border bg-background text-muted-foreground/70 hover:border-primary/30 hover:text-foreground",
+                    )}
+                  >
+                    {option}
+                  </button>
+                )
+              })}
+            </div>
+            {errors.unitType && <p className="text-[10px] text-destructive">{errors.unitType.message}</p>}
+          </div>
+
           <input type="hidden" {...register("flatType")} />
 
-          {projectType === "REDEVELOPMENT" && canChangeFlatType && (
+          {projectType === "REDEVELOPMENT" && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Type</Label>
               <div className="grid grid-cols-2 gap-3">
@@ -491,12 +679,12 @@ function EditFlatDialog({
             </div>
           )}
 
-          {projectType === "REDEVELOPMENT" && !canChangeFlatType && (
+          {projectType === "NEW_CONSTRUCTION" && (
             <div className="border border-border bg-muted/20 p-4">
               <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Type</p>
               <p className="mt-2 text-sm font-serif text-foreground">{flatTypeLabel}</p>
               <p className="mt-2 text-[10px] text-muted-foreground/70">
-                Flat type is locked once this unit is assigned to a customer or owner.
+                New construction sites always keep flats under customer inventory.
               </p>
             </div>
           )}
@@ -504,11 +692,16 @@ function EditFlatDialog({
           <div className="border border-border bg-muted/20 p-4">
             <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Editing</p>
             <p className="mt-2 text-sm font-serif text-foreground">{flatDisplayName}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground/70">{floorName}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground/70">
+              {currentWingLabel} • {currentFloorLabel}
+            </p>
+            {selectedFloor && (
+              <p className="mt-1 text-[10px] text-muted-foreground/70">
+                Moving to: {selectedFloor.wingName ?? "Unassigned"} • {getFloorDisplayName(selectedFloor)}
+              </p>
+            )}
             <p className="mt-2 text-[10px] text-muted-foreground/70">
-              {canChangeFlatType
-                ? "You can update the unit ID and flat type before this unit is assigned."
-                : "You can still correct the unit ID here, but booking-linked details and flat type stay protected."}
+              Update the flat ID, unit type, placement, and inventory type from here. Changes apply across the site inventory.
             </p>
           </div>
         </form>
@@ -609,33 +802,80 @@ function DeleteFlatDialog({
 function BookFlatPanel({
   siteId,
   floors,
+  wings,
+  projectType,
+  preferredWingId,
+  preferredFloorId,
   initialFlatId,
   onClose,
 }: {
   siteId: string
   floors: Floor[]
+  wings: WingOption[]
+  projectType: 'NEW_CONSTRUCTION' | 'REDEVELOPMENT'
+  preferredWingId?: string
+  preferredFloorId?: string
   initialFlatId?: string
   onClose: () => void
 }) {
+  const { mutateAsync: createFlat, isPending: isCreatingFlat, error: createFlatError } = useCreateFlat(siteId)
   const { mutateAsync: updateFlatDetails, isPending: isUpdatingFlat, error: updateFlatError } = useUpdateFlatDetails(siteId)
   const { mutateAsync: bookFlat, isPending: isBooking, error: bookingError } = useBookFlat(siteId, { onSuccess: onClose })
-  const bookableFloors = floors.filter((floor) => floor.flats.some((flat) => flat.status === "AVAILABLE"))
-  const initialFloorId =
-    (initialFlatId
-      ? bookableFloors.find((floor) => floor.flats.some((flat) => flat.id === initialFlatId))?.id
-      : undefined) ?? bookableFloors[0]?.id ?? ""
+  const hasWingSelection = wings.length > 0 && floors.some((floor) => Boolean(floor.wingId))
+  const hasUnassignedFloors = floors.some((floor) => !floor.wingId)
+  const wingOptions = hasWingSelection
+    ? [
+        ...wings.filter((wing) => floors.some((floor) => floor.wingId === wing.id)),
+        ...(hasUnassignedFloors ? [{ id: UNASSIGNED_WING_FILTER_ID, name: "Unassigned" }] : []),
+      ]
+    : []
+  const floorWithInitialFlat = initialFlatId
+    ? floors.find((floor) => floor.flats.some((flat) => flat.id === initialFlatId)) ?? null
+    : null
+  const initialWingId = hasWingSelection
+    ? (
+        floorWithInitialFlat
+          ? floorWithInitialFlat.wingId ?? UNASSIGNED_WING_FILTER_ID
+          : undefined
+      ) ??
+      (preferredWingId && wingOptions.some((wing) => wing.id === preferredWingId)
+        ? preferredWingId
+        : undefined) ??
+      wingOptions[0]?.id ??
+      ""
+    : ""
+  const initialFloorCandidates = hasWingSelection
+    ? initialWingId === UNASSIGNED_WING_FILTER_ID
+      ? floors.filter((floor) => !floor.wingId)
+      : floors.filter((floor) => floor.wingId === initialWingId)
+    : floors
+  const initialFloorId = floorWithInitialFlat?.id ?? initialFloorCandidates[0]?.id ?? ""
+  const resolvedInitialFloorId = floorWithInitialFlat?.id
+    ?? (preferredFloorId && initialFloorCandidates.some((floor) => floor.id === preferredFloorId)
+      ? preferredFloorId
+      : initialFloorCandidates[0]?.id ?? "")
+  const initiallySelectedFlat = floorWithInitialFlat && initialFlatId
+    ? floorWithInitialFlat.flats.find((flat) => flat.id === initialFlatId) ?? null
+    : null
 
-  const [selectedFloorId, setSelectedFloorId] = useState(initialFloorId)
-  const [selectedFlatId, setSelectedFlatId] = useState(initialFlatId ?? "")
-  const [editableFlatId, setEditableFlatId] = useState("")
-  const [hasEditedFlatId, setHasEditedFlatId] = useState(false)
+  const [selectedWingId, setSelectedWingId] = useState(initialWingId)
+  const [selectedFloorId, setSelectedFloorId] = useState(resolvedInitialFloorId)
   const [flatIdError, setFlatIdError] = useState<string | null>(null)
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<BookFlatWithSelectionInput>({
     resolver: zodResolver(bookFlatWithSelectionSchema),
     defaultValues: {
-      floorId: initialFloorId,
-      flatId: initialFlatId ?? "",
+      floorId: resolvedInitialFloorId,
+      flatName: initiallySelectedFlat ? getFlatDisplayName(initiallySelectedFlat) : "",
+      unitTypePreset: (COMMON_UNIT_TYPES.includes((initiallySelectedFlat?.unitType ?? "") as typeof COMMON_UNIT_TYPES[number])
+        ? initiallySelectedFlat?.unitType
+        : "CUSTOM") as BookFlatWithSelectionInput["unitTypePreset"],
+      customUnitType: initiallySelectedFlat?.unitType && !COMMON_UNIT_TYPES.includes(initiallySelectedFlat.unitType as typeof COMMON_UNIT_TYPES[number])
+        ? initiallySelectedFlat.unitType
+        : "",
+      flatType: projectType === "NEW_CONSTRUCTION"
+        ? "CUSTOMER"
+        : initiallySelectedFlat?.flatType ?? "CUSTOMER",
       name: "",
       phone: "",
       email: "",
@@ -645,81 +885,167 @@ function BookFlatPanel({
   })
 
   useEffect(() => {
-    if (!selectedFloorId && initialFloorId) {
-      setSelectedFloorId(initialFloorId)
-      return
+    if (!hasWingSelection) return
+
+    if (!selectedWingId || !wingOptions.some((wing) => wing.id === selectedWingId)) {
+      setSelectedWingId(initialWingId)
+    }
+  }, [hasWingSelection, initialWingId, selectedWingId, wingOptions])
+
+  const wingScopedFloors = useMemo(() => {
+    if (!hasWingSelection) {
+      return floors
     }
 
-    if (selectedFloorId && !bookableFloors.some((floor) => floor.id === selectedFloorId)) {
-      setSelectedFloorId(initialFloorId)
+    if (selectedWingId === UNASSIGNED_WING_FILTER_ID) {
+      return floors.filter((floor) => !floor.wingId)
     }
-  }, [bookableFloors, initialFloorId, selectedFloorId])
 
-  const selectedFloor = bookableFloors.find((floor) => floor.id === selectedFloorId) ?? null
-  const availableFlats = selectedFloor?.flats.filter((candidateFlat) => candidateFlat.status === "AVAILABLE") ?? []
+    return floors.filter((floor) => floor.wingId === selectedWingId)
+  }, [floors, hasWingSelection, selectedWingId])
 
   useEffect(() => {
-    const preferredFlatId =
-      (initialFlatId && availableFlats.some((candidateFlat) => candidateFlat.id === initialFlatId)
-        ? initialFlatId
-        : undefined) ?? availableFlats[0]?.id ?? ""
+    const availableFloorChoices = wingScopedFloors
+    const fallbackFloorId =
+      (initialFlatId
+        ? availableFloorChoices.find((floor) => floor.flats.some((flat) => flat.id === initialFlatId))?.id
+        : undefined) ??
+      (preferredFloorId && availableFloorChoices.some((floor) => floor.id === preferredFloorId)
+        ? preferredFloorId
+        : undefined) ??
+      availableFloorChoices[0]?.id ??
+      ""
 
-    if (!selectedFlatId || !availableFlats.some((candidateFlat) => candidateFlat.id === selectedFlatId)) {
-      setSelectedFlatId(preferredFlatId)
+    if (!selectedFloorId || !availableFloorChoices.some((floor) => floor.id === selectedFloorId)) {
+      setSelectedFloorId(fallbackFloorId)
     }
-  }, [availableFlats, initialFlatId, selectedFlatId])
+  }, [initialFlatId, preferredFloorId, selectedFloorId, wingScopedFloors])
 
-  const selectedFlat = availableFlats.find((candidateFlat) => candidateFlat.id === selectedFlatId) ?? null
+  const selectedFloor = wingScopedFloors.find((floor) => floor.id === selectedFloorId) ?? null
+  const floorAvailableFlats = selectedFloor?.flats.filter((candidateFlat) => candidateFlat.status === "AVAILABLE") ?? []
+  const unitTypePreset = watch("unitTypePreset")
+  const customUnitType = watch("customUnitType") || ""
+  const unitTypeInputValue = unitTypePreset === "CUSTOM" ? customUnitType : unitTypePreset
+  const flatName = watch("flatName") || ""
+  const selectedFlatType = watch("flatType") || "CUSTOMER"
+  const resolvedUnitType = (unitTypePreset === "CUSTOM" ? customUnitType : unitTypePreset)?.trim() || ""
+  const availableFlats = floorAvailableFlats
+  const normalizedFlatName = flatName.trim().toLowerCase()
+  const matchedAvailableFlat = normalizedFlatName
+    ? availableFlats.find((candidateFlat) => getFlatDisplayName(candidateFlat).trim().toLowerCase() === normalizedFlatName) ?? null
+    : null
 
   useEffect(() => {
     setValue("floorId", selectedFloorId, { shouldValidate: true })
   }, [selectedFloorId, setValue])
 
   useEffect(() => {
-    setValue("flatId", selectedFlatId, { shouldValidate: true })
-  }, [selectedFlatId, setValue])
+    if (!matchedAvailableFlat) return
 
-  useEffect(() => {
-    if (selectedFlat) {
-      setEditableFlatId(getFlatDisplayName(selectedFlat))
-      setHasEditedFlatId(false)
-      setFlatIdError(null)
+    setValue("unitTypePreset", (
+      COMMON_UNIT_TYPES.includes((matchedAvailableFlat.unitType ?? "") as typeof COMMON_UNIT_TYPES[number])
+        ? matchedAvailableFlat.unitType
+        : "CUSTOM"
+    ) as BookFlatWithSelectionInput["unitTypePreset"], { shouldValidate: true })
+
+    setValue(
+      "customUnitType",
+      matchedAvailableFlat.unitType && !COMMON_UNIT_TYPES.includes(matchedAvailableFlat.unitType as typeof COMMON_UNIT_TYPES[number])
+        ? matchedAvailableFlat.unitType
+        : "",
+      { shouldValidate: true },
+    )
+
+    setValue(
+      "flatType",
+      projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : matchedAvailableFlat.flatType,
+      { shouldValidate: true },
+    )
+  }, [matchedAvailableFlat, projectType, setValue])
+
+  const applyUnitTypeValue = (nextValue: string) => {
+    const normalizedValue = nextValue.trim()
+    const matchedCommonUnitType = COMMON_UNIT_TYPES.find(
+      (unitTypeOption) => unitTypeOption.toLowerCase() === normalizedValue.toLowerCase(),
+    )
+
+    if (matchedCommonUnitType) {
+      setValue("unitTypePreset", matchedCommonUnitType, { shouldValidate: true })
+      setValue("customUnitType", "", { shouldValidate: true })
       return
     }
 
-    setEditableFlatId("")
-    setHasEditedFlatId(false)
-    setFlatIdError(null)
-  }, [selectedFlat])
+    setValue("unitTypePreset", "CUSTOM", { shouldValidate: true })
+    setValue("customUnitType", nextValue, { shouldValidate: true })
+  }
 
-  const isExistingOwner = selectedFlat?.flatType === "EXISTING_OWNER"
+  const effectiveFlatType = projectType === "NEW_CONSTRUCTION"
+    ? "CUSTOMER"
+    : matchedAvailableFlat?.flatType ?? selectedFlatType
+  const isExistingOwner = effectiveFlatType === "EXISTING_OWNER"
   const sellingPrice = watch("sellingPrice") || 0
   const bookingAmount = watch("bookingAmount") || 0
   const remaining = Number(sellingPrice) - Number(bookingAmount)
 
   const onSubmit = async (data: BookFlatWithSelectionInput) => {
-    if (!selectedFlat || !selectedFloor) return
+    if (!selectedFloor) {
+      setFlatIdError("Select a floor before booking.")
+      return
+    }
 
-    const trimmedFlatId = editableFlatId.trim()
-    const currentDisplayFlatId = getFlatDisplayName(selectedFlat)
+    const trimmedFlatName = data.flatName.trim()
+    if (!trimmedFlatName) {
+      setFlatIdError("Flat name is required.")
+      return
+    }
 
-    if (hasEditedFlatId) {
-      if (!trimmedFlatId) {
-        setFlatIdError("Flat ID cannot be blank after you edit it.")
-        return
+    const nextUnitType = (data.unitTypePreset === "CUSTOM" ? data.customUnitType : data.unitTypePreset)?.trim()
+    if (!nextUnitType) {
+      setFlatIdError("Unit type is required.")
+      return
+    }
+
+    let targetFlatId = ""
+
+    if (matchedAvailableFlat) {
+      const currentDisplayFlatId = getFlatDisplayName(matchedAvailableFlat)
+      const nextFlatType = projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType
+      if (
+        trimmedFlatName !== currentDisplayFlatId ||
+        matchedAvailableFlat.unitType !== nextUnitType ||
+        matchedAvailableFlat.flatType !== nextFlatType
+      ) {
+        await updateFlatDetails({
+          flatId: matchedAvailableFlat.id,
+          data: {
+            customFlatId: trimmedFlatName,
+            unitType: nextUnitType,
+            flatType: nextFlatType,
+          },
+        })
       }
 
-      if (trimmedFlatId !== currentDisplayFlatId) {
-        await updateFlatDetails({
-          flatId: selectedFlat.id,
-          data: { customFlatId: trimmedFlatId },
-        })
+      targetFlatId = matchedAvailableFlat.id
+    } else {
+      const createdFlat = await createFlat({
+        floorId: selectedFloor.id,
+        data: {
+          customFlatId: trimmedFlatName,
+          unitType: nextUnitType,
+          flatType: projectType === "NEW_CONSTRUCTION" ? "CUSTOMER" : data.flatType,
+        },
+      })
+
+      targetFlatId = createdFlat?.data?.flat?.id ?? ""
+      if (!targetFlatId) {
+        setFlatIdError("Could not prepare the flat entry. Please retry.")
+        return
       }
     }
 
     setFlatIdError(null)
     await bookFlat({
-      flatId: selectedFlat.id,
+      flatId: targetFlatId,
       data: {
         name: data.name,
         phone: data.phone,
@@ -730,10 +1056,7 @@ function BookFlatPanel({
     })
   }
 
-  const selectedFloorName = selectedFloor ? getFloorDisplayName(selectedFloor) : "Select Floor"
-  const flatDisplayName = selectedFlat ? getFlatDisplayName(selectedFlat) : "Select Flat"
-  const previewFlatDisplayName = editableFlatId.trim() || flatDisplayName
-  const isPending = isUpdatingFlat || isBooking
+  const isPending = isUpdatingFlat || isCreatingFlat || isBooking
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -741,7 +1064,7 @@ function BookFlatPanel({
       <div className="w-full max-w-md bg-background border-l border-border flex flex-col h-full shadow-2xl animate-in slide-in-from-right duration-300 overflow-y-auto">
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-5 border-b border-border">
+        <div className="px-6 pt-7 pb-4 border-b border-border">
           <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-2">Current Action</p>
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-2xl font-serif tracking-tight text-foreground">
@@ -756,30 +1079,51 @@ function BookFlatPanel({
             </Button>
           </div>
           <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70">
-            Select the floor and available unit, adjust the flat ID if needed, and complete the booking details in this same drawer.
+            {hasWingSelection
+              ? "Select wing, floor, unit type, and flat name. Then fill the customer details to complete booking."
+              : "Choose floor, unit type, and flat name. Then fill the customer details to complete booking."}
           </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1">
-          <div className="px-8 py-6 flex flex-col gap-6 flex-1">
+          <div className="px-6 py-5 flex flex-col gap-5 flex-1">
             <input type="hidden" {...register("floorId")} />
-            <input type="hidden" {...register("flatId")} />
 
-            {(updateFlatError || bookingError) && (
+            {(createFlatError || updateFlatError || bookingError) && (
               <div className="bg-destructive/10 text-destructive text-[11px] font-bold p-3">
-                {getApiErrorMessage(updateFlatError ?? bookingError, "Failed to book flat.")}
+                {getApiErrorMessage(createFlatError ?? updateFlatError ?? bookingError, "Failed to complete booking.")}
               </div>
             )}
 
-            {bookableFloors.length === 0 && (
+            {floors.length === 0 && (
               <div className="border border-border bg-muted/20 p-4 text-[11px] leading-relaxed text-muted-foreground">
-                There are no available units to book right now. Add a floor or flat first, or free up an available flat to continue.
+                Add at least one floor first. Then you can create and book a flat directly from this panel.
               </div>
             )}
 
-            {bookableFloors.length > 0 && (
+            {floors.length > 0 && (
               <div className="flex flex-col gap-4">
                 <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Unit Selection</p>
+
+                {hasWingSelection && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Wing</Label>
+                    <NativeSelect
+                      value={selectedWingId}
+                      onChange={(event) => {
+                        setSelectedWingId(event.target.value)
+                        setSelectedFloorId("")
+                      }}
+                      className="w-full"
+                    >
+                      {wingOptions.map((wing) => (
+                        <NativeSelectOption key={wing.id} value={wing.id}>
+                          {wing.name}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Floor</Label>
@@ -787,73 +1131,88 @@ function BookFlatPanel({
                     value={selectedFloorId}
                     onChange={(event) => {
                       setSelectedFloorId(event.target.value)
-                      setSelectedFlatId("")
                     }}
                     className="w-full"
                   >
-                    {bookableFloors.map((floor) => (
+                    {wingScopedFloors.map((floor) => (
                       <NativeSelectOption key={floor.id} value={floor.id}>
                         {getFloorDisplayName(floor)}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
                   {errors.floorId && <p className="text-[10px] text-destructive">{errors.floorId.message}</p>}
+                  {wingScopedFloors.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground/60">No floors found in the selected wing.</p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Available Unit Slot</Label>
-                  <NativeSelect
-                    value={selectedFlatId}
-                    onChange={(event) => setSelectedFlatId(event.target.value)}
-                    className="w-full"
-                    disabled={availableFlats.length === 0}
-                  >
-                    {availableFlats.map((candidateFlat) => (
-                      <NativeSelectOption key={candidateFlat.id} value={candidateFlat.id}>
-                        {getFlatDisplayName(candidateFlat)}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                  {errors.flatId && <p className="text-[10px] text-destructive">{errors.flatId.message}</p>}
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat ID</Label>
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Unit Type</Label>
                   <Input
-                    value={editableFlatId}
+                    value={unitTypeInputValue || ""}
+                    onChange={(event) => applyUnitTypeValue(event.target.value)}
+                    placeholder="Type or pick e.g. 2BHK, Shop, Office"
+                    className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {COMMON_UNIT_TYPES.map((option) => {
+                      const isSelected = resolvedUnitType.toLowerCase() === option.toLowerCase()
+
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => applyUnitTypeValue(option)}
+                          className={cn(
+                            "h-7 px-2.5 border text-[10px] font-bold tracking-widest uppercase transition-colors",
+                            isSelected
+                              ? "border-primary/50 bg-primary/10 text-foreground"
+                              : "border-border bg-background text-muted-foreground/70 hover:border-primary/30 hover:text-foreground",
+                          )}
+                        >
+                          {option}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {errors.customUnitType && <p className="text-[10px] text-destructive">{errors.customUnitType.message}</p>}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Flat Name</Label>
+                  <Input
+                    value={flatName}
                     onChange={(event) => {
-                      setEditableFlatId(event.target.value)
-                      setHasEditedFlatId(true)
+                      setValue("flatName", event.target.value, { shouldValidate: true })
                       setFlatIdError(null)
                     }}
                     placeholder="e.g. A-101, Shop-1, G-01"
                     className="h-11 bg-muted border-none rounded-none text-sm focus-visible:bg-card"
-                    disabled={!selectedFlat}
                   />
                   {flatIdError && <p className="text-[10px] text-destructive">{flatIdError}</p>}
+                  {errors.flatName && <p className="text-[10px] text-destructive">{errors.flatName.message}</p>}
                   <p className="text-[10px] text-muted-foreground/60">
-                    {selectedFlat?.customFlatId
-                      ? "This ID is already linked to the selected unit and can be corrected before booking."
-                      : `This unit is currently shown as ${flatDisplayName}. Enter a custom ID here if you want to name it during booking.`}
+                    {matchedAvailableFlat
+                      ? "Matching available flat found. This entry will be booked."
+                      : "This flat entry will be added and booked directly in one step."}
                   </p>
                 </div>
 
-                <div className="border border-border bg-muted/20 p-4">
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Selected Unit</p>
-                  <p className="mt-2 text-sm font-serif text-foreground">{previewFlatDisplayName}</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground/70">{selectedFloorName}</p>
-                </div>
-              </div>
-            )}
+                {projectType === "REDEVELOPMENT" && (
+                  <div className="flex flex-col gap-1.5">
+                    <input type="hidden" {...register("flatType")} />
+                    <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Buyer Type</Label>
+                    <NativeSelect
+                      value={selectedFlatType}
+                      onChange={(event) => setValue("flatType", event.target.value as "CUSTOMER" | "EXISTING_OWNER", { shouldValidate: true })}
+                      className="w-full"
+                    >
+                      <NativeSelectOption value="CUSTOMER">New Customer</NativeSelectOption>
+                      <NativeSelectOption value="EXISTING_OWNER">Existing Owner</NativeSelectOption>
+                    </NativeSelect>
+                  </div>
+                )}
 
-            {isExistingOwner && (
-              <div className="border border-violet-500/20 bg-violet-500/5 p-4">
-                <div className="w-fit rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[10px] font-bold tracking-widest uppercase text-violet-700">
-                  EXISTING OWNER
-                </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                  Owner-acquisition entries can be saved with <strong className="text-foreground">zero selling price</strong>. If money is received later, add only the new amount from the owner profile.
-                </p>
               </div>
             )}
 
@@ -954,15 +1313,20 @@ function BookFlatPanel({
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-6 border-t border-border flex flex-col gap-2">
+          <div className="px-6 py-5 border-t border-border flex flex-col gap-2">
             <Button
               type="submit"
-              disabled={isPending || !selectedFlat}
+              disabled={isPending || !selectedFloor}
               className="w-full h-14 bg-primary text-black font-bold text-[11px] tracking-[0.2em] uppercase rounded-none gap-2"
             >
               {isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <><BookOpen className="w-4 h-4" /> {isExistingOwner ? "Create Owner Entry" : "Book Flat"}</>
+                : (
+                  <>
+                    <BookOpen className="w-4 h-4" />
+                    {isExistingOwner ? "Create Owner Entry" : "Book Flat"}
+                  </>
+                )
               }
             </Button>
             <p className="text-[9px] text-center text-muted-foreground/40 uppercase tracking-widest">
@@ -993,52 +1357,7 @@ function FlatCard({
 }) {
   const flatDisplayName = getFlatDisplayName(flat)
   const isOwnerFlat = flat.flatType === 'EXISTING_OWNER'
-
-  if (flat.status === "AVAILABLE") {
-    return (
-      <div className="relative border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all min-h-36 group">
-        <div className="absolute left-3 top-3 z-10 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onEdit(flat)}
-            className="w-8 h-8 flex items-center justify-center border border-border bg-background/90 text-muted-foreground/60 transition-colors hover:text-foreground hover:border-primary/40"
-            aria-label={`Edit ${flatDisplayName}`}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(flat)}
-            className="w-8 h-8 flex items-center justify-center border border-border bg-background/90 text-muted-foreground/60 transition-colors hover:text-red-500 hover:border-red-500/40"
-            aria-label={`Delete ${flatDisplayName}`}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-        {isOwnerFlat && (
-          <span className="absolute top-4 right-4 bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase">
-            OWNER
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onBook(flat)}
-          className="w-full h-full p-4 pt-12 flex flex-col items-center justify-center gap-2 text-center"
-        >
-          <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 group-hover:text-primary transition-colors">
-            {flatDisplayName} &nbsp; Available
-          </p>
-          <div className="w-8 h-8 rounded-full border-2 border-dashed border-muted-foreground/20 group-hover:border-primary/40 flex items-center justify-center transition-colors">
-            <Plus className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
-          </div>
-          <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/30 group-hover:text-primary/60 transition-colors">
-            Book This Flat
-          </p>
-        </button>
-      </div>
-    )
-  }
-
+  const flatTypeLabel = isOwnerFlat ? "Existing Owner" : "Customer"
   const c = flat.customer
   const pct = c
     ? c.sellingPrice > 0
@@ -1047,64 +1366,134 @@ function FlatCard({
         ? 100
         : 0
     : 0
-
   const isSold = flat.status === "SOLD"
+  const isBooked = flat.status === "BOOKED"
+  const isAvailable = flat.status === "AVAILABLE"
 
   return (
-    <div className={cn(
-      "relative border p-4 flex flex-col gap-3 min-h-36",
-      isSold ? "bg-foreground/5 border-foreground/10" : "border-amber-500/30 bg-amber-500/5"
-    )}>
-      <div className="flex items-center justify-between">
-        <span className="text-lg font-serif text-foreground font-bold">{flatDisplayName}</span>
-        <div className="flex items-center gap-2">
-          {isOwnerFlat && (
-            <span className="bg-violet-500/15 text-violet-700 border border-violet-500/25 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase">
-              OWNER
+    <div className="px-3 py-3">
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] md:items-center">
+        <div className="min-w-0 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn(
+              "h-2.5 w-2.5 rounded-full shrink-0",
+              isAvailable ? "bg-emerald-500" : isSold ? "bg-blue-500" : "bg-amber-500"
+            )} />
+            <p className="truncate text-base font-semibold text-foreground">{flatDisplayName}</p>
+            <span className={cn(
+              "inline-flex px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase border",
+              isAvailable
+                ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/25"
+                : isSold
+                  ? "bg-blue-500/15 text-blue-700 border-blue-500/25"
+                  : "bg-amber-500/15 text-amber-700 border-amber-500/25"
+            )}>
+              {isAvailable ? "Available" : isSold ? "Sold" : "Booked"}
             </span>
+            <span className={cn(
+              "inline-flex px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase border",
+              isOwnerFlat
+                ? "bg-violet-500/15 text-violet-700 border-violet-500/25"
+                : "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/20"
+            )}>
+              {flatTypeLabel}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/75">
+            <span>{flat.unitType || "Unit type pending"}</span>
+            {c ? (
+              <button
+                type="button"
+                onClick={() => onCustomerClick(flat)}
+                className="max-w-full truncate text-left text-foreground/85 hover:underline"
+              >
+                {c.name}
+              </button>
+            ) : (
+              <span>No customer assigned</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          {c ? (
+            <>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground/70">
+                <span>Payment</span>
+                <span>{pct.toFixed(0)}%</span>
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    isSold ? "bg-emerald-500" : isBooked ? "bg-amber-500" : "bg-emerald-500"
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground/80">
+                {formatINR(c.amountPaid)} / {formatINR(c.sellingPrice)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/45">Ready to book</p>
+              <p className="text-[11px] text-muted-foreground/70">Choose wing, floor, unit type and customer details.</p>
+            </>
           )}
-          <span className={cn(
-            "text-[10px] font-bold tracking-widest uppercase px-2.5 py-1",
-            isSold ? "bg-foreground/10 text-foreground/70" : "bg-amber-500/20 text-amber-600"
-          )}>
-            {isSold ? "Sold" : "Booked"}
-          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 md:justify-end">
+          {isAvailable ? (
+            <>
+              <Button
+                type="button"
+                onClick={() => onBook(flat)}
+                className="h-8 px-3 rounded-md text-[10px] font-bold tracking-widest uppercase gap-1"
+              >
+                <BookOpen className="w-3.5 h-3.5" /> Book
+              </Button>
+              <button
+                type="button"
+                onClick={() => onEdit(flat)}
+                className="h-8 w-8 flex items-center justify-center rounded-md border border-border bg-muted/30 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label={`Edit ${flatDisplayName}`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(flat)}
+                className="h-8 w-8 flex items-center justify-center rounded-md border border-border bg-muted/30 text-muted-foreground/70 transition-colors hover:text-red-500"
+                aria-label={`Delete ${flatDisplayName}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onCustomerClick(flat)}
+                disabled={!c}
+                className="h-8 px-3 rounded-md text-[10px] font-bold tracking-widest uppercase"
+              >
+                View
+              </Button>
+              <button
+                type="button"
+                onClick={() => onEdit(flat)}
+                className="h-8 w-8 flex items-center justify-center rounded-md border border-border bg-muted/30 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label={`Edit ${flatDisplayName}`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
-      {c && (
-        <>
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">
-              {isSold ? "Owner" : "Customer"}
-            </p>
-            <button onClick={() => onCustomerClick(flat)} className="text-base font-serif font-medium text-primary hover:underline truncate text-left">
-              {c.name}
-            </button>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">
-              {isSold ? "Payment Received" : "Booking Amount"}
-            </p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-sm font-serif text-foreground">{formatINR(c.amountPaid)}</span>
-              <span className="text-[10px] text-muted-foreground/40">/</span>
-              <span className="text-[10px] text-muted-foreground/50">{formatINR(c.sellingPrice)}</span>
-              <span className={cn(
-                "text-[10px] font-bold ml-auto",
-                isSold ? "text-emerald-600" : "text-amber-600"
-              )}>
-                {pct.toFixed(0)}%
-              </span>
-            </div>
-            <div className="mt-1.5 h-1 bg-muted rounded-full overflow-hidden">
-              <div
-                className={cn("h-full rounded-full", isSold ? "bg-emerald-500" : "bg-amber-500")}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }
@@ -1115,7 +1504,7 @@ function FloorRow({
   defaultOpen,
   onBook,
   onCustomerClick,
-  onAddFlat,
+  onBookFloor,
   onEditFloor,
   onDeleteFloor,
   onEditFlat,
@@ -1125,92 +1514,154 @@ function FloorRow({
   defaultOpen: boolean
   onBook: (flat: Flat, floorName: string) => void
   onCustomerClick: (flat: Flat, floorName: string) => void
-  onAddFlat: (floorId: string, floorName: string) => void
+  onBookFloor: (floor: Floor) => void
   onEditFloor: (floor: Floor) => void
   onDeleteFloor: (floor: Floor) => void
   onEditFlat: (flat: Flat, floorName: string) => void
   onDeleteFlat: (flat: Flat, floorName: string) => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const [page, setPage] = useState(1)
 
-  const sold = floor.flats.filter(f => f.status === "SOLD").length
-  const booked = floor.flats.filter(f => f.status === "BOOKED").length
-  const available = floor.flats.filter(f => f.status === "AVAILABLE").length
-
+  const sold = floor.flats.filter((flatItem) => flatItem.status === "SOLD").length
+  const booked = floor.flats.filter((flatItem) => flatItem.status === "BOOKED").length
+  const available = floor.flats.filter((flatItem) => flatItem.status === "AVAILABLE").length
+  const ownerFlats = floor.flats.filter((flatItem) => flatItem.flatType === "EXISTING_OWNER").length
+  const customerFlats = Math.max(0, floor.flats.length - ownerFlats)
+  const pageSize = 8
+  const totalPages = Math.max(1, Math.ceil(floor.flats.length / pageSize))
+  const pagedFlats = floor.flats.slice((page - 1) * pageSize, page * pageSize)
   const floorDisplayName = getFloorDisplayName(floor)
 
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
   return (
-    <div className="border border-border">
-      {/* Floor Header */}
-      <div className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors group">
+    <div className="border border-border/80 bg-background">
+      <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
         <button
-          onClick={() => setOpen(o => !o)}
-          className="flex-1 flex items-center gap-4 text-left"
+          type="button"
+          onClick={() => setOpen((isOpen) => !isOpen)}
+          className="flex-1 text-left"
         >
-          <h3 className="text-xl font-serif text-foreground tracking-tight">{floorDisplayName}</h3>
-          <span className="px-2.5 py-1 bg-muted text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
-            {floor.flats.length} Flats
-          </span>
-          <div className="hidden sm:flex items-center gap-3 text-[11px] font-bold uppercase tracking-widest">
-            {sold > 0 && <span className="text-foreground/60">{sold} Sold</span>}
-            {booked > 0 && <span className="text-amber-600">{booked} Booked</span>}
-            {available > 0 && <span className="text-muted-foreground/50">{available} Available</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{floorDisplayName}</h3>
+            {floor.wingName && (
+              <span className="px-2 py-0.5 bg-muted text-[9px] font-bold tracking-widest uppercase text-muted-foreground/60">
+                {floor.wingName}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest">
+            <span className="px-2 py-0.5 bg-muted text-muted-foreground/70">{floor.flats.length} Flats</span>
+            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600">{available} Available</span>
+            <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600">{booked} Booked</span>
+            <span className="px-2 py-0.5 bg-foreground/10 text-foreground/70">{sold} Sold</span>
+            <span className="px-2 py-0.5 bg-sky-500/10 text-sky-700">{customerFlats} Customer</span>
+            <span className="px-2 py-0.5 bg-violet-500/15 text-violet-700">{ownerFlats} Existing Owner</span>
           </div>
         </button>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
+
+        <div className="flex items-center gap-1 self-end sm:self-auto">
+          <button
+            type="button"
             onClick={() => onEditFloor(floor)}
-            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-muted rounded-none gap-1"
+            className="flex h-8 w-8 items-center justify-center rounded-none border border-border p-0 text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+            aria-label={`Edit ${floorDisplayName}`}
           >
-            <Pencil className="w-3 h-3" /> Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => onDeleteFloor(floor)}
-            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-red-500/10 hover:text-red-500 rounded-none gap-1"
+            className="flex h-8 w-8 items-center justify-center rounded-none border border-border p-0 text-muted-foreground/70 hover:bg-red-500/10 hover:text-red-500"
+            aria-label={`Delete ${floorDisplayName}`}
           >
-            <Trash2 className="w-3 h-3" /> Delete
-          </Button>
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
-            onClick={() => onAddFlat(floor.id, floorDisplayName)}
-            className="h-9 px-3 text-[10px] font-bold tracking-widest uppercase hover:bg-primary hover:text-black rounded-none gap-1"
+            onClick={() => onBookFloor(floor)}
+            className="flex h-8 w-8 items-center justify-center rounded-none border border-border text-muted-foreground/70 hover:bg-primary hover:text-black"
+            aria-label={`Book a flat in ${floorDisplayName}`}
           >
-            <Plus className="w-3 h-3" /> Add Flat
+            <BookOpen className="w-3.5 h-3.5" />
           </Button>
-          <button onClick={() => setOpen(o => !o)} className="p-2">
-            {open ? <ChevronUp className="w-4 h-4 text-muted-foreground/40" /> : <ChevronDown className="w-4 h-4 text-muted-foreground/40" />}
+          <button
+            type="button"
+            onClick={() => setOpen((isOpen) => !isOpen)}
+            className="flex h-8 w-8 items-center justify-center border border-border text-muted-foreground/60 hover:text-foreground"
+            aria-label={open ? `Collapse ${floorDisplayName}` : `Expand ${floorDisplayName}`}
+          >
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* Flat Grid */}
       {open && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 px-6 pb-6 pt-2">
-          {floor.flats.map(flat => (
-            <FlatCard
-              key={flat.id}
-              flat={flat}
-              onBook={(f) => onBook(f, floorDisplayName)}
-              onCustomerClick={(f) => onCustomerClick(f, floorDisplayName)}
-              onEdit={(f) => onEditFlat(f, floorDisplayName)}
-              onDelete={(f) => onDeleteFlat(f, floorDisplayName)}
-            />
-          ))}
-          {floor.flats.length === 0 && (
+        <div className="px-3 pb-3 pt-1">
+          {floor.flats.length === 0 ? (
             <button
-              onClick={() => onAddFlat(floor.id, floorDisplayName)}
-              className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all p-4 flex flex-col items-center justify-center gap-2 min-h-36 group"
+              type="button"
+              onClick={() => onBookFloor(floor)}
+              className="w-full border border-dashed border-border hover:border-primary/40 hover:bg-primary/5 transition-colors p-3 flex flex-col items-center justify-center gap-2"
             >
-              <Plus className="w-6 h-6 text-muted-foreground/20 group-hover:text-primary/40 transition-colors" />
-              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 group-hover:text-primary transition-colors">
-                Add First Flat
-              </p>
+              <BookOpen className="w-5 h-5 text-muted-foreground/30" />
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/45">Book A Flat</p>
             </button>
+          ) : (
+            <div className="border border-border/70 bg-background">
+              <div className="hidden md:grid md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto] md:items-center px-3 py-2 border-b border-border/70 text-[9px] font-bold tracking-widest uppercase text-muted-foreground/55">
+                <span>Flat</span>
+                <span>Payment</span>
+                <span className="text-right">Actions</span>
+              </div>
+              <div className="divide-y divide-border/70">
+                {pagedFlats.map((flatItem) => (
+                  <FlatCard
+                    key={flatItem.id}
+                    flat={flatItem}
+                    onBook={(selectedFlat) => onBook(selectedFlat, floorDisplayName)}
+                    onCustomerClick={(selectedFlat) => onCustomerClick(selectedFlat, floorDisplayName)}
+                    onEdit={(selectedFlat) => onEditFlat(selectedFlat, floorDisplayName)}
+                    onDelete={(selectedFlat) => onDeleteFlat(selectedFlat, floorDisplayName)}
+                  />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-border/70 bg-muted/10">
+                  <p className="text-[10px] text-muted-foreground/60">
+                    Showing {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, floor.flats.length)} of {floor.flats.length}
+                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+                      disabled={page === 1}
+                      className="h-7 px-2 border border-border text-[10px] font-bold tracking-widest uppercase disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">
+                      {page}/{totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+                      disabled={page === totalPages}
+                      className="h-7 px-2 border border-border text-[10px] font-bold tracking-widest uppercase disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1229,14 +1680,69 @@ export function FloorsFlatsTab({
   projectType: 'NEW_CONSTRUCTION' | 'REDEVELOPMENT'
 }) {
   const { data, isLoading } = useFloors(siteId)
-  const [booking, setBooking] = useState<{ initialFlatId?: string } | null>(null)
+  const { data: wingsData } = useWings(siteId)
+  const [booking, setBooking] = useState<{ initialFlatId?: string; preferredFloorId?: string } | null>(null)
   const [customerView, setCustomerView] = useState<{ flat: Flat; floorName: string } | null>(null)
   const [addingFloor, setAddingFloor] = useState(false)
-  const [addingFlat, setAddingFlat] = useState<{ floorId: string; floorName: string } | null>(null)
   const [editingFloor, setEditingFloor] = useState<Floor | null>(null)
   const [deletingFloor, setDeletingFloor] = useState<Floor | null>(null)
   const [editingFlat, setEditingFlat] = useState<{ flat: Flat; floorName: string } | null>(null)
   const [deletingFlat, setDeletingFlat] = useState<{ flat: Flat; floorName: string } | null>(null)
+  const [selectedWingFilterId, setSelectedWingFilterId] = useState("")
+
+  const floors: Floor[] = data?.data?.floors ?? []
+  const floorWingOptions = useMemo(() => {
+    const grouped = new Map<string, WingOption>()
+    floors.forEach((floor) => {
+      if (!floor.wingId || !floor.wingName) return
+      grouped.set(floor.wingId, { id: floor.wingId, name: floor.wingName })
+    })
+    return Array.from(grouped.values())
+  }, [floors])
+  const siteWings: WingOption[] = (wingsData?.data?.wings ?? []).map((wing) => ({
+    id: wing.id,
+    name: wing.name,
+  }))
+  const effectiveWings = siteWings.length > 0 ? siteWings : floorWingOptions
+  const hasUnassignedFloors = floors.some((floor) => !floor.wingId)
+  const showWingFilter = effectiveWings.length > 1
+  const wingFilterOptions = useMemo(() => {
+    if (!showWingFilter) return []
+
+    const options = [...effectiveWings]
+    if (hasUnassignedFloors) {
+      options.push({ id: UNASSIGNED_WING_FILTER_ID, name: "Unassigned" })
+    }
+    return options
+  }, [effectiveWings, hasUnassignedFloors, showWingFilter])
+
+  useEffect(() => {
+    if (!showWingFilter) {
+      if (selectedWingFilterId !== "") {
+        setSelectedWingFilterId("")
+      }
+      return
+    }
+
+    if (!wingFilterOptions.some((wing) => wing.id === selectedWingFilterId)) {
+      setSelectedWingFilterId(wingFilterOptions[0]?.id ?? "")
+    }
+  }, [selectedWingFilterId, showWingFilter, wingFilterOptions])
+
+  const visibleFloors = useMemo(() => {
+    if (!showWingFilter || !selectedWingFilterId) {
+      return floors
+    }
+
+    if (selectedWingFilterId === UNASSIGNED_WING_FILTER_ID) {
+      return floors.filter((floor) => !floor.wingId)
+    }
+
+    return floors.filter((floor) => floor.wingId === selectedWingFilterId)
+  }, [floors, selectedWingFilterId, showWingFilter])
+
+  const canOpenBooking = visibleFloors.length > 0
+  const visibleFlatCount = visibleFloors.reduce((count, floor) => count + floor.flats.length, 0)
 
   if (isLoading) {
     return (
@@ -1246,33 +1752,58 @@ export function FloorsFlatsTab({
     )
   }
 
-  const floors: Floor[] = data?.data?.floors ?? []
-  const hasAvailableFlats = floors.some((floor) => floor.flats.some((flat) => flat.status === "AVAILABLE"))
-
   return (
     <>
       <div className="flex flex-col gap-4">
         {/* Header Actions */}
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="w-4 h-4 text-muted-foreground/40" />
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/60">Inventory Control</span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4 text-muted-foreground/40" />
+              <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/60">Inventory Control</span>
+            </div>
+
+            {showWingFilter && (
+              <div className="flex items-center gap-2 border-l border-border/60 pl-3">
+                <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground/55">Wing</span>
+                <NativeSelect
+                  value={selectedWingFilterId}
+                  onChange={(event) => setSelectedWingFilterId(event.target.value)}
+                  className="h-8 min-w-36"
+                >
+                  {wingFilterOptions.map((wing) => (
+                    <NativeSelectOption key={wing.id} value={wing.id}>
+                      {wing.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </div>
+            )}
+
+            {floors.length > 0 && (
+              <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-muted-foreground/45">
+                {visibleFloors.length} Floors • {visibleFlatCount} Flats
+              </span>
+            )}
           </div>
+
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               onClick={() => setBooking({})}
-              disabled={!hasAvailableFlats}
+              disabled={!canOpenBooking}
               className="h-10 px-4 border-border font-bold text-[10px] tracking-[0.2em] uppercase rounded-none gap-2"
             >
               <BookOpen className="w-4 h-4" /> Book Flat
             </Button>
-            <Button
-              onClick={() => setAddingFloor(true)}
-              className="h-10 px-4 bg-primary text-black font-bold text-[10px] tracking-[0.2em] uppercase hover:bg-primary/90 rounded-none gap-2"
-            >
-              <Plus className="w-4 h-4" /> Add Floor
-            </Button>
+            {floors.length === 0 && (
+              <Button
+                onClick={() => setAddingFloor(true)}
+                className="h-10 px-4 bg-primary text-black font-bold text-[10px] tracking-[0.2em] uppercase hover:bg-primary/90 rounded-none gap-2"
+              >
+                <Plus className="w-4 h-4" /> Add Floor
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1287,16 +1818,21 @@ export function FloorsFlatsTab({
               Initialize First Floor
             </Button>
           </div>
+        ) : visibleFloors.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 border border-dashed border-border bg-muted/10 gap-2">
+            <p className="text-sm text-muted-foreground uppercase tracking-widest opacity-60">No floors in this wing yet</p>
+            <p className="text-[11px] text-muted-foreground/60">Select a different wing or add a floor for this wing.</p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {floors.map((floor, i) => (
+            {visibleFloors.map((floor, i) => (
               <FloorRow
                 key={floor.id}
                 floor={floor}
                 defaultOpen={i === 0}
                 onBook={(flat) => setBooking({ initialFlatId: flat.id })}
                 onCustomerClick={(flat, floorName) => setCustomerView({ flat, floorName })}
-                onAddFlat={(floorId, floorName) => setAddingFlat({ floorId, floorName })}
+                onBookFloor={(selectedFloor) => setBooking({ preferredFloorId: selectedFloor.id })}
                 onEditFloor={(selectedFloor) => setEditingFloor(selectedFloor)}
                 onDeleteFloor={(selectedFloor) => setDeletingFloor(selectedFloor)}
                 onEditFlat={(flat, floorName) => setEditingFlat({ flat, floorName })}
@@ -1310,17 +1846,8 @@ export function FloorsFlatsTab({
       {addingFloor && (
         <AddFloorPanel
           siteId={siteId}
+          wings={effectiveWings}
           onClose={() => setAddingFloor(false)}
-        />
-      )}
-
-      {addingFlat && (
-        <AddFlatPanel
-          siteId={siteId}
-          floorId={addingFlat.floorId}
-          floorName={addingFlat.floorName}
-          projectType={projectType}
-          onClose={() => setAddingFlat(null)}
         />
       )}
 
@@ -1344,7 +1871,8 @@ export function FloorsFlatsTab({
         <EditFlatDialog
           siteId={siteId}
           flat={editingFlat.flat}
-          floorName={editingFlat.floorName}
+          floors={floors}
+          wings={effectiveWings}
           projectType={projectType}
           onClose={() => setEditingFlat(null)}
         />
@@ -1363,6 +1891,10 @@ export function FloorsFlatsTab({
         <BookFlatPanel
           siteId={siteId}
           floors={floors}
+          wings={effectiveWings}
+          projectType={projectType}
+          preferredWingId={selectedWingFilterId || undefined}
+          preferredFloorId={booking.preferredFloorId}
           initialFlatId={booking.initialFlatId}
           onClose={() => setBooking(null)}
         />
