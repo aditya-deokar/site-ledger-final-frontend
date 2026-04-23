@@ -2,6 +2,7 @@ import api from '@/lib/axios';
 import {
   AttendanceHistoryResponse,
   MarkAttendanceInput,
+  TodayAttendanceResponse,
 } from '@/schemas/attendance.schema';
 
 export const attendanceService = {
@@ -19,4 +20,7 @@ export const attendanceService = {
         ...(year ? { year } : {}),
       },
     }),
+
+  getTodayAttendance: (): Promise<TodayAttendanceResponse> =>
+    api.get('/attendance/today'),
 };

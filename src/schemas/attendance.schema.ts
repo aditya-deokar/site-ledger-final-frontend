@@ -32,6 +32,28 @@ export interface AttendanceHistoryResponse {
   };
 }
 
+export interface TodayAttendanceResponse {
+  ok: boolean;
+  data: {
+    date: string;
+    attendance: Array<{
+      employee: {
+        id: string;
+        employeeId: string;
+        name: string;
+      };
+      attendance: AttendanceRecord | null;
+    }>;
+    summary: {
+      totalEmployees: number;
+      markedCount: number;
+      present: number;
+      absent: number;
+      halfDay: number;
+    };
+  };
+}
+
 export interface MarkAttendanceInput {
   employeeId: string;
   date: string;

@@ -17,14 +17,14 @@ import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, us
 import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
-import { useCreateEmployee, useDeleteEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
+import { useCreateEmployee, useDeleteEmployee, useEmployees, usePaySalary, useUpdateEmployee } from '@/hooks/api/employee.hooks';
 import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
 import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput } from '@/schemas/investor.schema';
 import { createVendorSchema, CreateVendorInput, updateVendorSchema, UpdateVendorInput } from '@/schemas/vendor.schema';
 import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, RecordPaymentInput, cancelDealSchema } from '@/schemas/customer.schema';
-import { createEmployeeSchema, CreateEmployeeInput, UpdateEmployeeInput } from '@/schemas/employee.schema';
+import { createEmployeeSchema, CreateEmployeeInput, PaySalaryInput, paySalarySchema, UpdateEmployeeInput } from '@/schemas/employee.schema';
 import type { AttendanceStatus } from '@/schemas/attendance.schema';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
@@ -114,6 +114,7 @@ const CATEGORIES: CategoryDef[] = [
       { id: 'edit-employee', label: 'Edit Employee', shortcut: '3', icon: Pencil },
       { id: 'delete-employee', label: 'Delete Employee', shortcut: '4', icon: Trash2 },
       { id: 'mark-employee-attendance', label: 'Take Attendance', shortcut: '5', icon: CalendarDays },
+      { id: 'pay-salary', label: 'Pay Salary', shortcut: '6', icon: IndianRupee },
     ],
   },
 ];
@@ -125,7 +126,7 @@ const ACTIONS_NEEDING_SELECTOR = [
   'edit-vendor', 'delete-vendor',
   'edit-customer', 'record-payment', 'cancel-deal',
   'view-employee-details', 'edit-employee', 'delete-employee',
-  'mark-employee-attendance'
+  'mark-employee-attendance', 'pay-salary',
 ];
 
 const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
@@ -2372,6 +2373,104 @@ function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any
   );
 }
 
+function PaySalaryForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: companyData } = useCompany();
+  const availableFund: number = (companyData?.data as { available_fund?: number } | undefined)?.available_fund ?? 0;
+
+  const now = new Date();
+  const { mutate, isPending, error } = usePaySalary({
+    onSuccess: () => {
+      toast.success(`Salary paid to ${entity?.name}`);
+      onSuccess();
+    },
+  });
+
+  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<PaySalaryInput>({
+    resolver: zodResolver(paySalarySchema),
+    defaultValues: {
+      amount: entity?.salary ?? 0,
+      paymentMethod: 'cash',
+      note: '',
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+    },
+  });
+
+  useEffect(() => {
+    setTimeout(() => setFocus('amount'), 50);
+  }, [setFocus]);
+
+  return (
+    <FormShell title={`Pay Salary: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Pay Salary" formId="pay-salary-form">
+      <form
+        id="pay-salary-form"
+        onSubmit={handleSubmit((values) => mutate({ id: entity.id, data: values }))}
+        className="flex flex-col gap-6"
+      >
+        {error && <FormError msg={getApiErrorMessage(error, 'Failed to process salary payment')} />}
+
+        <div className="border border-border bg-muted/20 p-3 space-y-1">
+          <p className={LABEL_CLS}>Employee</p>
+          <p className="text-sm font-bold uppercase tracking-widest">{entity?.name}</p>
+          <p className="text-[10px] text-muted-foreground">{entity?.employeeId} - Monthly Salary: {formatINR(entity?.salary ?? 0)}</p>
+        </div>
+
+        <div className="border border-border bg-amber-500/5 p-3">
+          <p className={LABEL_CLS}>Company Available Fund</p>
+          <p className={`mt-1 text-base font-bold tracking-widest ${availableFund > 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+            {formatINR(availableFund)}
+          </p>
+        </div>
+
+        <Field label="Amount (INR)" error={errors.amount?.message}>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            className={INPUT_CLS}
+            {...register('amount', { valueAsNumber: true })}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Month" error={errors.month?.message}>
+            <select className={INPUT_CLS} {...register('month', { valueAsNumber: true })}>
+              {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, index) => (
+                <option key={month} value={index + 1}>{month}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Year" error={errors.year?.message}>
+            <input
+              type="number"
+              min={2000}
+              max={2100}
+              className={INPUT_CLS}
+              {...register('year', { valueAsNumber: true })}
+            />
+          </Field>
+        </div>
+
+        <Field label="Payment Method">
+          <select className={INPUT_CLS} {...register('paymentMethod')}>
+            <option value="cash">Cash</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </Field>
+
+        <Field label="Note (optional)">
+          <input
+            placeholder="Optional note"
+            className={INPUT_CLS}
+            {...register('note')}
+          />
+        </Field>
+      </form>
+    </FormShell>
+  );
+}
+
 function SiteQuickPickerSelector({
   sites,
   loading,
@@ -2876,6 +2975,7 @@ export default function CommandCenter() {
       case 'view-employee-details': return <EmployeeDetailsForm {...props} entity={selectedEntity} />;
       case 'edit-employee': return <EditEmployeeForm {...props} entity={selectedEntity} />;
       case 'mark-employee-attendance': return <MarkEmployeeAttendanceForm {...props} entity={selectedEntity} />;
+      case 'pay-salary': return <PaySalaryForm {...props} entity={selectedEntity} />;
       default: return null;
     }
   }

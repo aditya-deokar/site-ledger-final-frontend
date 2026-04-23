@@ -20,15 +20,29 @@ import {
   X as XIcon,
   Circle,
   CalendarDays,
+  Bell,
+  AlertCircle,
+  DollarSign,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
+import { EmployeeWorkspaceSheet } from '@/components/employees/employee-workspace-sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 import {
   createEmployeeSchema,
@@ -42,11 +56,20 @@ import {
   useEmployees,
   useUpdateEmployee,
 } from '@/hooks/api/employee.hooks';
-import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
+import { useMarkAttendance, useTodayAttendance } from '@/hooks/api/attendance.hooks';
 import { attendanceService } from '@/services/attendance.service';
+import {
+  useGenerateReminders,
+  useMarkReminderPaid,
+  useSalaryReminders,
+} from '@/hooks/api/salary-reminder.hooks';
+import { toast } from 'sonner';
 
 type EmployeeStatus = 'active' | 'inactive' | 'terminated';
-type EmployeesSection = 'directory' | 'attendance';
+type EmployeesSection = 'directory' | 'attendance' | 'payroll';
+type ReminderActionState =
+  | { kind: 'generate'; month: number; year: number; periodLabel: string }
+  | { kind: 'pay'; reminderId: string; amount: number; employeeName: string; periodLabel: string };
 
 function formatCurrency(value: number) {
   return `Rs ${value.toLocaleString('en-IN')}`;
@@ -62,6 +85,19 @@ function formatDate(value: string) {
 
 function toDateInput(value: string) {
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function toAttendanceDateTime(year: number, month: number, day: number, value: string) {
+  if (!value) return undefined;
+
+  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return undefined;
+
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
+}
+
+function getMonthName(month: number) {
+  return new Date(2000, month - 1, 1).toLocaleDateString('en-US', { month: 'long' });
 }
 
 function statusClass(status: EmployeeStatus) {
@@ -131,6 +167,7 @@ function EmployeeForm({
       department: '',
       dateOfJoining: new Date().toISOString().slice(0, 10),
       salary: 0,
+      salaryDate: null,
       status: 'active',
       ...defaultValues,
     },
@@ -200,6 +237,27 @@ function EmployeeForm({
                 <option value="terminated">Terminated</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                Salary Due Date <span className="normal-case font-normal">(day of month, e.g. 28)</span>
+              </Label>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                placeholder="e.g. 28"
+                {...register('salaryDate', {
+                  valueAsNumber: true,
+                  setValueAs: (value) => (value === '' || isNaN(value) ? null : Number(value)),
+                })}
+                className="h-11 rounded-none bg-muted border-none text-sm"
+              />
+              {errors.salaryDate && <p className="text-[10px] text-destructive">{errors.salaryDate.message}</p>}
+            </div>
+            <div />
           </div>
 
           {errorMessage && (
@@ -278,13 +336,22 @@ function attendanceCellSymbol(status?: AttendanceStatus) {
   return '•';
 }
 
-function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
+function AttendanceMatrixSection({
+  employees,
+  onOpenEmployee,
+}: {
+  employees: Employee[];
+  onOpenEmployee: (employee: Employee) => void;
+}) {
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   });
   const [markMode, setMarkMode] = useState<AttendanceStatus>('present');
   const [pendingCell, setPendingCell] = useState<string | null>(null);
+  const [checkInTime, setCheckInTime] = useState('');
+  const [checkOutTime, setCheckOutTime] = useState('');
+  const [attendanceNote, setAttendanceNote] = useState('');
 
   const year = activeMonth.getUTCFullYear();
   const month = activeMonth.getUTCMonth() + 1;
@@ -324,17 +391,31 @@ function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
   const onCellClick = useCallback((employeeId: string, day: number) => {
     const cellKey = `${employeeId}-${year}-${month}-${day}`;
     const date = new Date(Date.UTC(year, month - 1, day)).toISOString();
+    const trimmedNote = attendanceNote.trim();
+    const checkInDateTime = markMode === 'absent'
+      ? undefined
+      : toAttendanceDateTime(year, month, day, checkInTime);
+    const checkOutDateTime = markMode === 'absent'
+      ? undefined
+      : toAttendanceDateTime(year, month, day, checkOutTime);
 
     setPendingCell(cellKey);
     markAttendance(
-      { employeeId, date, status: markMode },
+      {
+        employeeId,
+        date,
+        status: markMode,
+        ...(checkInDateTime ? { checkInTime: checkInDateTime } : {}),
+        ...(checkOutDateTime ? { checkOutTime: checkOutDateTime } : {}),
+        ...(trimmedNote && markMode !== 'present' ? { reasonOfAbsenteeism: trimmedNote } : {}),
+      },
       {
         onSettled: () => {
           setPendingCell((value) => (value === cellKey ? null : value));
         },
       },
     );
-  }, [markAttendance, markMode, month, year]);
+  }, [attendanceNote, checkInTime, checkOutTime, markAttendance, markMode, month, year]);
 
   const monthInputValue = `${year}-${String(month).padStart(2, '0')}`;
 
@@ -408,6 +489,76 @@ function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
         </Button>
       </div>
 
+      <div className="border border-border bg-muted/10 p-4">
+        <div className="grid gap-4 lg:grid-cols-[140px_140px_minmax(0,1fr)_auto]">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Check In</Label>
+            <Input
+              type="time"
+              value={checkInTime}
+              disabled={markMode === 'absent'}
+              onChange={(event) => setCheckInTime(event.target.value)}
+              className="h-10 rounded-none bg-background text-xs font-bold uppercase tracking-widest"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Check Out</Label>
+            <Input
+              type="time"
+              value={checkOutTime}
+              disabled={markMode === 'absent'}
+              onChange={(event) => setCheckOutTime(event.target.value)}
+              className="h-10 rounded-none bg-background text-xs font-bold uppercase tracking-widest"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Note / Leave Reason</Label>
+            <Input
+              value={attendanceNote}
+              onChange={(event) => setAttendanceNote(event.target.value)}
+              placeholder={markMode === 'present' ? 'Optional note for the next marks' : 'Sick Leave / Casual Leave / Unpaid Leave'}
+              className="h-10 rounded-none bg-background text-sm"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-none px-4 text-[10px] font-bold uppercase tracking-widest"
+              onClick={() => {
+                setCheckInTime('');
+                setCheckOutTime('');
+                setAttendanceNote('');
+              }}
+            >
+              Clear Inputs
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Quick Notes</span>
+          {['Sick Leave', 'Casual Leave', 'Unpaid Leave', 'Late Entry', 'On Site Work'].map((preset) => (
+            <Button
+              key={preset}
+              type="button"
+              variant="outline"
+              className="h-8 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest"
+              onClick={() => setAttendanceNote(preset)}
+            >
+              {preset}
+            </Button>
+          ))}
+        </div>
+
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          These optional fields power leave labels, late-arrival tracking, and overtime insights inside each employee workspace.
+        </p>
+      </div>
+
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
         Showing {format(activeMonth, 'MMMM yyyy')}
         {isFetchingAttendance ? ' • Syncing...' : ''}
@@ -454,8 +605,17 @@ function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
               {employees.map((employee) => (
                 <tr key={employee.id}>
                   <td className="bg-background border-r border-b border-border px-2 py-2">
-                    <p className="text-sm font-semibold text-foreground truncate">{employee.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{employee.employeeId}</p>
+                    <button
+                      type="button"
+                      className="text-left"
+                      onClick={() => onOpenEmployee(employee)}
+                    >
+                      <p className="text-sm font-semibold text-foreground truncate">{employee.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{employee.employeeId}</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary/70">
+                        Open Workspace
+                      </p>
+                    </button>
                   </td>
                   {days.map((day) => {
                     const status = attendanceLookup.get(employee.id)?.get(day);
@@ -475,7 +635,17 @@ function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
                           )}
                           title={`${employee.name} - ${day}/${month}/${year}`}
                         >
-                          {isCellPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : attendanceCellSymbol(status)}
+                          {isCellPending ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
+                          ) : status === 'present' ? (
+                            'P'
+                          ) : status === 'absent' ? (
+                            'A'
+                          ) : status === 'half_day' ? (
+                            'H'
+                          ) : (
+                            '-'
+                          )}
                         </button>
                       </td>
                     );
@@ -488,9 +658,908 @@ function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
       )}
 
       <div className="flex flex-wrap gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+        <span className="inline-flex items-center gap-1"><span className="text-emerald-600">P</span> Present</span>
+        <span className="inline-flex items-center gap-1"><span className="text-red-500">A</span> Absent</span>
+        <span className="inline-flex items-center gap-1"><span className="text-amber-600">H</span> Half Day</span>
+      </div>
+
+      <div className="hidden">
         <span className="inline-flex items-center gap-1"><span className="text-emerald-600">✓</span> Present</span>
         <span className="inline-flex items-center gap-1"><span className="text-red-500">✕</span> Absent</span>
         <span className="inline-flex items-center gap-1"><span className="text-amber-600">◐</span> Half Day</span>
+      </div>
+    </div>
+  );
+}
+
+function ReminderActionDialog({
+  action,
+  isPending,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  action: ReminderActionState | null;
+  isPending: boolean;
+  error: unknown;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!action) return null;
+
+  const isGenerate = action.kind === 'generate';
+
+  return (
+    <AlertDialog open onOpenChange={(open) => { if (!open && !isPending) onClose(); }}>
+      <AlertDialogContent className="max-w-lg border-t-4 border-t-primary rounded-none p-0 overflow-hidden bg-background">
+        <AlertDialogHeader className="p-8 pb-4">
+          <div className="flex flex-col items-center gap-5">
+            <div className={cn(
+              'w-12 h-12 flex items-center justify-center',
+              isGenerate ? 'bg-primary/10 text-primary' : 'bg-emerald-500/10 text-emerald-600',
+            )}>
+              {isGenerate ? <Bell className="w-6 h-6" /> : <DollarSign className="w-6 h-6" />}
+            </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <AlertDialogTitle className="text-2xl font-serif text-center text-foreground">
+                {isGenerate ? `Generate ${action.periodLabel} reminders?` : `Pay ${action.employeeName}?`}
+              </AlertDialogTitle>
+              <div className={cn(
+                'px-3 py-1 text-[9px] font-bold uppercase tracking-widest',
+                isGenerate
+                  ? 'bg-primary/10 text-primary'
+                  : 'bg-emerald-500/10 text-emerald-600',
+              )}>
+                {isGenerate ? 'Missing reminders only' : 'Deducts from company fund'}
+              </div>
+            </div>
+          </div>
+        </AlertDialogHeader>
+
+        <div className="px-8 pb-6 space-y-4">
+          <div className="p-4 bg-muted border border-border space-y-3">
+            <p className="text-[11px] font-bold tracking-widest uppercase text-foreground">
+              {isGenerate ? 'Action Summary' : 'Payment Summary'}
+            </p>
+
+            {isGenerate ? (
+              <>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Period</span>
+                  <span className="font-bold text-foreground">{action.periodLabel}</span>
+                </div>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  This creates salary reminders for eligible employees in the selected month. Existing reminders stay untouched, so duplicates will not be created.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Employee</span>
+                  <span className="font-bold text-foreground">{action.employeeName}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-bold text-foreground">{formatCurrency(action.amount)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Period</span>
+                  <span className="font-bold text-foreground">{action.periodLabel}</span>
+                </div>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  This marks the reminder as paid and deducts the amount from your company&apos;s available fund.
+                </p>
+              </>
+            )}
+          </div>
+
+          {!!error && (
+            <div className="border border-red-500/30 bg-red-500/10 p-4 text-[10px] leading-relaxed text-red-600">
+              {getApiErrorMessage(error, isGenerate ? 'Unable to generate reminders.' : 'Unable to process salary payment.')}
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter className="p-8 pt-0 flex gap-4 sm:space-x-4">
+          <AlertDialogCancel
+            className="flex-1 rounded-none border-border bg-transparent text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted h-12"
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+            disabled={isPending}
+            className={cn(
+              'flex-1 rounded-none text-[10px] font-bold uppercase tracking-widest h-12 disabled:opacity-60',
+              isGenerate
+                ? 'bg-primary text-black hover:bg-primary/90'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white',
+            )}
+          >
+            {isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : isGenerate ? (
+              'Generate Reminders'
+            ) : (
+              'Confirm Payment'
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function SalaryRemindersSection() {
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'paid' | 'overdue' | undefined>(undefined);
+  const [pendingAction, setPendingAction] = useState<ReminderActionState | null>(null);
+
+  const getMonthName = (month: number) =>
+    new Date(2000, month - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+
+  const { data, isLoading } = useSalaryReminders({
+    year: selectedYear,
+    month: selectedMonth,
+    status: statusFilter,
+  });
+
+  const reminders = data?.data?.reminders ?? [];
+  const summary = data?.data?.summary ?? { totalPending: 0, totalAmount: 0, overdueCount: 0 };
+
+  const {
+    mutate: generateReminders,
+    isPending: isGenerating,
+    error: generateError,
+    reset: resetGenerateReminders,
+  } = useGenerateReminders({
+    onSuccess: () => {
+      if (pendingAction?.kind === 'generate') {
+        toast.success(`Salary reminders generated for ${pendingAction.periodLabel}`);
+      } else {
+        toast.success('Salary reminders generated successfully');
+      }
+      resetGenerateReminders();
+      setPendingAction(null);
+    },
+  });
+
+  const {
+    mutate: markPaid,
+    isPending: isMarkingPaid,
+    error: payError,
+    reset: resetMarkPaid,
+  } = useMarkReminderPaid({
+    onSuccess: () => {
+      if (pendingAction?.kind === 'pay') {
+        toast.success(`Salary paid to ${pendingAction.employeeName}`);
+      } else {
+        toast.success('Salary payment completed successfully');
+      }
+      resetMarkPaid();
+      setPendingAction(null);
+    },
+  });
+
+  const handleGenerate = () => {
+    resetGenerateReminders();
+    setPendingAction({
+      kind: 'generate',
+      month: selectedMonth,
+      year: selectedYear,
+      periodLabel: `${getMonthName(selectedMonth)} ${selectedYear}`,
+    });
+  };
+
+  const handleMarkPaid = (
+    reminderId: string,
+    amount: number,
+    employeeName: string,
+    month: number,
+    year: number,
+  ) => {
+    resetMarkPaid();
+    setPendingAction({
+      kind: 'pay',
+      reminderId,
+      amount,
+      employeeName,
+      periodLabel: `${getMonthName(month)} ${year}`,
+    });
+  };
+
+  const closePendingAction = () => {
+    if (isGenerating || isMarkingPaid) return;
+    resetGenerateReminders();
+    resetMarkPaid();
+    setPendingAction(null);
+  };
+
+  const confirmPendingAction = () => {
+    if (!pendingAction) return;
+
+    if (pendingAction.kind === 'generate') {
+      generateReminders({ year: pendingAction.year, month: pendingAction.month });
+      return;
+    }
+
+    markPaid({
+      id: pendingAction.reminderId,
+      data: { paidAt: new Date().toISOString() },
+    });
+  };
+
+  const dialogError = pendingAction?.kind === 'generate' ? generateError : payError;
+  const dialogPending = pendingAction?.kind === 'generate' ? isGenerating : isMarkingPaid;
+
+  const getStatusColor = (status: string) => {
+    if (status === 'paid') return 'bg-emerald-500/10 text-emerald-600';
+    if (status === 'overdue') return 'bg-red-500/10 text-red-600';
+    return 'bg-amber-500/10 text-amber-600';
+  };
+
+  const formatReminderDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+  return (
+    <div className="space-y-6">
+      <ReminderActionDialog
+        action={pendingAction}
+        isPending={dialogPending}
+        error={dialogError}
+        onClose={closePendingAction}
+        onConfirm={confirmPendingAction}
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+              <Bell className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Pending</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{summary.totalPending}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Overdue</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{summary.overdueCount}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <DollarSign className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Total Amount</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{formatCurrency(summary.totalAmount)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex flex-wrap gap-3">
+          <select
+            value={selectedMonth}
+            onChange={(event) => setSelectedMonth(Number(event.target.value))}
+            className="h-10 rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+          >
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+              <option key={month} value={month}>
+                {getMonthName(month)}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedYear}
+            onChange={(event) => setSelectedYear(Number(event.target.value))}
+            className="h-10 rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+          >
+            {Array.from({ length: 5 }, (_, index) => now.getFullYear() - 2 + index).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={statusFilter ?? ''}
+            onChange={(event) => {
+              const value = event.target.value;
+              setStatusFilter(value ? (value as 'pending' | 'paid' | 'overdue') : undefined);
+            }}
+            className="h-10 rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+          >
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="overdue">Overdue</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+
+        <Button
+          onClick={handleGenerate}
+          disabled={isGenerating}
+          className="h-10 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest gap-2"
+        >
+          {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+          Generate Reminders
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="border border-border p-8 flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : reminders.length === 0 ? (
+        <div className="border border-dashed border-border p-12 flex flex-col items-center justify-center gap-3">
+          <Bell className="w-12 h-12 text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground italic">
+            No salary reminders found. Click "Generate Reminders" to create them.
+          </p>
+        </div>
+      ) : (
+        <div className="border border-border divide-y divide-border">
+          <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
+            <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Employee</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Month/Year</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Due Date</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</div>
+            <div className="col-span-1 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</div>
+            <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Actions</div>
+          </div>
+
+          {reminders.map((reminder) => (
+            <div
+              key={reminder.id}
+              className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 lg:items-center hover:bg-muted/20 transition-colors"
+            >
+              <div className="lg:col-span-3">
+                <p className="font-serif text-base text-foreground">{reminder.employeeName}</p>
+              </div>
+              <div className="lg:col-span-2 text-sm text-muted-foreground">
+                {getMonthName(reminder.month)} {reminder.year}
+              </div>
+              <div className="lg:col-span-2 text-sm text-muted-foreground">
+                {formatReminderDate(reminder.dueDate)}
+              </div>
+              <div className="lg:col-span-2">
+                <p className="text-sm font-semibold text-primary">{formatCurrency(reminder.salaryAmount)}</p>
+                {reminder.paidAt && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    Paid: {formatReminderDate(reminder.paidAt)}
+                  </p>
+                )}
+              </div>
+              <div className="lg:col-span-1">
+                <span className={cn('inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest', getStatusColor(reminder.status))}>
+                  {reminder.status}
+                </span>
+              </div>
+              <div className="lg:col-span-2 flex items-center justify-start lg:justify-end gap-2">
+                {reminder.status !== 'paid' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest"
+                    onClick={() => handleMarkPaid(
+                      reminder.id,
+                      reminder.salaryAmount,
+                      reminder.employeeName,
+                      reminder.month,
+                      reminder.year,
+                    )}
+                    disabled={isMarkingPaid}
+                  >
+                    {isMarkingPaid ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Mark Paid'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PayrollDashboardSection({
+  employees,
+  onOpenEmployee,
+}: {
+  employees: Employee[];
+  onOpenEmployee: (employee: Employee) => void;
+}) {
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'paid' | 'overdue' | undefined>(undefined);
+  const [pendingAction, setPendingAction] = useState<ReminderActionState | null>(null);
+
+  const { data, isLoading } = useSalaryReminders({
+    year: selectedYear,
+    month: selectedMonth,
+  });
+  const { data: todayAttendanceData, isLoading: isTodayAttendanceLoading } = useTodayAttendance();
+
+  const employeeLookup = useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee])),
+    [employees],
+  );
+
+  const reminderPool = useMemo(
+    () => (data?.data?.reminders ?? []).filter((reminder) => employeeLookup.has(reminder.employeeId)),
+    [data?.data?.reminders, employeeLookup],
+  );
+
+  const reminders = useMemo(
+    () => (statusFilter ? reminderPool.filter((reminder) => reminder.status === statusFilter) : reminderPool),
+    [reminderPool, statusFilter],
+  );
+
+  const summary = useMemo(() => ({
+    totalPending: reminderPool.filter((reminder) => reminder.status !== 'paid').length,
+    totalAmount: reminderPool
+      .filter((reminder) => reminder.status !== 'paid')
+      .reduce((sum, reminder) => sum + reminder.salaryAmount, 0),
+    overdueCount: reminderPool.filter((reminder) => reminder.status === 'overdue').length,
+  }), [reminderPool]);
+
+  const paidAmount = useMemo(
+    () => reminderPool
+      .filter((reminder) => reminder.status === 'paid')
+      .reduce((sum, reminder) => sum + reminder.salaryAmount, 0),
+    [reminderPool],
+  );
+
+  const paidCount = useMemo(
+    () => reminderPool.filter((reminder) => reminder.status === 'paid').length,
+    [reminderPool],
+  );
+
+  const projectedPayroll = useMemo(
+    () => employees
+      .filter((employee) => employee.status !== 'terminated')
+      .reduce((sum, employee) => sum + employee.salary, 0),
+    [employees],
+  );
+
+  const completionRate = reminderPool.length > 0
+    ? Math.round((paidCount / reminderPool.length) * 100)
+    : 0;
+
+  const todaySummary = todayAttendanceData?.data?.summary ?? {
+    totalEmployees: 0,
+    markedCount: 0,
+    present: 0,
+    absent: 0,
+    halfDay: 0,
+  };
+
+  const {
+    mutate: generateReminders,
+    isPending: isGenerating,
+    error: generateError,
+    reset: resetGenerateReminders,
+  } = useGenerateReminders({
+    onSuccess: () => {
+      if (pendingAction?.kind === 'generate') {
+        toast.success(`Payroll reminders generated for ${pendingAction.periodLabel}`);
+      } else {
+        toast.success('Payroll reminders generated successfully');
+      }
+      resetGenerateReminders();
+      setPendingAction(null);
+    },
+  });
+
+  const {
+    mutate: markPaid,
+    isPending: isMarkingPaid,
+    error: payError,
+    reset: resetMarkPaid,
+  } = useMarkReminderPaid({
+    onSuccess: () => {
+      if (pendingAction?.kind === 'pay') {
+        toast.success(`Salary paid to ${pendingAction.employeeName}`);
+      } else {
+        toast.success('Salary payment completed successfully');
+      }
+      resetMarkPaid();
+      setPendingAction(null);
+    },
+  });
+
+  const handleGenerate = () => {
+    if (employees.length === 0) return;
+
+    resetGenerateReminders();
+    setPendingAction({
+      kind: 'generate',
+      month: selectedMonth,
+      year: selectedYear,
+      periodLabel: `${getMonthName(selectedMonth)} ${selectedYear}`,
+    });
+  };
+
+  const handleMarkPaid = (
+    reminderId: string,
+    amount: number,
+    employeeName: string,
+    month: number,
+    year: number,
+  ) => {
+    resetMarkPaid();
+    setPendingAction({
+      kind: 'pay',
+      reminderId,
+      amount,
+      employeeName,
+      periodLabel: `${getMonthName(month)} ${year}`,
+    });
+  };
+
+  const closePendingAction = () => {
+    if (isGenerating || isMarkingPaid) return;
+    resetGenerateReminders();
+    resetMarkPaid();
+    setPendingAction(null);
+  };
+
+  const confirmPendingAction = () => {
+    if (!pendingAction) return;
+
+    if (pendingAction.kind === 'generate') {
+      const employeeIds = employees.map((employee) => employee.id);
+      if (employeeIds.length === 0) return;
+
+      generateReminders({
+        year: pendingAction.year,
+        month: pendingAction.month,
+        employeeIds,
+      });
+      return;
+    }
+
+    markPaid({
+      id: pendingAction.reminderId,
+      data: { paidAt: new Date().toISOString() },
+    });
+  };
+
+  const dialogError = pendingAction?.kind === 'generate' ? generateError : payError;
+  const dialogPending = pendingAction?.kind === 'generate' ? isGenerating : isMarkingPaid;
+
+  const getStatusColor = (status: string) => {
+    if (status === 'paid') return 'bg-emerald-500/10 text-emerald-600';
+    if (status === 'overdue') return 'bg-red-500/10 text-red-600';
+    return 'bg-amber-500/10 text-amber-600';
+  };
+
+  const formatReminderDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+  return (
+    <div className="space-y-6">
+      <ReminderActionDialog
+        action={pendingAction}
+        isPending={dialogPending}
+        error={dialogError}
+        onClose={closePendingAction}
+        onConfirm={confirmPendingAction}
+      />
+
+      <div className="border border-border bg-muted/20 p-6 lg:p-8">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/50">Payroll Command</p>
+            <h2 className="mt-2 text-3xl font-serif tracking-tight text-foreground">Monthly Payroll Dashboard</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Track salary dues, generate the month&apos;s payroll reminders, and jump into an employee workspace for payslips, attendance insights, and recovery history.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
+            <select
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(Number(event.target.value))}
+              className="h-10 rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+            >
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                <option key={month} value={month}>
+                  {getMonthName(month)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(Number(event.target.value))}
+              className="h-10 rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+            >
+              {Array.from({ length: 5 }, (_, index) => now.getFullYear() - 2 + index).map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+
+            <Button
+              onClick={handleGenerate}
+              disabled={isGenerating || employees.length === 0}
+              className="h-10 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest gap-2"
+            >
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              Generate Reminders
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Wallet className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Projected Payroll</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{formatCurrency(projectedPayroll)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+              <Bell className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Outstanding</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{formatCurrency(summary.totalAmount)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Paid This Cycle</p>
+              <p className="text-2xl font-serif text-foreground mt-1">{formatCurrency(paidAmount)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-border p-5 bg-background">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Marked Today</p>
+              <p className="text-2xl font-serif text-foreground mt-1">
+                {todaySummary.markedCount}/{todaySummary.totalEmployees}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Cycle Detail</p>
+              <h3 className="mt-2 text-lg font-serif text-foreground">
+                {getMonthName(selectedMonth)} {selectedYear}
+              </h3>
+            </div>
+
+            <div className="w-full sm:w-52">
+              <select
+                value={statusFilter ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setStatusFilter(value ? (value as 'pending' | 'paid' | 'overdue') : undefined);
+                }}
+                className="h-10 w-full rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="overdue">Overdue</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+          </div>
+
+          {employees.length === 0 ? (
+            <div className="border border-dashed border-border p-12 text-center text-sm text-muted-foreground italic">
+              No employees match the current filters, so payroll is narrowed to an empty view.
+            </div>
+          ) : isLoading ? (
+            <div className="border border-border p-8 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : reminderPool.length === 0 ? (
+            <div className="border border-dashed border-border p-12 flex flex-col items-center justify-center gap-3">
+              <Bell className="w-12 h-12 text-muted-foreground/30" />
+              <p className="text-lg font-serif text-foreground">No payroll reminders yet</p>
+              <p className="max-w-xl text-center text-sm text-muted-foreground">
+                Generate reminders for this cycle to start tracking pending salary payments and payslips.
+              </p>
+            </div>
+          ) : (
+            <div className="border border-border divide-y divide-border">
+              <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
+                <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Employee</div>
+                <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Month/Year</div>
+                <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Due Date</div>
+                <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount</div>
+                <div className="col-span-1 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</div>
+                <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Actions</div>
+              </div>
+
+              {reminders.map((reminder) => {
+                const employee = employeeLookup.get(reminder.employeeId) ?? null;
+
+                return (
+                  <div
+                    key={reminder.id}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 lg:items-center hover:bg-muted/20 transition-colors"
+                  >
+                    <div className="lg:col-span-3">
+                      <p className="font-serif text-base text-foreground">{reminder.employeeName}</p>
+                      {employee && (
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                          {employee.department} / {employee.designation}
+                        </p>
+                      )}
+                    </div>
+                    <div className="lg:col-span-2 text-sm text-muted-foreground">
+                      {getMonthName(reminder.month)} {reminder.year}
+                    </div>
+                    <div className="lg:col-span-2 text-sm text-muted-foreground">
+                      {formatReminderDate(reminder.dueDate)}
+                    </div>
+                    <div className="lg:col-span-2">
+                      <p className="text-sm font-semibold text-primary">{formatCurrency(reminder.salaryAmount)}</p>
+                      {reminder.paidAt && (
+                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          Paid: {formatReminderDate(reminder.paidAt)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="lg:col-span-1">
+                      <span className={cn('inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest', getStatusColor(reminder.status))}>
+                        {reminder.status}
+                      </span>
+                    </div>
+                    <div className="lg:col-span-2 flex items-center justify-start lg:justify-end gap-2">
+                      {employee && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest"
+                          onClick={() => onOpenEmployee(employee)}
+                        >
+                          Open Workspace
+                        </Button>
+                      )}
+
+                      {reminder.status !== 'paid' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest"
+                          onClick={() => handleMarkPaid(
+                            reminder.id,
+                            reminder.salaryAmount,
+                            reminder.employeeName,
+                            reminder.month,
+                            reminder.year,
+                          )}
+                          disabled={isMarkingPaid}
+                        >
+                          {isMarkingPaid ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Mark Paid'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="border border-border p-5 bg-background">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Cycle Snapshot</p>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Payroll Completion</p>
+                  <p className="mt-1 text-3xl font-serif text-foreground">{completionRate}%</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Paid / Total</p>
+                  <p className="mt-1 text-lg font-sans font-bold text-foreground">{paidCount} / {reminderPool.length}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-border bg-muted/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Pending</p>
+                  <p className="mt-2 text-2xl font-serif text-foreground">{summary.totalPending}</p>
+                </div>
+                <div className="border border-border bg-muted/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Overdue</p>
+                  <p className="mt-2 text-2xl font-serif text-foreground">{summary.overdueCount}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border border-border p-5 bg-background">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Today Attendance Pulse</p>
+            {isTodayAttendanceLoading ? (
+              <div className="mt-6 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="border border-border bg-muted/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Present</p>
+                  <p className="mt-2 text-2xl font-serif text-emerald-600">{todaySummary.present}</p>
+                </div>
+                <div className="border border-border bg-muted/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Absent</p>
+                  <p className="mt-2 text-2xl font-serif text-red-500">{todaySummary.absent}</p>
+                </div>
+                <div className="border border-border bg-muted/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Half Day</p>
+                  <p className="mt-2 text-2xl font-serif text-amber-600">{todaySummary.halfDay}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border border-border p-5 bg-background">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Next Step</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Open any employee workspace to view attendance analytics, advance recovery, transaction history, and printable payslips for paid salary cycles.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -501,12 +1570,16 @@ export default function EmployeesPage() {
   const [department, setDepartment] = useState('');
   const [section, setSection] = useState<EmployeesSection>('directory');
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setSection(params.get('section') === 'attendance' ? 'attendance' : 'directory');
+    const sectionParam = params.get('section');
+    if (sectionParam === 'attendance') setSection('attendance');
+    else if (sectionParam === 'payroll' || sectionParam === 'reminders') setSection('payroll');
+    else setSection('directory');
   }, []);
 
   const filters = useMemo(() => ({
@@ -530,6 +1603,8 @@ export default function EmployeesPage() {
 
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
   const handleCloseEdit = useCallback(() => setEditEmployee(null), []);
+  const handleCloseWorkspace = useCallback(() => setSelectedEmployee(null), []);
+  const handleOpenWorkspace = useCallback((employee: Employee) => setSelectedEmployee(employee), []);
 
   const {
     mutate: createEmployee,
@@ -561,7 +1636,7 @@ export default function EmployeesPage() {
           <div>
             <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Employees</h1>
             <p className="mt-2 text-base text-muted-foreground italic">
-              Manage your team roster, departments, and payroll details.
+              Manage your team roster, attendance, and payroll workspace from one place.
             </p>
           </div>
 
@@ -597,7 +1672,7 @@ export default function EmployeesPage() {
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-1 border-b border-border overflow-x-auto pb-px">
-            {(['directory', 'attendance'] as const).map((value) => (
+            {(['directory', 'payroll', 'attendance'] as const).map((value) => (
               <button
                 key={value}
                 onClick={() => setSection(value)}
@@ -608,7 +1683,7 @@ export default function EmployeesPage() {
                     : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
-                {value === 'directory' ? 'Employee Directory' : 'Attendance'}
+                {value === 'directory' ? 'Employee Directory' : value === 'payroll' ? 'Payroll Dashboard' : 'Attendance'}
               </button>
             ))}
           </div>
@@ -636,8 +1711,10 @@ export default function EmployeesPage() {
           <StatCard icon={Wallet} label="Visible Payroll" value={formatCurrency(totalSalary)} />
         </div>
 
-        {section === 'attendance' ? (
-          <AttendanceMatrixSection employees={employees} />
+        {section === 'payroll' ? (
+          <PayrollDashboardSection employees={employees} onOpenEmployee={handleOpenWorkspace} />
+        ) : section === 'attendance' ? (
+          <AttendanceMatrixSection employees={employees} onOpenEmployee={handleOpenWorkspace} />
         ) : employees.length === 0 ? (
           <div className="border border-dashed border-border flex items-center justify-center py-20">
             <p className="text-sm text-muted-foreground italic">
@@ -670,6 +1747,9 @@ export default function EmployeesPage() {
                 <div className="lg:col-span-2">
                   <p className="text-sm text-foreground">{formatDate(employee.dateOfJoining)}</p>
                   <p className="text-sm font-semibold text-primary mt-1">{formatCurrency(employee.salary)}</p>
+                  {employee.salaryDate != null && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Due: {employee.salaryDate}th</p>
+                  )}
                 </div>
                 <div className="lg:col-span-1">
                   <span className={cn('inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest', statusClass(employee.status))}>
@@ -677,6 +1757,14 @@ export default function EmployeesPage() {
                   </span>
                 </div>
                 <div className="lg:col-span-2 flex items-center justify-start lg:justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest"
+                    onClick={() => handleOpenWorkspace(employee)}
+                  >
+                    Open Workspace
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -744,6 +1832,7 @@ export default function EmployeesPage() {
                 department: editEmployee.department,
                 dateOfJoining: editEmployee.dateOfJoining,
                 salary: editEmployee.salary,
+                salaryDate: editEmployee.salaryDate ?? undefined,
                 status: editEmployee.status,
               }}
               onSubmit={(values) => updateEmployee({ id: editEmployee.id, data: values })}
@@ -755,6 +1844,12 @@ export default function EmployeesPage() {
       {deleteEmployee && (
         <DeleteConfirm employee={deleteEmployee} onClose={() => setDeleteEmployee(null)} />
       )}
+
+      <EmployeeWorkspaceSheet
+        employee={selectedEmployee}
+        open={Boolean(selectedEmployee)}
+        onClose={handleCloseWorkspace}
+      />
     </DashboardShell>
   );
 }
