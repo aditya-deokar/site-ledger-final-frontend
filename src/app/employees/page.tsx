@@ -27,7 +27,6 @@ import {
 import { format } from 'date-fns';
 
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
-import { EmployeeWorkspaceSheet } from '@/components/employees/employee-workspace-sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,7 +65,7 @@ import {
 import { toast } from 'sonner';
 
 type EmployeeStatus = 'active' | 'inactive' | 'terminated';
-type EmployeesSection = 'directory' | 'attendance' | 'payroll';
+type EmployeesSection = 'directory' | 'attendance' | 'reminders';
 type ReminderActionState =
   | { kind: 'generate'; month: number; year: number; periodLabel: string }
   | { kind: 'pay'; reminderId: string; amount: number; employeeName: string; periodLabel: string };
@@ -85,15 +84,6 @@ function formatDate(value: string) {
 
 function toDateInput(value: string) {
   return new Date(value).toISOString().slice(0, 10);
-}
-
-function toAttendanceDateTime(year: number, month: number, day: number, value: string) {
-  if (!value) return undefined;
-
-  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10));
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return undefined;
-
-  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
 }
 
 function getMonthName(month: number) {
@@ -336,22 +326,13 @@ function attendanceCellSymbol(status?: AttendanceStatus) {
   return '•';
 }
 
-function AttendanceMatrixSection({
-  employees,
-  onOpenEmployee,
-}: {
-  employees: Employee[];
-  onOpenEmployee: (employee: Employee) => void;
-}) {
+function AttendanceMatrixSection({ employees }: { employees: Employee[] }) {
   const [activeMonth, setActiveMonth] = useState(() => {
     const now = new Date();
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   });
   const [markMode, setMarkMode] = useState<AttendanceStatus>('present');
   const [pendingCell, setPendingCell] = useState<string | null>(null);
-  const [checkInTime, setCheckInTime] = useState('');
-  const [checkOutTime, setCheckOutTime] = useState('');
-  const [attendanceNote, setAttendanceNote] = useState('');
 
   const year = activeMonth.getUTCFullYear();
   const month = activeMonth.getUTCMonth() + 1;
@@ -391,31 +372,17 @@ function AttendanceMatrixSection({
   const onCellClick = useCallback((employeeId: string, day: number) => {
     const cellKey = `${employeeId}-${year}-${month}-${day}`;
     const date = new Date(Date.UTC(year, month - 1, day)).toISOString();
-    const trimmedNote = attendanceNote.trim();
-    const checkInDateTime = markMode === 'absent'
-      ? undefined
-      : toAttendanceDateTime(year, month, day, checkInTime);
-    const checkOutDateTime = markMode === 'absent'
-      ? undefined
-      : toAttendanceDateTime(year, month, day, checkOutTime);
 
     setPendingCell(cellKey);
     markAttendance(
-      {
-        employeeId,
-        date,
-        status: markMode,
-        ...(checkInDateTime ? { checkInTime: checkInDateTime } : {}),
-        ...(checkOutDateTime ? { checkOutTime: checkOutDateTime } : {}),
-        ...(trimmedNote && markMode !== 'present' ? { reasonOfAbsenteeism: trimmedNote } : {}),
-      },
+      { employeeId, date, status: markMode },
       {
         onSettled: () => {
           setPendingCell((value) => (value === cellKey ? null : value));
         },
       },
     );
-  }, [attendanceNote, checkInTime, checkOutTime, markAttendance, markMode, month, year]);
+  }, [markAttendance, markMode, month, year]);
 
   const monthInputValue = `${year}-${String(month).padStart(2, '0')}`;
 
@@ -489,76 +456,6 @@ function AttendanceMatrixSection({
         </Button>
       </div>
 
-      <div className="border border-border bg-muted/10 p-4">
-        <div className="grid gap-4 lg:grid-cols-[140px_140px_minmax(0,1fr)_auto]">
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Check In</Label>
-            <Input
-              type="time"
-              value={checkInTime}
-              disabled={markMode === 'absent'}
-              onChange={(event) => setCheckInTime(event.target.value)}
-              className="h-10 rounded-none bg-background text-xs font-bold uppercase tracking-widest"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Check Out</Label>
-            <Input
-              type="time"
-              value={checkOutTime}
-              disabled={markMode === 'absent'}
-              onChange={(event) => setCheckOutTime(event.target.value)}
-              className="h-10 rounded-none bg-background text-xs font-bold uppercase tracking-widest"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Note / Leave Reason</Label>
-            <Input
-              value={attendanceNote}
-              onChange={(event) => setAttendanceNote(event.target.value)}
-              placeholder={markMode === 'present' ? 'Optional note for the next marks' : 'Sick Leave / Casual Leave / Unpaid Leave'}
-              className="h-10 rounded-none bg-background text-sm"
-            />
-          </div>
-
-          <div className="flex items-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-none px-4 text-[10px] font-bold uppercase tracking-widest"
-              onClick={() => {
-                setCheckInTime('');
-                setCheckOutTime('');
-                setAttendanceNote('');
-              }}
-            >
-              Clear Inputs
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Quick Notes</span>
-          {['Sick Leave', 'Casual Leave', 'Unpaid Leave', 'Late Entry', 'On Site Work'].map((preset) => (
-            <Button
-              key={preset}
-              type="button"
-              variant="outline"
-              className="h-8 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest"
-              onClick={() => setAttendanceNote(preset)}
-            >
-              {preset}
-            </Button>
-          ))}
-        </div>
-
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          These optional fields power leave labels, late-arrival tracking, and overtime insights inside each employee workspace.
-        </p>
-      </div>
-
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
         Showing {format(activeMonth, 'MMMM yyyy')}
         {isFetchingAttendance ? ' • Syncing...' : ''}
@@ -605,17 +502,8 @@ function AttendanceMatrixSection({
               {employees.map((employee) => (
                 <tr key={employee.id}>
                   <td className="bg-background border-r border-b border-border px-2 py-2">
-                    <button
-                      type="button"
-                      className="text-left"
-                      onClick={() => onOpenEmployee(employee)}
-                    >
-                      <p className="text-sm font-semibold text-foreground truncate">{employee.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{employee.employeeId}</p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary/70">
-                        Open Workspace
-                      </p>
-                    </button>
+                    <p className="text-sm font-semibold text-foreground truncate">{employee.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{employee.employeeId}</p>
                   </td>
                   {days.map((day) => {
                     const status = attendanceLookup.get(employee.id)?.get(day);
@@ -635,17 +523,7 @@ function AttendanceMatrixSection({
                           )}
                           title={`${employee.name} - ${day}/${month}/${year}`}
                         >
-                          {isCellPending ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" />
-                          ) : status === 'present' ? (
-                            'P'
-                          ) : status === 'absent' ? (
-                            'A'
-                          ) : status === 'half_day' ? (
-                            'H'
-                          ) : (
-                            '-'
-                          )}
+                          {isCellPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : attendanceCellSymbol(status)}
                         </button>
                       </td>
                     );
@@ -1570,7 +1448,6 @@ export default function EmployeesPage() {
   const [department, setDepartment] = useState('');
   const [section, setSection] = useState<EmployeesSection>('directory');
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
 
@@ -1578,7 +1455,7 @@ export default function EmployeesPage() {
     const params = new URLSearchParams(window.location.search);
     const sectionParam = params.get('section');
     if (sectionParam === 'attendance') setSection('attendance');
-    else if (sectionParam === 'payroll' || sectionParam === 'reminders') setSection('payroll');
+    else if (sectionParam === 'reminders') setSection('reminders');
     else setSection('directory');
   }, []);
 
@@ -1603,8 +1480,6 @@ export default function EmployeesPage() {
 
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
   const handleCloseEdit = useCallback(() => setEditEmployee(null), []);
-  const handleCloseWorkspace = useCallback(() => setSelectedEmployee(null), []);
-  const handleOpenWorkspace = useCallback((employee: Employee) => setSelectedEmployee(employee), []);
 
   const {
     mutate: createEmployee,
@@ -1636,7 +1511,7 @@ export default function EmployeesPage() {
           <div>
             <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Employees</h1>
             <p className="mt-2 text-base text-muted-foreground italic">
-              Manage your team roster, attendance, and payroll workspace from one place.
+              Manage your team roster, departments, and payroll details.
             </p>
           </div>
 
@@ -1672,7 +1547,7 @@ export default function EmployeesPage() {
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-1 border-b border-border overflow-x-auto pb-px">
-            {(['directory', 'payroll', 'attendance'] as const).map((value) => (
+            {(['directory', 'attendance', 'reminders'] as const).map((value) => (
               <button
                 key={value}
                 onClick={() => setSection(value)}
@@ -1683,7 +1558,7 @@ export default function EmployeesPage() {
                     : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
-                {value === 'directory' ? 'Employee Directory' : value === 'payroll' ? 'Payroll Dashboard' : 'Attendance'}
+                {value === 'directory' ? 'Employee Directory' : value === 'attendance' ? 'Attendance' : 'Salary Reminders'}
               </button>
             ))}
           </div>
@@ -1711,10 +1586,10 @@ export default function EmployeesPage() {
           <StatCard icon={Wallet} label="Visible Payroll" value={formatCurrency(totalSalary)} />
         </div>
 
-        {section === 'payroll' ? (
-          <PayrollDashboardSection employees={employees} onOpenEmployee={handleOpenWorkspace} />
+        {section === 'reminders' ? (
+          <SalaryRemindersSection />
         ) : section === 'attendance' ? (
-          <AttendanceMatrixSection employees={employees} onOpenEmployee={handleOpenWorkspace} />
+          <AttendanceMatrixSection employees={employees} />
         ) : employees.length === 0 ? (
           <div className="border border-dashed border-border flex items-center justify-center py-20">
             <p className="text-sm text-muted-foreground italic">
@@ -1757,14 +1632,6 @@ export default function EmployeesPage() {
                   </span>
                 </div>
                 <div className="lg:col-span-2 flex items-center justify-start lg:justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest"
-                    onClick={() => handleOpenWorkspace(employee)}
-                  >
-                    Open Workspace
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -1844,12 +1711,6 @@ export default function EmployeesPage() {
       {deleteEmployee && (
         <DeleteConfirm employee={deleteEmployee} onClose={() => setDeleteEmployee(null)} />
       )}
-
-      <EmployeeWorkspaceSheet
-        employee={selectedEmployee}
-        open={Boolean(selectedEmployee)}
-        onClose={handleCloseWorkspace}
-      />
     </DashboardShell>
   );
 }
