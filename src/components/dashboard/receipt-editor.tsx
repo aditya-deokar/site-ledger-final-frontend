@@ -1,31 +1,31 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Download, IndianRupee, Plus, Trash2 } from "lucide-react"
+import type { ReactNode, RefObject } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Download, FileText, ReceiptText, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
-import { type Customer, type CustomerPaymentHistoryItem } from "@/schemas/customer.schema"
+import { Textarea } from "@/components/ui/textarea"
+import { useCustomerAgreement } from "@/hooks/api/customer.hooks"
+import {
+  type Customer,
+  type CustomerAgreementLine,
+  type CustomerAgreementLineType,
+  type CustomerPaymentHistoryItem,
+} from "@/schemas/customer.schema"
 import { cn } from "@/lib/utils"
-import { RecordPaymentModal } from "./record-payment-modal"
 
 type WorkspaceMode = "receipt" | "statement"
-type TaxType = "percentage" | "amount"
-
-type TaxRow = {
-  id: string
-  name: string
-  type: TaxType
-  value: number
-}
 
 type StatementRow = {
   payment: CustomerPaymentHistoryItem
   cumulativePaid: number
   balance: number
 }
+
+type RecordedAgreementRow = Pick<CustomerAgreementLine, "type" | "label" | "signedAmount" | "affectsProfit">
 
 type PrintDetails = {
   customerName: string
@@ -40,8 +40,20 @@ type PrintDetails = {
   ratePerSqft: string
 }
 
+interface ReceiptEditorProps {
+  customer: Customer & { siteName?: string | null }
+  siteAddress?: string
+  payments: CustomerPaymentHistoryItem[]
+  onClose: () => void
+}
+
 function formatINR(value: number) {
   return "\u20B9" + value.toLocaleString("en-IN")
+}
+
+function formatSignedINR(value: number) {
+  if (value < 0) return `- ${formatINR(Math.abs(value))}`
+  return formatINR(value)
 }
 
 function formatShortDate(iso?: string | null) {
@@ -72,24 +84,6 @@ function formatDateTime(iso?: string | null) {
   })
 }
 
-function formatIsoDate(iso?: string | null) {
-  if (!iso) return ""
-  return iso.slice(0, 10)
-}
-
-function sanitizeFilename(value: string) {
-  return value.trim().replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"
-}
-
-function escapeHtml(value?: string | null) {
-  return (value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-}
-
 function getPaymentModeLabel(mode?: string | null) {
   switch (mode) {
     case "CASH":
@@ -105,18 +99,31 @@ function getPaymentModeLabel(mode?: string | null) {
   }
 }
 
+function getAgreementTypeLabel(type: CustomerAgreementLineType) {
+  switch (type) {
+    case "BASE_PRICE":
+      return "Base Price"
+    case "CHARGE":
+      return "Charge"
+    case "TAX":
+      return "Tax / GST"
+    case "DISCOUNT":
+      return "Discount"
+    case "CREDIT":
+      return "Credit"
+    default:
+      return type
+  }
+}
+
 function buildReceiptNumber(paymentId: string, postedAt: string) {
   const dateToken = postedAt.slice(2, 10).replace(/-/g, "")
   const paymentToken = paymentId.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()
   return `RCP-${dateToken}-${paymentToken}`
 }
 
-function createEditorRowId(prefix: string) {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `${prefix}-${crypto.randomUUID()}`
-  }
-
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+function sanitizeFilename(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"
 }
 
 function convertToIndianWords(num: number): string {
@@ -161,621 +168,520 @@ function comparePayments(a: CustomerPaymentHistoryItem, b: CustomerPaymentHistor
   return a.id.localeCompare(b.id)
 }
 
-function buildStatementRows(payments: CustomerPaymentHistoryItem[], sellingPrice: number): StatementRow[] {
+function buildStatementRows(payments: CustomerPaymentHistoryItem[], agreementValue: number): StatementRow[] {
   let cumulativePaid = 0
 
   return [...payments].sort(comparePayments).map((payment) => {
     cumulativePaid += payment.amount
+
     return {
       payment,
       cumulativePaid,
-      balance: Math.max(sellingPrice - cumulativePaid, 0),
+      balance: Math.max(agreementValue - cumulativePaid, 0),
     }
   })
 }
 
-function calculateTaxAmount(tax: TaxRow, baseAmount: number) {
-  if (tax.type === "percentage") {
-    return (baseAmount * tax.value) / 100
+function convertLabColorToRgb(element: HTMLElement) {
+  const computedStyle = window.getComputedStyle(element)
+  const colorProperties = ['color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor']
+  
+  colorProperties.forEach(prop => {
+    const value = computedStyle.getPropertyValue(prop)
+    if (value && value.includes('lab(')) {
+      // Get the computed RGB value by creating a temporary element
+      const tempDiv = document.createElement('div')
+      tempDiv.style.color = value
+      document.body.appendChild(tempDiv)
+      const rgbValue = window.getComputedStyle(tempDiv).color
+      document.body.removeChild(tempDiv)
+      element.style.setProperty(prop, rgbValue, 'important')
+    }
+  })
+}
+
+function cloneAndFixColors(element: HTMLElement): HTMLElement {
+  const clone = element.cloneNode(true) as HTMLElement
+  
+  // Fix colors on the clone and all its children
+  const allElements = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[]
+  allElements.forEach(el => {
+    const computedStyle = window.getComputedStyle(el)
+    
+    // Convert computed colors to inline styles to avoid lab() parsing
+    const colorProps = ['color', 'backgroundColor', 'borderColor']
+    colorProps.forEach(prop => {
+      const value = computedStyle.getPropertyValue(prop)
+      if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
+        el.style.setProperty(prop, value, 'important')
+      }
+    })
+  })
+  
+  return clone
+}
+
+async function exportElementToPdf(element: HTMLElement, filename: string) {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ])
+
+  // Clone the element and fix color issues
+  const clonedElement = cloneAndFixColors(element)
+  
+  // Temporarily add to DOM for rendering
+  clonedElement.style.position = 'absolute'
+  clonedElement.style.left = '-9999px'
+  clonedElement.style.top = '0'
+  document.body.appendChild(clonedElement)
+
+  try {
+    const canvas = await html2canvas(clonedElement, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      windowWidth: clonedElement.scrollWidth,
+      windowHeight: clonedElement.scrollHeight,
+    })
+
+    const imageData = canvas.toDataURL("image/png")
+    const pdf = new jsPDF("p", "mm", "a4")
+    const margin = 8
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const contentWidth = pageWidth - margin * 2
+    const contentHeight = (canvas.height * contentWidth) / canvas.width
+    const printableHeight = pageHeight - margin * 2
+
+    let remainingHeight = contentHeight
+    let offsetY = margin
+
+    pdf.addImage(imageData, "PNG", margin, offsetY, contentWidth, contentHeight, undefined, "FAST")
+    remainingHeight -= printableHeight
+
+    while (remainingHeight > 0) {
+      pdf.addPage()
+      offsetY = margin - (contentHeight - remainingHeight)
+      pdf.addImage(imageData, "PNG", margin, offsetY, contentWidth, contentHeight, undefined, "FAST")
+      remainingHeight -= printableHeight
+    }
+
+    pdf.save(filename)
+  } finally {
+    // Clean up the cloned element
+    document.body.removeChild(clonedElement)
   }
-
-  return tax.value
 }
 
-function downloadHtmlFile(filename: string, html: string) {
-  const blob = new Blob([html], { type: "text/html" })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
-  URL.revokeObjectURL(url)
-}
-
-function buildReceiptHtml(input: {
-  receiptNumber: string
-  selectedPayment: CustomerPaymentHistoryItem
-  statementRow: StatementRow
-  printDetails: PrintDetails
-  paymentAmountWords: string
-  printTaxBaseAmount: number
-  taxRows: Array<TaxRow & { calculatedAmount: number }>
-  totalPrintTaxAmount: number
+function PreviewField({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string
+  value: string
+  muted?: boolean
 }) {
-  const { receiptNumber, selectedPayment, statementRow, printDetails, paymentAmountWords, printTaxBaseAmount, taxRows, totalPrintTaxAmount } = input
-  const paymentModeLabel = getPaymentModeLabel(selectedPayment.paymentMode)
-  const taxRowsHtml = taxRows.length > 0
-    ? taxRows.map((tax, index) => `
-        <tr>
-          <td>${index + 1}</td>
-          <td>${escapeHtml(tax.name || "Tax Row")}</td>
-          <td>${tax.type === "percentage" ? `${tax.value}%` : formatINR(tax.value)}</td>
-          <td class="text-right">${formatINR(tax.calculatedAmount)}</td>
-        </tr>
-      `).join("")
-    : `<tr><td colspan="4" class="muted">No print-only taxes added</td></tr>`
-
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Receipt - ${escapeHtml(printDetails.customerName)}</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --border: #1f2937;
-      --muted: #6b7280;
-      --soft: #f3f4f6;
-      --accent: #0f766e;
-    }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      color: #111827;
-      background: #ffffff;
-      font-size: 13px;
-      line-height: 1.45;
-    }
-
-    .page {
-      width: 100%;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .title-block {
-      border: 2px solid var(--border);
-      padding: 18px 20px;
-      margin-bottom: 18px;
-    }
-
-    .title-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 28px;
-      letter-spacing: 0.08em;
-    }
-
-    .title-sub {
-      color: var(--muted);
-      margin-top: 6px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-
-    .receipt-meta {
-      text-align: right;
-      min-width: 220px;
-    }
-
-    .receipt-meta div {
-      margin-bottom: 6px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-
-    .panel {
-      border: 1px solid var(--border);
-      padding: 14px;
-    }
-
-    .panel h2 {
-      margin: 0 0 10px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-    }
-
-    .field {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 4px 0;
-      border-bottom: 1px dashed #d1d5db;
-    }
-
-    .field:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .field-label {
-      color: var(--muted);
-      min-width: 140px;
-    }
-
-    .amount-box {
-      border: 2px solid var(--border);
-      padding: 18px 20px;
-      margin-bottom: 18px;
-    }
-
-    .amount-box .amount {
-      font-size: 26px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    .amount-box .words {
-      margin-top: 8px;
-      font-size: 15px;
-      font-weight: 600;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-
-    th, td {
-      border: 1px solid var(--border);
-      padding: 9px 10px;
-      vertical-align: top;
-    }
-
-    th {
-      background: var(--soft);
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 0.08em;
-    }
-
-    .text-right {
-      text-align: right;
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
-    .note {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .signature-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 30px;
-      margin-top: 44px;
-    }
-
-    .signature-box {
-      width: 260px;
-      padding-top: 32px;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      font-size: 12px;
-    }
-
-    @media print {
-      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-      .page { padding: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="title-block">
-      <div class="title-row">
-        <div>
-          <h1>PAYMENT RECEIPT</h1>
-          <div class="title-sub">Single payment acknowledgement</div>
-        </div>
-        <div class="receipt-meta">
-          <div><strong>Receipt No:</strong> ${escapeHtml(receiptNumber)}</div>
-          <div><strong>Receipt Date:</strong> ${escapeHtml(formatShortDate(selectedPayment.createdAt))}</div>
-          <div><strong>Payment Posted:</strong> ${escapeHtml(formatDateTime(selectedPayment.createdAt))}</div>
-        </div>
-      </div>
+  return (
+    <div className="flex items-start justify-between gap-6 border-b border-slate-200 py-3 last:border-b-0 last:pb-0">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</span>
+      <span className={cn("text-right text-sm leading-6", muted ? "text-slate-500" : "font-medium text-slate-900")}>
+        {value || "-"}
+      </span>
     </div>
-
-    <div class="grid">
-      <div class="panel">
-        <h2>Customer Details</h2>
-        <div class="field"><span class="field-label">Customer Name</span><strong>${escapeHtml(printDetails.customerName)}</strong></div>
-        <div class="field"><span class="field-label">Phone</span><span>${escapeHtml(printDetails.customerPhone || "-")}</span></div>
-        <div class="field"><span class="field-label">Address</span><span>${escapeHtml(printDetails.customerAddress || "-")}</span></div>
-        <div class="field"><span class="field-label">PAN Number</span><span>${escapeHtml(printDetails.customerPan || "-")}</span></div>
-      </div>
-      <div class="panel">
-        <h2>Project & Flat Details</h2>
-        <div class="field"><span class="field-label">Project</span><strong>${escapeHtml(printDetails.projectName || "-")}</strong></div>
-        <div class="field"><span class="field-label">Site Address</span><span>${escapeHtml(printDetails.siteAddress || "-")}</span></div>
-        <div class="field"><span class="field-label">Flat / Unit</span><span>${escapeHtml(printDetails.flatNumber || "-")}</span></div>
-        <div class="field"><span class="field-label">Floor</span><span>${escapeHtml(printDetails.floorNumber || "-")}</span></div>
-        <div class="field"><span class="field-label">Carpet Area</span><span>${escapeHtml(printDetails.carpetArea || "-")}</span></div>
-        <div class="field"><span class="field-label">Rate / Sq Ft</span><span>${escapeHtml(printDetails.ratePerSqft || "-")}</span></div>
-      </div>
-    </div>
-
-    <div class="amount-box">
-      <div><strong>Received Amount:</strong></div>
-      <div class="amount">${formatINR(selectedPayment.amount)}</div>
-      <div class="words">${escapeHtml(paymentAmountWords)}</div>
-    </div>
-
-    <div class="panel">
-      <h2>Payment Details</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Mode</th>
-            <th>Reference</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>${escapeHtml(formatDateTime(selectedPayment.createdAt))}</td>
-            <td>${escapeHtml(paymentModeLabel)}</td>
-            <td>${escapeHtml(selectedPayment.referenceNumber || "-")}</td>
-            <td>${escapeHtml(selectedPayment.note || "-")}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel" style="margin-top: 18px;">
-      <h2>Running Account Summary</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Agreement Value</th>
-            <th>Total Received So Far</th>
-            <th>Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="text-right">${formatINR(statementRow.balance + statementRow.cumulativePaid)}</td>
-            <td class="text-right">${formatINR(statementRow.cumulativePaid)}</td>
-            <td class="text-right">${formatINR(statementRow.balance)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel" style="margin-top: 18px;">
-      <h2>Print-only Tax Breakup</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Sr. No.</th>
-            <th>Tax Name</th>
-            <th>Rate / Amount</th>
-            <th>Calculated Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${taxRowsHtml}
-          <tr>
-            <td colspan="3" class="text-right"><strong>Total Print-only Tax</strong></td>
-            <td class="text-right"><strong>${formatINR(totalPrintTaxAmount)}</strong></td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="note">
-        Print-only tax calculations are based on ${formatINR(printTaxBaseAmount)} and do not change the customer ledger, agreement balance, or booking value.
-      </div>
-    </div>
-
-    <div class="signature-row">
-      <div class="signature-box">Customer Signature</div>
-      <div class="signature-box">Authorized Signatory</div>
-    </div>
-  </div>
-</body>
-</html>
-  `
+  )
 }
 
-function buildStatementHtml(input: {
+function PreviewSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-[2px] border border-slate-200 bg-white p-6">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{title}</h3>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function DocumentShell({
+  children,
+  previewRef,
+}: {
+  children: ReactNode
+  previewRef: RefObject<HTMLDivElement | null>
+}) {
+  return (
+    <div className="mx-auto min-w-[820px] max-w-[920px] px-4">
+      <div
+        ref={previewRef}
+        className="mx-auto w-full max-w-[860px] bg-white text-slate-900 shadow-[0_24px_80px_rgba(15,23,42,0.16)]"
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ReceiptPreview({
+  previewRef,
+  printDetails,
+  selectedPayment,
+  selectedStatementRow,
+  agreementValue,
+  receiptNumber,
+  paymentAmountWords,
+  recordedAgreementRows,
+}: {
+  previewRef: RefObject<HTMLDivElement | null>
+  printDetails: PrintDetails
+  selectedPayment: CustomerPaymentHistoryItem
+  selectedStatementRow: StatementRow
+  agreementValue: number
+  receiptNumber: string
+  paymentAmountWords: string
+  recordedAgreementRows: RecordedAgreementRow[]
+}) {
+  const receiptDate = formatShortDate(selectedPayment.createdAt)
+  const paymentMode = getPaymentModeLabel(selectedPayment.paymentMode)
+
+  return (
+    <DocumentShell previewRef={previewRef}>
+      <div className="border-b border-slate-900 px-10 py-10">
+        <div className="flex items-start justify-between gap-10">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Builder Collection Receipt</p>
+            <h1 className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">Payment Receipt</h1>
+            <p className="mt-4 text-lg font-medium text-slate-900">{printDetails.projectName || "Project Name"}</p>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">{printDetails.siteAddress || "Add the site address in the details panel."}</p>
+          </div>
+
+          <div className="w-full max-w-[300px] border border-slate-200 bg-slate-50 px-5 py-4">
+            <PreviewField label="Receipt No" value={receiptNumber} />
+            <PreviewField label="Receipt Date" value={receiptDate} />
+            <PreviewField label="Posted At" value={formatDateTime(selectedPayment.createdAt)} />
+            <PreviewField label="Mode" value={paymentMode} muted={paymentMode === "Not recorded"} />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-b border-slate-200 px-10 py-8">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_300px]">
+          <div className="border border-emerald-200 bg-emerald-50 px-6 py-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">Received Amount</p>
+            <p className="mt-4 text-5xl font-semibold tracking-tight text-emerald-700">{formatINR(selectedPayment.amount)}</p>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-700">{paymentAmountWords}</p>
+          </div>
+
+          <div className="border border-slate-200 px-6 py-6">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Received From</p>
+            <p className="mt-4 text-2xl font-semibold text-slate-950">{printDetails.customerName || "Customer Name"}</p>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <p>{printDetails.customerPhone || "Phone number not added"}</p>
+              <p>{printDetails.flatNumber || "Flat / Unit pending"}</p>
+              <p>{printDetails.floorNumber || "Floor pending"}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 px-10 py-8 md:grid-cols-2">
+        <PreviewSection title="Customer Details">
+          <PreviewField label="Customer" value={printDetails.customerName} />
+          <PreviewField label="Phone" value={printDetails.customerPhone} muted={!printDetails.customerPhone} />
+          <PreviewField label="Address" value={printDetails.customerAddress} muted={!printDetails.customerAddress} />
+          <PreviewField label="PAN Number" value={printDetails.customerPan} muted={!printDetails.customerPan} />
+        </PreviewSection>
+
+        <PreviewSection title="Property Details">
+          <PreviewField label="Project" value={printDetails.projectName} />
+          <PreviewField label="Site Address" value={printDetails.siteAddress} muted={!printDetails.siteAddress} />
+          <PreviewField label="Flat / Unit" value={printDetails.flatNumber} muted={!printDetails.flatNumber} />
+          <PreviewField label="Floor" value={printDetails.floorNumber} muted={!printDetails.floorNumber} />
+          <PreviewField label="Carpet Area" value={printDetails.carpetArea} muted={!printDetails.carpetArea} />
+          <PreviewField label="Rate / Sq Ft" value={printDetails.ratePerSqft} muted={!printDetails.ratePerSqft} />
+        </PreviewSection>
+      </div>
+
+      <div className="border-t border-slate-200 px-10 py-8">
+        <PreviewSection title="Payment Details">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Reference</p>
+              <p className="mt-3 text-base font-semibold text-slate-950">{selectedPayment.referenceNumber || "-"}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment Mode</p>
+              <p className="mt-3 text-base font-semibold text-slate-950">{paymentMode}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Receipt Date</p>
+              <p className="mt-3 text-base font-semibold text-slate-950">{receiptDate}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Amount</p>
+              <p className="mt-3 text-base font-semibold text-emerald-700">{formatINR(selectedPayment.amount)}</p>
+            </div>
+          </div>
+          <div className="mt-4 border border-slate-200 px-4 py-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Note</p>
+            <p className="mt-3 text-sm leading-6 text-slate-700">{selectedPayment.note || "No note recorded for this payment."}</p>
+          </div>
+        </PreviewSection>
+      </div>
+
+      <div className="border-t border-slate-200 px-10 py-8">
+        <PreviewSection title="Running Account Summary">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="border border-slate-200 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Agreement Value</p>
+              <p className="mt-3 text-2xl font-semibold text-slate-950">{formatINR(agreementValue)}</p>
+            </div>
+            <div className="border border-slate-200 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Collected Till This Receipt</p>
+              <p className="mt-3 text-2xl font-semibold text-emerald-700">{formatINR(selectedStatementRow.cumulativePaid)}</p>
+            </div>
+            <div className="border border-slate-200 px-4 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Outstanding Balance</p>
+              <p className={cn("mt-3 text-2xl font-semibold", selectedStatementRow.balance > 0 ? "text-red-600" : "text-emerald-700")}>
+                {formatINR(selectedStatementRow.balance)}
+              </p>
+            </div>
+          </div>
+        </PreviewSection>
+      </div>
+
+      <div className="border-t border-slate-200 px-10 py-8">
+        <PreviewSection title="Recorded Agreement Breakdown">
+          {recordedAgreementRows.length === 0 ? (
+            <div className="border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+              No recorded agreement rows found for this customer.
+            </div>
+          ) : (
+            <div className="overflow-hidden border border-slate-200">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="border-b border-slate-200">
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Type</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Label</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Profit Effect</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recordedAgreementRows.map((row, index) => (
+                    <tr key={`${row.type}-${row.label}-${index}`} className="border-b border-slate-200 last:border-b-0">
+                      <td className="px-4 py-3">{getAgreementTypeLabel(row.type)}</td>
+                      <td className="px-4 py-3">{row.label}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.affectsProfit ? "Affects profit" : "Pass-through"}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-950">{formatSignedINR(row.signedAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p className="mt-4 text-xs leading-6 text-slate-500">
+            This receipt uses only recorded agreement and payment data. Price changes, GST rows, and discounts shown here come from the stored customer ledger.
+          </p>
+        </PreviewSection>
+      </div>
+
+      <div className="flex justify-between gap-8 border-t border-slate-200 px-10 pb-12 pt-14">
+        <div className="w-full max-w-[260px] border-t border-slate-400 pt-4 text-center text-sm text-slate-600">
+          Customer Signature
+        </div>
+        <div className="w-full max-w-[260px] border-t border-slate-400 pt-4 text-center text-sm text-slate-600">
+          Authorized Signatory
+        </div>
+      </div>
+    </DocumentShell>
+  )
+}
+
+function StatementPreview({
+  previewRef,
+  printDetails,
+  statementRows,
+  agreementValue,
+  recordedAgreementRows,
+}: {
+  previewRef: RefObject<HTMLDivElement | null>
   printDetails: PrintDetails
   statementRows: StatementRow[]
-  sellingPrice: number
+  agreementValue: number
+  recordedAgreementRows: RecordedAgreementRow[]
 }) {
-  const { printDetails, statementRows, sellingPrice } = input
-  const latestBalance = statementRows.at(-1)?.balance ?? sellingPrice
   const totalReceived = statementRows.at(-1)?.cumulativePaid ?? 0
-  const rowsHtml = statementRows.map((row, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${escapeHtml(formatDateTime(row.payment.createdAt))}</td>
-      <td class="text-right">${formatINR(row.payment.amount)}</td>
-      <td>${escapeHtml(getPaymentModeLabel(row.payment.paymentMode))}</td>
-      <td>${escapeHtml(row.payment.referenceNumber || "-")}</td>
-      <td>${escapeHtml(row.payment.note || "-")}</td>
-      <td class="text-right">${formatINR(row.cumulativePaid)}</td>
-      <td class="text-right">${formatINR(row.balance)}</td>
-    </tr>
-  `).join("")
+  const latestBalance = statementRows.at(-1)?.balance ?? agreementValue
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Account Statement - ${escapeHtml(printDetails.customerName)}</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --border: #111827;
-      --muted: #6b7280;
-      --soft: #f3f4f6;
-      --accent: #1d4ed8;
-    }
+  return (
+    <DocumentShell previewRef={previewRef}>
+      <div className="border-b border-slate-900 px-10 py-10">
+        <div className="flex items-start justify-between gap-10">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Customer Account Statement</p>
+            <h1 className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">Account Statement</h1>
+            <p className="mt-4 text-lg font-medium text-slate-900">{printDetails.projectName || "Project Name"}</p>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">{printDetails.siteAddress || "Add the site address in the details panel."}</p>
+          </div>
 
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      color: #111827;
-      background: #ffffff;
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .page {
-      width: 100%;
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .header {
-      border: 2px solid var(--border);
-      padding: 18px 20px;
-      margin-bottom: 18px;
-    }
-
-    .header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 20px;
-      margin-bottom: 14px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 26px;
-      letter-spacing: 0.08em;
-    }
-
-    .subtitle {
-      margin-top: 6px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 11px;
-    }
-
-    .meta {
-      text-align: right;
-    }
-
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .summary-box {
-      border: 1px solid var(--border);
-      padding: 12px;
-      background: var(--soft);
-    }
-
-    .summary-label {
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      font-size: 10px;
-      margin-bottom: 6px;
-    }
-
-    .summary-value {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-
-    .details {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .panel {
-      border: 1px solid var(--border);
-      padding: 14px;
-    }
-
-    .panel h2 {
-      margin: 0 0 10px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-    }
-
-    .field {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 4px 0;
-      border-bottom: 1px dashed #d1d5db;
-    }
-
-    .field:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .field-label {
-      color: var(--muted);
-      min-width: 140px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    th, td {
-      border: 1px solid var(--border);
-      padding: 8px 9px;
-      vertical-align: top;
-    }
-
-    th {
-      background: var(--soft);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .text-right {
-      text-align: right;
-    }
-
-    @media print {
-      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-      .page { padding: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="header">
-      <div class="header-top">
-        <div>
-          <h1>ACCOUNT STATEMENT</h1>
-          <div class="subtitle">Customer collection history</div>
-        </div>
-        <div class="meta">
-          <div><strong>Generated On:</strong> ${escapeHtml(formatDateTime(new Date().toISOString()))}</div>
-          <div><strong>Customer:</strong> ${escapeHtml(printDetails.customerName)}</div>
-          <div><strong>Project:</strong> ${escapeHtml(printDetails.projectName || "-")}</div>
+          <div className="w-full max-w-[300px] border border-slate-200 bg-slate-50 px-5 py-4">
+            <PreviewField label="Generated On" value={formatDateTime(new Date().toISOString())} />
+            <PreviewField label="Customer" value={printDetails.customerName} />
+            <PreviewField label="Flat / Unit" value={printDetails.flatNumber} muted={!printDetails.flatNumber} />
+          </div>
         </div>
       </div>
 
-      <div class="summary">
-        <div class="summary-box">
-          <div class="summary-label">Agreement Value</div>
-          <div class="summary-value">${formatINR(sellingPrice)}</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">Total Received</div>
-          <div class="summary-value">${formatINR(totalReceived)}</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">Balance</div>
-          <div class="summary-value">${formatINR(latestBalance)}</div>
+      <div className="border-b border-slate-200 px-10 py-8">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Agreement Value</p>
+            <p className="mt-3 text-3xl font-semibold text-slate-950">{formatINR(agreementValue)}</p>
+          </div>
+          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Collected</p>
+            <p className="mt-3 text-3xl font-semibold text-emerald-700">{formatINR(totalReceived)}</p>
+          </div>
+          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Outstanding Balance</p>
+            <p className={cn("mt-3 text-3xl font-semibold", latestBalance > 0 ? "text-red-600" : "text-emerald-700")}>
+              {formatINR(latestBalance)}
+            </p>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="details">
-      <div class="panel">
-        <h2>Customer Details</h2>
-        <div class="field"><span class="field-label">Name</span><strong>${escapeHtml(printDetails.customerName)}</strong></div>
-        <div class="field"><span class="field-label">Phone</span><span>${escapeHtml(printDetails.customerPhone || "-")}</span></div>
-        <div class="field"><span class="field-label">Address</span><span>${escapeHtml(printDetails.customerAddress || "-")}</span></div>
-        <div class="field"><span class="field-label">PAN Number</span><span>${escapeHtml(printDetails.customerPan || "-")}</span></div>
+      <div className="grid gap-6 px-10 py-8 md:grid-cols-2">
+        <PreviewSection title="Customer Details">
+          <PreviewField label="Customer" value={printDetails.customerName} />
+          <PreviewField label="Phone" value={printDetails.customerPhone} muted={!printDetails.customerPhone} />
+          <PreviewField label="Address" value={printDetails.customerAddress} muted={!printDetails.customerAddress} />
+          <PreviewField label="PAN Number" value={printDetails.customerPan} muted={!printDetails.customerPan} />
+        </PreviewSection>
+
+        <PreviewSection title="Property Details">
+          <PreviewField label="Project" value={printDetails.projectName} />
+          <PreviewField label="Site Address" value={printDetails.siteAddress} muted={!printDetails.siteAddress} />
+          <PreviewField label="Flat / Unit" value={printDetails.flatNumber} muted={!printDetails.flatNumber} />
+          <PreviewField label="Floor" value={printDetails.floorNumber} muted={!printDetails.floorNumber} />
+          <PreviewField label="Carpet Area" value={printDetails.carpetArea} muted={!printDetails.carpetArea} />
+          <PreviewField label="Rate / Sq Ft" value={printDetails.ratePerSqft} muted={!printDetails.ratePerSqft} />
+        </PreviewSection>
       </div>
-      <div class="panel">
-        <h2>Project & Flat Details</h2>
-        <div class="field"><span class="field-label">Project</span><strong>${escapeHtml(printDetails.projectName || "-")}</strong></div>
-        <div class="field"><span class="field-label">Flat / Unit</span><span>${escapeHtml(printDetails.flatNumber || "-")}</span></div>
-        <div class="field"><span class="field-label">Floor</span><span>${escapeHtml(printDetails.floorNumber || "-")}</span></div>
-        <div class="field"><span class="field-label">Site Address</span><span>${escapeHtml(printDetails.siteAddress || "-")}</span></div>
+
+      <div className="border-t border-slate-200 px-10 py-8">
+        <PreviewSection title="Payment Ledger">
+          <div className="overflow-hidden border border-slate-200">
+            <table className="min-w-full border-collapse text-sm">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Date</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Mode</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Reference</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Note</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Amount</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Cumulative</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statementRows.map((row) => (
+                  <tr key={row.payment.id} className="border-b border-slate-200 last:border-b-0">
+                    <td className="px-4 py-3">{formatDateTime(row.payment.createdAt)}</td>
+                    <td className="px-4 py-3">{getPaymentModeLabel(row.payment.paymentMode)}</td>
+                    <td className="px-4 py-3">{row.payment.referenceNumber || "-"}</td>
+                    <td className="px-4 py-3">{row.payment.note || "-"}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-emerald-700">{formatINR(row.payment.amount)}</td>
+                    <td className="px-4 py-3 text-right">{formatINR(row.cumulativePaid)}</td>
+                    <td className="px-4 py-3 text-right">{formatINR(row.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PreviewSection>
       </div>
-    </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>Sr.</th>
-          <th>Date</th>
-          <th>Amount</th>
-          <th>Mode</th>
-          <th>Reference</th>
-          <th>Note</th>
-          <th>Cumulative Paid</th>
-          <th>Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rowsHtml}
-      </tbody>
-    </table>
-  </div>
-</body>
-</html>
-  `
-}
-
-interface ReceiptEditorProps {
-  customer: Customer & { siteName?: string | null }
-  siteId?: string
-  siteAddress?: string
-  payments: CustomerPaymentHistoryItem[]
-  onClose: () => void
-}
-
-export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose }: ReceiptEditorProps) {
-  const incomingCustomerPayments = payments.filter(
-    (payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT",
+      <div className="border-t border-slate-200 px-10 py-8">
+        <PreviewSection title="Recorded Agreement Breakdown">
+          {recordedAgreementRows.length === 0 ? (
+            <div className="border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+              No recorded agreement rows found for this customer.
+            </div>
+          ) : (
+            <div className="overflow-hidden border border-slate-200">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-slate-50">
+                  <tr className="border-b border-slate-200">
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Type</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Label</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Profit Effect</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recordedAgreementRows.map((row, index) => (
+                    <tr key={`${row.type}-${row.label}-${index}`} className="border-b border-slate-200 last:border-b-0">
+                      <td className="px-4 py-3">{getAgreementTypeLabel(row.type)}</td>
+                      <td className="px-4 py-3">{row.label}</td>
+                      <td className="px-4 py-3 text-slate-600">{row.affectsProfit ? "Affects profit" : "Pass-through"}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-950">{formatSignedINR(row.signedAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </PreviewSection>
+      </div>
+    </DocumentShell>
   )
+}
+
+function PreviewPlaceholder({
+  icon,
+  title,
+  message,
+}: {
+  icon: ReactNode
+  title: string
+  message: string
+}) {
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-14rem)] min-w-[820px] max-w-[920px] items-center justify-center px-4">
+      <div className="w-full max-w-[860px] border border-dashed border-slate-300 bg-white px-8 py-16 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center bg-slate-100 text-slate-500">
+          {icon}
+        </div>
+        <h3 className="mt-5 text-2xl font-semibold text-slate-950">{title}</h3>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-500">{message}</p>
+      </div>
+    </div>
+  )
+}
+
+export function ReceiptEditor({ customer, siteAddress, payments, onClose }: ReceiptEditorProps) {
+  const receiptPreviewRef = useRef<HTMLDivElement | null>(null)
+  const statementPreviewRef = useRef<HTMLDivElement | null>(null)
+
+  const incomingCustomerPayments = useMemo(
+    () => payments.filter((payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT"),
+    [payments],
+  )
+
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("receipt")
-  const [ledgerPayments, setLedgerPayments] = useState<CustomerPaymentHistoryItem[]>(incomingCustomerPayments)
   const [selectedPaymentId, setSelectedPaymentId] = useState("")
-  const [isLedgerPaymentModalOpen, setIsLedgerPaymentModalOpen] = useState(false)
-  const [printTaxBaseAmount, setPrintTaxBaseAmount] = useState(0)
-  const [taxes, setTaxes] = useState<TaxRow[]>([])
+  const [isExporting, setIsExporting] = useState(false)
   const [printDetails, setPrintDetails] = useState<PrintDetails>({
     customerName: customer.name,
     customerPhone: customer.phone || "",
@@ -788,16 +694,41 @@ export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose
     carpetArea: "",
     ratePerSqft: "",
   })
-  const {
-    mutate: recordPayment,
-    isPending: isRecordingPayment,
-    error: paymentError,
-    reset: resetPaymentState,
-  } = useRecordCustomerPayment()
 
-  useEffect(() => {
-    setLedgerPayments(incomingCustomerPayments)
-  }, [payments])
+  const { data: agreementData } = useCustomerAgreement(customer.id)
+  const agreement = agreementData?.data?.agreement
+  const agreementValue = agreement?.totals.payableTotal ?? customer.sellingPrice
+  const recordedAgreementRows: RecordedAgreementRow[] = useMemo(
+    () => (agreement?.lines ?? []).map((line) => ({
+      type: line.type,
+      label: line.label,
+      signedAmount: line.signedAmount,
+      affectsProfit: line.affectsProfit,
+    })),
+    [agreement?.lines],
+  )
+  const recordedTaxTotal = agreement?.totals.tax ?? 0
+  const recordedNetSaleValue = agreement?.totals.profitRevenue ?? agreementValue
+  const statementRows = useMemo(
+    () => buildStatementRows(incomingCustomerPayments, agreementValue),
+    [agreementValue, incomingCustomerPayments],
+  )
+  const selectedStatementRow = useMemo(
+    () => statementRows.find((row) => row.payment.id === selectedPaymentId) ?? null,
+    [selectedPaymentId, statementRows],
+  )
+  const selectedPayment = selectedStatementRow?.payment ?? null
+  const totalReceived = statementRows.at(-1)?.cumulativePaid ?? 0
+  const ledgerBalance = Math.max(agreementValue - totalReceived, 0)
+  const receiptNumber = selectedPayment ? buildReceiptNumber(selectedPayment.id, selectedPayment.createdAt) : ""
+  const paymentAmountWords = selectedPayment ? convertToIndianWords(selectedPayment.amount) : ""
+  const hasPayments = statementRows.length > 0
+  const downloadDisabled = workspaceMode === "receipt" ? !selectedPayment : !hasPayments
+  const downloadDisabledMessage = !hasPayments
+    ? "No customer payments are recorded yet. Add the payment from the customer profile before exporting a PDF."
+    : workspaceMode === "receipt" && !selectedPayment
+      ? "Select one recorded payment to generate the receipt PDF."
+      : ""
 
   useEffect(() => {
     if (siteAddress) {
@@ -805,308 +736,175 @@ export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose
     }
   }, [siteAddress])
 
-  const statementRows = buildStatementRows(ledgerPayments, customer.sellingPrice)
-  const selectedStatementRow = statementRows.find((row) => row.payment.id === selectedPaymentId) ?? null
-  const selectedPayment = selectedStatementRow?.payment ?? null
-  const totalReceived = statementRows.at(-1)?.cumulativePaid ?? 0
-  const ledgerBalance = Math.max(customer.sellingPrice - totalReceived, 0)
-  const paymentAmountWords = selectedPayment ? convertToIndianWords(selectedPayment.amount) : "Select a payment to generate the receipt."
-  const receiptNumber = selectedPayment ? buildReceiptNumber(selectedPayment.id, selectedPayment.createdAt) : ""
-  const calculatedTaxes = taxes.map((tax) => ({
-    ...tax,
-    calculatedAmount: calculateTaxAmount(tax, printTaxBaseAmount),
-  }))
-  const totalPrintTaxAmount = calculatedTaxes.reduce((sum, tax) => sum + tax.calculatedAmount, 0)
-  const hasPayments = statementRows.length > 0
-  const canRecordPayment = ledgerBalance > 0
-  const downloadDisabled = workspaceMode === "receipt" ? !selectedPayment : !hasPayments
-  const downloadDisabledMessage = !hasPayments
-    ? "No customer payments are recorded yet. Record the first collection before downloading a receipt or statement."
-    : workspaceMode === "receipt" && !selectedPayment
-      ? "Select one recorded payment to generate its receipt."
-      : ""
-
   useEffect(() => {
     if (statementRows.length === 0) {
       setSelectedPaymentId("")
-      setPrintTaxBaseAmount(0)
       return
     }
 
-    if (statementRows.length === 1) {
-      setSelectedPaymentId(statementRows[0].payment.id)
+    if (selectedPaymentId && statementRows.some((row) => row.payment.id === selectedPaymentId)) {
       return
     }
 
-    if (selectedPaymentId && !statementRows.some((row) => row.payment.id === selectedPaymentId)) {
-      setSelectedPaymentId("")
-    }
+    setSelectedPaymentId(statementRows[statementRows.length - 1].payment.id)
   }, [selectedPaymentId, statementRows])
-
-  useEffect(() => {
-    setPrintTaxBaseAmount(selectedPayment?.amount ?? 0)
-  }, [selectedPayment?.amount, selectedPaymentId])
 
   const handlePrintDetailChange = (field: keyof PrintDetails, value: string) => {
     setPrintDetails((current) => ({ ...current, [field]: value }))
   }
 
-  const addTaxRow = () => {
-    setTaxes((current) => [
-      ...current,
-      {
-        id: createEditorRowId("tax"),
-        name: "",
-        type: "percentage",
-        value: 0,
-      },
-    ])
-  }
+  const handleDownloadPdf = async () => {
+    const activePreviewRef = workspaceMode === "receipt" ? receiptPreviewRef : statementPreviewRef
+    const activeNode = activePreviewRef.current
 
-  const updateTaxRow = (taxId: string, field: keyof TaxRow, value: string | number) => {
-    setTaxes((current) =>
-      current.map((tax) => tax.id === taxId ? { ...tax, [field]: value } : tax),
-    )
-  }
+    if (!activeNode) return
 
-  const removeTaxRow = (taxId: string) => {
-    setTaxes((current) => current.filter((tax) => tax.id !== taxId))
-  }
+    const fileName = workspaceMode === "receipt"
+      ? `receipt-${sanitizeFilename(printDetails.customerName)}-${sanitizeFilename(receiptNumber)}.pdf`
+      : `statement-${sanitizeFilename(printDetails.customerName)}.pdf`
 
-  const handleDownload = () => {
-    if (workspaceMode === "receipt") {
-      if (!selectedPayment || !selectedStatementRow) return
-
-      const html = buildReceiptHtml({
-        receiptNumber,
-        selectedPayment,
-        statementRow: selectedStatementRow,
-        printDetails,
-        paymentAmountWords,
-        printTaxBaseAmount,
-        taxRows: calculatedTaxes,
-        totalPrintTaxAmount,
-      })
-      downloadHtmlFile(
-        `receipt-${sanitizeFilename(printDetails.customerName)}-${sanitizeFilename(receiptNumber)}.html`,
-        html,
-      )
-      return
+    setIsExporting(true)
+    try {
+      await exportElementToPdf(activeNode, fileName)
+    } finally {
+      setIsExporting(false)
     }
-
-    const html = buildStatementHtml({
-      printDetails,
-      statementRows,
-      sellingPrice: customer.sellingPrice,
-    })
-    downloadHtmlFile(`statement-${sanitizeFilename(printDetails.customerName)}.html`, html)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-      <div className="flex h-[100dvh] w-full max-w-6xl flex-col overflow-hidden border border-border bg-background sm:h-auto sm:max-h-[92vh]">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/95 p-6 backdrop-blur">
-          <div>
-            <h2 className="text-2xl font-serif text-foreground">Receipt & Statement Workspace</h2>
-            <p className="text-sm text-muted-foreground">
-              Receipt mode prints one recorded payment. Statement mode prints the full payment trail with running balance.
-            </p>
+    <div className="fixed inset-0 z-[70] bg-background">
+      <div className="flex h-full flex-col">
+        <div className="border-b border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground/60">Receipt Workspace</p>
+              <h2 className="mt-2 text-2xl font-serif text-foreground">Customer Receipt & Statement</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review the actual document, adjust print details, and export a PDF instead of downloading raw HTML.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="grid grid-cols-2 overflow-hidden border border-border">
+                <Button
+                  type="button"
+                  variant={workspaceMode === "receipt" ? "default" : "ghost"}
+                  onClick={() => setWorkspaceMode("receipt")}
+                  className="rounded-none border-0 px-4 text-[10px] font-semibold uppercase tracking-widest"
+                >
+                  <ReceiptText className="mr-2 h-4 w-4" />
+                  Receipt
+                </Button>
+                <Button
+                  type="button"
+                  variant={workspaceMode === "statement" ? "default" : "ghost"}
+                  onClick={() => setWorkspaceMode("statement")}
+                  className="rounded-none border-0 px-4 text-[10px] font-semibold uppercase tracking-widest"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Statement
+                </Button>
+              </div>
+
+              <Button type="button" variant="outline" onClick={onClose} className="gap-2 rounded-none text-[10px] font-semibold uppercase tracking-widest">
+                <X className="h-4 w-4" />
+                Close
+              </Button>
+              <Button type="button" onClick={handleDownloadPdf} disabled={downloadDisabled || isExporting} className="gap-2 rounded-none text-[10px] font-semibold uppercase tracking-widest">
+                <Download className="h-4 w-4" />
+                {isExporting ? "Preparing PDF" : "Download PDF"}
+              </Button>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="border-border px-4 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-muted"
-          >
-            Cancel
-          </Button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Account Snapshot</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Customer</p>
-                  <p className="mt-2 text-base font-serif text-foreground">{printDetails.customerName || "Pending name"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Project</p>
-                  <p className="mt-2 text-base font-serif text-foreground">{printDetails.projectName || "Pending project"}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Agreement Value</p>
-                  <p className="mt-2 text-base font-serif text-foreground">{formatINR(customer.sellingPrice)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Current Balance</p>
-                  <p className={cn("mt-2 text-base font-serif", ledgerBalance > 0 ? "text-red-500" : "text-emerald-600")}>
-                    {formatINR(ledgerBalance)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-dashed">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Workspace Mode</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={workspaceMode === "receipt" ? "default" : "outline"}
-                    onClick={() => setWorkspaceMode("receipt")}
-                    className="rounded-none text-[10px] font-bold uppercase tracking-widest"
-                  >
-                    Receipt
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={workspaceMode === "statement" ? "default" : "outline"}
-                    onClick={() => setWorkspaceMode("statement")}
-                    className="rounded-none text-[10px] font-bold uppercase tracking-widest"
-                  >
-                    Statement
-                  </Button>
-                </div>
-
-                <div className="space-y-3 border border-border/70 p-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Total Received</p>
-                    <p className="mt-1 text-2xl font-bold text-emerald-600">{formatINR(totalReceived)}</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetPaymentState()
-                      setIsLedgerPaymentModalOpen(true)
-                    }}
-                    disabled={!canRecordPayment}
-                    className="w-full rounded-none text-[10px] font-bold uppercase tracking-widest"
-                  >
-                    <IndianRupee className="mr-2 h-4 w-4" />
-                    {canRecordPayment ? "Record Payment" : "Fully Paid"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-h-0 overflow-auto bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] px-4 py-6 dark:bg-[linear-gradient(180deg,#020617_0%,#0f172a_100%)] sm:px-6">
+            {workspaceMode === "receipt" ? (
+              selectedPayment && selectedStatementRow ? (
+                <ReceiptPreview
+                  previewRef={receiptPreviewRef}
+                  printDetails={printDetails}
+                  selectedPayment={selectedPayment}
+                  selectedStatementRow={selectedStatementRow}
+                  agreementValue={agreementValue}
+                  receiptNumber={receiptNumber}
+                  paymentAmountWords={paymentAmountWords}
+                  recordedAgreementRows={recordedAgreementRows}
+                />
+              ) : (
+                <PreviewPlaceholder
+                  icon={<ReceiptText className="h-7 w-7" />}
+                  title="Select a payment to preview the receipt"
+                  message="This receipt view always represents one real customer payment. Pick the payment from the right-side panel and the receipt will render here."
+                />
+              )
+            ) : hasPayments ? (
+              <StatementPreview
+                previewRef={statementPreviewRef}
+                printDetails={printDetails}
+                statementRows={statementRows}
+                agreementValue={agreementValue}
+                recordedAgreementRows={recordedAgreementRows}
+              />
+            ) : (
+              <PreviewPlaceholder
+                icon={<FileText className="h-7 w-7" />}
+                title="No statement available yet"
+                message="The account statement becomes available once the customer has at least one recorded payment in the ledger."
+              />
+            )}
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Print Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="customerName">Customer Name</Label>
-                  <Input
-                    id="customerName"
-                    value={printDetails.customerName}
-                    onChange={(event) => handlePrintDetailChange("customerName", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customerPhone">Phone Number</Label>
-                  <Input
-                    id="customerPhone"
-                    value={printDetails.customerPhone}
-                    onChange={(event) => handlePrintDetailChange("customerPhone", event.target.value)}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="customerAddress">Address</Label>
-                  <Input
-                    id="customerAddress"
-                    value={printDetails.customerAddress}
-                    onChange={(event) => handlePrintDetailChange("customerAddress", event.target.value)}
-                    placeholder="Manual print-only field"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="customerPan">PAN Number</Label>
-                  <Input
-                    id="customerPan"
-                    value={printDetails.customerPan}
-                    onChange={(event) => handlePrintDetailChange("customerPan", event.target.value)}
-                    placeholder="Manual print-only field"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="projectName">Project Name</Label>
-                  <Input
-                    id="projectName"
-                    value={printDetails.projectName}
-                    onChange={(event) => handlePrintDetailChange("projectName", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="flatNumber">Flat / Unit</Label>
-                  <Input
-                    id="flatNumber"
-                    value={printDetails.flatNumber}
-                    onChange={(event) => handlePrintDetailChange("flatNumber", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="floorNumber">Floor</Label>
-                  <Input
-                    id="floorNumber"
-                    value={printDetails.floorNumber}
-                    onChange={(event) => handlePrintDetailChange("floorNumber", event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="carpetArea">Carpet Area</Label>
-                  <Input
-                    id="carpetArea"
-                    value={printDetails.carpetArea}
-                    onChange={(event) => handlePrintDetailChange("carpetArea", event.target.value)}
-                    placeholder="Manual print-only field"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="ratePerSqft">Rate per Sq Ft</Label>
-                  <Input
-                    id="ratePerSqft"
-                    value={printDetails.ratePerSqft}
-                    onChange={(event) => handlePrintDetailChange("ratePerSqft", event.target.value)}
-                    placeholder="Manual print-only field"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label htmlFor="siteAddress">Site Address</Label>
-                  <Input
-                    id="siteAddress"
-                    value={printDetails.siteAddress}
-                    onChange={(event) => handlePrintDetailChange("siteAddress", event.target.value)}
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Address, PAN number, carpet area, and rate per square foot are now manual print fields here. They are no longer prefetched from missing customer properties.
-              </p>
-            </CardContent>
-          </Card>
-
-          {workspaceMode === "receipt" ? (
-            <div className="space-y-6">
+          <aside className="min-h-0 overflow-y-auto border-l border-border bg-background">
+            <div className="space-y-5 p-4 sm:p-5">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Receipt Mode</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Ledger Snapshot</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {!hasPayments ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                      No customer payments are recorded yet. Record the first collection before generating a receipt.
+                  <div className="grid gap-3">
+                    <div className="border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Agreement Total</p>
+                      <p className="mt-2 text-lg font-semibold text-foreground">{formatINR(agreementValue)}</p>
                     </div>
-                  ) : (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+                    <div className="border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Collected</p>
+                      <p className="mt-2 text-lg font-semibold text-emerald-600">{formatINR(totalReceived)}</p>
+                    </div>
+                    <div className="border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Outstanding</p>
+                      <p className={cn("mt-2 text-lg font-semibold", ledgerBalance > 0 ? "text-red-500" : "text-emerald-600")}>
+                        {formatINR(ledgerBalance)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1">
+                    <div className="border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Recorded Tax / GST</p>
+                      <p className="mt-2 text-base font-semibold text-amber-700">{formatINR(recordedTaxTotal)}</p>
+                    </div>
+                    <div className="border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Net Sale Value</p>
+                      <p className="mt-2 text-base font-semibold text-primary">{formatINR(recordedNetSaleValue)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {workspaceMode === "receipt" && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Payment to Print</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {!hasPayments ? (
+                      <div className="border border-dashed border-border px-4 py-6 text-sm leading-6 text-muted-foreground">
+                        No customer payments are recorded yet. Add the payment from the customer profile before generating a receipt PDF.
+                      </div>
+                    ) : (
+                      <>
                         <div>
                           <Label htmlFor="receiptPayment">Recorded Payment</Label>
                           <select
@@ -1115,7 +913,6 @@ export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose
                             onChange={(event) => setSelectedPaymentId(event.target.value)}
                             className="mt-2 h-11 w-full rounded-none border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                           >
-                            <option value="">Select one payment</option>
                             {statementRows.map((row) => (
                               <option key={row.payment.id} value={row.payment.id}>
                                 {`${formatShortDate(row.payment.createdAt)} | ${formatINR(row.payment.amount)} | ${getPaymentModeLabel(row.payment.paymentMode)}`}
@@ -1123,296 +920,171 @@ export function ReceiptEditor({ customer, siteId, siteAddress, payments, onClose
                             ))}
                           </select>
                           <p className="mt-2 text-xs text-muted-foreground">
-                            If only one payment exists it is selected automatically. Each receipt is now tied to one real payment only.
+                            Each receipt is tied to one real ledger payment. The latest payment is selected automatically.
                           </p>
                         </div>
-                        <div className="border border-border/70 p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Receipt Number</p>
-                          <p className="mt-2 text-lg font-serif text-foreground">{receiptNumber || "Select a payment"}</p>
-                          <p className="mt-3 text-[10px] text-muted-foreground">
-                            Generated from the selected payment id and posted date, so each receipt stays unique.
-                          </p>
-                        </div>
+
+                        {selectedPayment && (
+                          <div className="space-y-3 border border-border bg-muted/20 px-4 py-4">
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Receipt Number</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">{receiptNumber}</p>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Amount</p>
+                                <p className="mt-2 text-base font-semibold text-emerald-600">{formatINR(selectedPayment.amount)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Mode</p>
+                                <p className="mt-2 text-base font-semibold text-foreground">{getPaymentModeLabel(selectedPayment.paymentMode)}</p>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Reference</p>
+                              <p className="mt-2 text-sm text-foreground">{selectedPayment.referenceNumber || "No reference recorded"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground/55">Ledger Note</p>
+                              <p className="mt-2 text-sm leading-6 text-foreground">{selectedPayment.note || "No note recorded"}</p>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Receipt Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4">
+                    <div>
+                      <Label htmlFor="customerName">Customer Name</Label>
+                      <Input
+                        id="customerName"
+                        value={printDetails.customerName}
+                        onChange={(event) => handlePrintDetailChange("customerName", event.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customerPhone">Phone Number</Label>
+                      <Input
+                        id="customerPhone"
+                        value={printDetails.customerPhone}
+                        onChange={(event) => handlePrintDetailChange("customerPhone", event.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customerAddress">Customer Address</Label>
+                      <Textarea
+                        id="customerAddress"
+                        value={printDetails.customerAddress}
+                        onChange={(event) => handlePrintDetailChange("customerAddress", event.target.value)}
+                        className="mt-2 min-h-[88px] rounded-none"
+                        placeholder="Manual print field for the receipt body"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="customerPan">PAN Number</Label>
+                      <Input
+                        id="customerPan"
+                        value={printDetails.customerPan}
+                        onChange={(event) => handlePrintDetailChange("customerPan", event.target.value)}
+                        className="mt-2"
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="projectName">Project Name</Label>
+                      <Input
+                        id="projectName"
+                        value={printDetails.projectName}
+                        onChange={(event) => handlePrintDetailChange("projectName", event.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="siteAddress">Site Address</Label>
+                      <Textarea
+                        id="siteAddress"
+                        value={printDetails.siteAddress}
+                        onChange={(event) => handlePrintDetailChange("siteAddress", event.target.value)}
+                        className="mt-2 min-h-[88px] rounded-none"
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="flatNumber">Flat / Unit</Label>
+                        <Input
+                          id="flatNumber"
+                          value={printDetails.flatNumber}
+                          onChange={(event) => handlePrintDetailChange("flatNumber", event.target.value)}
+                          className="mt-2"
+                        />
                       </div>
+                      <div>
+                        <Label htmlFor="floorNumber">Floor</Label>
+                        <Input
+                          id="floorNumber"
+                          value={printDetails.floorNumber}
+                          onChange={(event) => handlePrintDetailChange("floorNumber", event.target.value)}
+                          className="mt-2"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor="carpetArea">Carpet Area</Label>
+                        <Input
+                          id="carpetArea"
+                          value={printDetails.carpetArea}
+                          onChange={(event) => handlePrintDetailChange("carpetArea", event.target.value)}
+                          className="mt-2"
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ratePerSqft">Rate per Sq Ft</Label>
+                        <Input
+                          id="ratePerSqft"
+                          value={printDetails.ratePerSqft}
+                          onChange={(event) => handlePrintDetailChange("ratePerSqft", event.target.value)}
+                          className="mt-2"
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                      {selectedPayment && selectedStatementRow ? (
-                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                          <Card className="border-border/60">
-                            <CardHeader>
-                              <CardTitle className="text-base">Selected Payment</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <div>
-                                  <Label>Receipt Date</Label>
-                                  <Input value={formatIsoDate(selectedPayment.createdAt)} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                                <div>
-                                  <Label>Posted At</Label>
-                                  <Input value={formatDateTime(selectedPayment.createdAt)} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                                <div>
-                                  <Label>Payment Amount</Label>
-                                  <Input value={formatINR(selectedPayment.amount)} readOnly className="mt-2 bg-muted/60 font-bold text-emerald-600" />
-                                </div>
-                                <div>
-                                  <Label>Amount in Words</Label>
-                                  <Input value={paymentAmountWords} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                                <div>
-                                  <Label>Payment Mode</Label>
-                                  <Input value={getPaymentModeLabel(selectedPayment.paymentMode)} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                                <div>
-                                  <Label>Reference Number</Label>
-                                  <Input value={selectedPayment.referenceNumber || "Not recorded"} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                                <div className="sm:col-span-2">
-                                  <Label>Ledger Note</Label>
-                                  <Input value={selectedPayment.note || "-"} readOnly className="mt-2 bg-muted/60" />
-                                </div>
-                              </div>
-                              {!selectedPayment.paymentMode && (
-                                <div className="border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] text-amber-700">
-                                  This is a legacy payment recorded before payment mode tracking was added. The receipt will show that the mode was not recorded, rather than inventing one on the frontend.
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-
-                          <Card className="border-dashed">
-                            <CardHeader>
-                              <CardTitle className="text-base">Running Summary</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Agreement Value</p>
-                                <p className="mt-1 text-2xl font-bold text-foreground">{formatINR(customer.sellingPrice)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Total Received So Far</p>
-                                <p className="mt-1 text-2xl font-bold text-emerald-600">{formatINR(selectedStatementRow.cumulativePaid)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Balance</p>
-                                <p className={cn("mt-1 text-2xl font-bold", selectedStatementRow.balance > 0 ? "text-red-500" : "text-emerald-600")}>
-                                  {formatINR(selectedStatementRow.balance)}
-                                </p>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                This summary uses the real customer ledger only. Print-only taxes below never affect booking balance.
-                              </p>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      ) : null}
-                    </>
-                  )}
+                  <p className="text-xs leading-6 text-muted-foreground">
+                    These fields update the receipt preview live. They are print metadata only and do not change the customer ledger.
+                  </p>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Print-only Tax Breakup</CardTitle>
-                    <Button type="button" variant="outline" size="sm" onClick={addTaxRow}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Tax
-                    </Button>
-                  </div>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Export Notes</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-                    <div>
-                      <Label htmlFor="printTaxBaseAmount">Print Amount for Tax Rows</Label>
-                      <Input
-                        id="printTaxBaseAmount"
-                        type="number"
-                        value={printTaxBaseAmount || ""}
-                        onChange={(event) => setPrintTaxBaseAmount(Number(event.target.value) || 0)}
-                        className="mt-2"
-                      />
-                    </div>
-                    <div className="rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                      Taxes here are print-only. They recalculate whenever this print amount changes, but they never change the real ledger total, cumulative paid amount, or booking balance.
-                    </div>
-                  </div>
-
-                  {taxes.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                      No print-only taxes added.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {calculatedTaxes.map((tax, index) => (
-                        <div
-                          key={tax.id}
-                          className="grid grid-cols-1 gap-2 border border-border/60 p-3 md:grid-cols-[auto_minmax(0,1.3fr)_180px_150px_140px_auto] md:items-center"
-                        >
-                          <div className="text-sm font-medium text-muted-foreground">#{index + 1}</div>
-                          <Input
-                            value={tax.name}
-                            onChange={(event) => updateTaxRow(tax.id, "name", event.target.value)}
-                            placeholder="Tax name"
-                          />
-                          <select
-                            value={tax.type}
-                            onChange={(event) => updateTaxRow(tax.id, "type", event.target.value as TaxType)}
-                            className="h-10 rounded-none border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                          >
-                            <option value="percentage">Percentage (%)</option>
-                            <option value="amount">Fixed Amount</option>
-                          </select>
-                          <Input
-                            type="number"
-                            value={tax.value}
-                            onChange={(event) => updateTaxRow(tax.id, "value", Number(event.target.value) || 0)}
-                            placeholder={tax.type === "percentage" ? "18" : "5000"}
-                          />
-                          <div className="text-sm font-bold text-primary">{formatINR(tax.calculatedAmount)}</div>
-                          <Button type="button" variant="outline" size="sm" onClick={() => removeTaxRow(tax.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="grid gap-4 rounded-lg bg-muted/50 p-4 md:grid-cols-2">
-                    <div>
-                      <Label>Total Print-only Tax</Label>
-                      <div className="text-lg font-bold text-orange-600">{formatINR(totalPrintTaxAmount)}</div>
-                    </div>
-                    <div>
-                      <Label>Print Total Including Tax</Label>
-                      <div className="text-lg font-bold text-primary">{formatINR(printTaxBaseAmount + totalPrintTaxAmount)}</div>
-                    </div>
-                  </div>
+                <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
+                  <p>{downloadDisabledMessage || (workspaceMode === "receipt"
+                    ? "The visible receipt preview will be exported as a PDF."
+                    : "The visible account statement preview will be exported as a PDF.")}</p>
+                  <p>
+                    Payment recording remains in the customer profile. This screen is now only for document review and PDF export.
+                  </p>
                 </CardContent>
               </Card>
             </div>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Account Statement</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!hasPayments ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                    No customer payments are recorded yet. Record the first collection before generating a statement.
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Statement mode includes every recorded customer payment in chronological order, with running cumulative total and remaining balance on each row.
-                    </p>
-                    <div className="overflow-x-auto border border-border">
-                      <table className="min-w-full border-collapse text-sm">
-                        <thead className="bg-muted/50">
-                          <tr className="border-b border-border">
-                            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Date</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Amount</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Mode</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Reference</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Note</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Cumulative</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Balance</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {statementRows.map((row) => (
-                            <tr key={row.payment.id} className="border-b border-border/60">
-                              <td className="px-3 py-3">{formatDateTime(row.payment.createdAt)}</td>
-                              <td className="px-3 py-3 text-right font-bold text-emerald-600">{formatINR(row.payment.amount)}</td>
-                              <td className="px-3 py-3">{getPaymentModeLabel(row.payment.paymentMode)}</td>
-                              <td className="px-3 py-3">{row.payment.referenceNumber || "-"}</td>
-                              <td className="px-3 py-3">{row.payment.note || "-"}</td>
-                              <td className="px-3 py-3 text-right">{formatINR(row.cumulativePaid)}</td>
-                              <td className="px-3 py-3 text-right">{formatINR(row.balance)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {paymentError && (
-            <div className="border border-red-500/20 bg-red-500/10 p-3 text-[11px] text-red-600">
-              {typeof paymentError === "string"
-                ? paymentError
-                : typeof paymentError === "object" && paymentError !== null && "error" in paymentError && typeof paymentError.error === "string"
-                  ? paymentError.error
-                  : "Payment could not be recorded from the receipt workspace."}
-            </div>
-          )}
-        </div>
-
-        <div className="sticky bottom-0 flex flex-col gap-3 border-t bg-background/95 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            {downloadDisabledMessage || (workspaceMode === "receipt"
-              ? "Download a single-payment receipt for the selected ledger entry."
-              : "Download a full account statement for all recorded payments.")}
-          </div>
-          <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="button" className="gap-2" disabled={downloadDisabled} onClick={handleDownload}>
-              <Download className="h-4 w-4" />
-              {workspaceMode === "receipt" ? "Download Receipt" : "Download Statement"}
-            </Button>
-          </div>
+          </aside>
         </div>
       </div>
-
-      {isLedgerPaymentModalOpen && (
-        <RecordPaymentModal
-          title={`Customer: ${customer.name}`}
-          totalAmount={customer.sellingPrice}
-          currentlyPaid={totalReceived}
-          entityType="customer-booking"
-          entityId={customer.id}
-          siteId={siteId}
-          isPending={isRecordingPayment}
-          onClose={() => {
-            setIsLedgerPaymentModalOpen(false)
-            resetPaymentState()
-          }}
-          onSubmit={(paymentInput) => {
-            recordPayment(
-              { customerId: customer.id, siteId, data: paymentInput },
-              {
-                onSuccess: (response: any) => {
-                  const payment = response?.data?.payment
-                  if (payment) {
-                    setLedgerPayments((current) => [
-                      ...current,
-                      {
-                        id: payment.id,
-                        amount: payment.amount,
-                        direction: "IN",
-                        movementType: "CUSTOMER_PAYMENT",
-                        paymentMode: payment.paymentMode ?? null,
-                        referenceNumber: payment.referenceNumber ?? null,
-                        note: payment.note ?? null,
-                        createdAt: payment.createdAt,
-                      },
-                    ])
-                    setSelectedPaymentId(payment.id)
-                    setWorkspaceMode("receipt")
-                  }
-                  setIsLedgerPaymentModalOpen(false)
-                  resetPaymentState()
-                },
-              },
-            )
-          }}
-        />
-      )}
     </div>
   )
 }

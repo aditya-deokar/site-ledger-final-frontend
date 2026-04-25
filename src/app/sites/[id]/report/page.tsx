@@ -585,7 +585,7 @@ export default function SiteReportPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-muted-foreground/55">Executive Summary</p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <SummaryCard label="Remaining Fund" value={formatINR(report.financialSummary.remainingFund)} tone="primary" />
-                <SummaryCard label="Total Profit" value={formatINR(report.financialSummary.totalProfit)} tone="success" />
+                <SummaryCard label="Projected Profit" value={formatINR(report.financialSummary.totalProfit)} tone="success" />
                 <SummaryCard label="Booked Units" value={String(report.inventorySummary.bookedUnits).padStart(2, '0')} />
                 <SummaryCard label="Outstanding Due" value={formatINR(report.customerSummary.totalOutstanding)} tone="danger" />
               </div>
@@ -601,11 +601,15 @@ export default function SiteReportPage() {
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Section eyebrow="Project Health" title="Financial Position" subtitle="Read this first to understand how much capital has gone in, how much has been spent, what is still collectible, and where the site stands right now.">
+          <Section eyebrow="Project Health" title="Financial Position" subtitle="Read this first to understand how much capital has gone in, how much has been spent, what is still collectible, and how agreement value differs from profit-bearing sale value.">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <SummaryCard label="Partner Fund" value={formatINR(report.financialSummary.partnerAllocatedFund)} />
               <SummaryCard label="Investor Fund" value={formatINR(report.financialSummary.investorAllocatedFund)} />
               <SummaryCard label="Withdrawn Back" value={formatINR(report.financialSummary.totalWithdrawnFund)} />
+              <SummaryCard label="Agreement Total" value={formatINR(report.financialSummary.totalAgreementValue)} />
+              <SummaryCard label="Net Sale Value" value={formatINR(report.financialSummary.netSaleValue)} tone="success" />
+              <SummaryCard label="Tax / GST" value={formatINR(report.financialSummary.totalTaxAmount)} />
+              <SummaryCard label="Discounts / Credits" value={formatINR(report.financialSummary.totalDiscounts)} />
               <SummaryCard label="Recorded Expenses" value={formatINR(report.financialSummary.totalExpensesRecorded)} tone="danger" />
               <SummaryCard label="Expense Outstanding" value={formatINR(report.financialSummary.totalExpensesOutstanding)} tone="danger" />
               <SummaryCard label="Projected Revenue" value={formatINR(report.financialSummary.totalProjectedRevenue)} tone="success" />
@@ -630,15 +634,18 @@ export default function SiteReportPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <Section eyebrow="Receivables" title="Customer and Booking Summary" subtitle="Agreement value, booking collected so far, and the amount still outstanding across all booked and sold units.">
+          <Section eyebrow="Receivables" title="Customer and Booking Summary" subtitle="Agreement totals, taxes, discounts, booking collected so far, and the amount still outstanding across all booked and sold units.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard label="Customers" value={String(report.customerSummary.totalCustomers).padStart(2, '0')} />
               <SummaryCard label="Booked" value={String(report.customerSummary.bookedCustomers).padStart(2, '0')} />
               <SummaryCard label="Sold" value={String(report.customerSummary.soldCustomers).padStart(2, '0')} tone="success" />
               <SummaryCard label="Existing Owners" value={String(report.customerSummary.existingOwners).padStart(2, '0')} />
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <SummaryCard label="Agreement Value" value={formatINR(report.customerSummary.totalAgreementValue)} />
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <SummaryCard label="Agreement Total" value={formatINR(report.customerSummary.totalAgreementValue)} />
+              <SummaryCard label="Net Sale Value" value={formatINR(report.customerSummary.netSaleValue)} tone="success" />
+              <SummaryCard label="Tax / GST" value={formatINR(report.customerSummary.totalTaxAmount)} />
+              <SummaryCard label="Discounts / Credits" value={formatINR(report.customerSummary.totalDiscounts)} />
               <SummaryCard label="Collected" value={formatINR(report.customerSummary.totalCollected)} tone="success" />
               <SummaryCard label="Outstanding" value={formatINR(report.customerSummary.totalOutstanding)} tone="danger" />
             </div>

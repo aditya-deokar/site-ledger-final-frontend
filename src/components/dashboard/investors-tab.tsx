@@ -91,7 +91,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           <div>
             <h3 className="text-xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Add capital for new money coming in. Equity investors are paid through profit share, not capital return.
+              Add capital for new money coming in. Equity investors are paid through profit share against projected site profit, not capital return.
             </p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
@@ -168,14 +168,14 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 </div>
               )}
 
-              {mode === "profit" && (
-                <div className="bg-primary/5 border border-primary/10 p-3 text-[10px] text-muted-foreground flex flex-col gap-1.5">
-                  <div>
-                    <span className="font-bold text-foreground">{equityPct}%</span> of site profit (<span className="font-bold text-foreground">{formatINR(siteProfit)}</span>) = <span className="font-bold text-primary">{formatINR(estimatedProfitShare)}</span>
-                    {availableProfitShareToRecord > 0 && (
-                      <button type="button" onClick={() => setValue("amount", availableProfitShareToRecord)} className="ml-2 text-primary font-bold underline">Use available amount</button>
-                    )}
-                  </div>
+                {mode === "profit" && (
+                  <div className="bg-primary/5 border border-primary/10 p-3 text-[10px] text-muted-foreground flex flex-col gap-1.5">
+                    <div>
+                      <span className="font-bold text-foreground">{equityPct}%</span> of projected site profit (<span className="font-bold text-foreground">{formatINR(siteProfit)}</span>) = <span className="font-bold text-primary">{formatINR(estimatedProfitShare)}</span>
+                      {availableProfitShareToRecord > 0 && (
+                        <button type="button" onClick={() => setValue("amount", availableProfitShareToRecord)} className="ml-2 text-primary font-bold underline">Use available amount</button>
+                      )}
+                    </div>
                   <div>
                     Recorded <span className="font-bold text-foreground">{formatINR(recordedProfitShare)}</span> · Paid <span className="font-bold text-foreground">{formatINR(profitPaid)}</span> · Pending <span className="font-bold text-primary">{formatINR(pendingProfitShare)}</span>
                   </div>
@@ -252,11 +252,11 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
             </div>
           </div>
           <div className="flex flex-col items-end gap-3">
-            {!mode && !investor.isClosed && (
-              <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
-                Use Add Capital for incoming equity. Profit Share turns on only after invested capital is actually paid in, and once recorded the remaining payout must be finished from that same row.
-              </p>
-            )}
+              {!mode && !investor.isClosed && (
+                <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
+                  Use Add Capital for incoming equity. Profit Share turns on only after invested capital is actually paid in, and the amount is capped from projected site profit after expenses.
+                </p>
+              )}
             <div className="flex gap-2">
               {!mode && !investor.isClosed && (
                 <>

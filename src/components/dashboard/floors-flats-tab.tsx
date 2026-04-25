@@ -1297,7 +1297,7 @@ function BookFlatPanel({
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                  {isExistingOwner ? "Settlement Value" : "Selling Price"}
+                  {isExistingOwner ? "Settlement Value" : "Base Price"}
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
@@ -1309,9 +1309,9 @@ function BookFlatPanel({
                   />
                 </div>
                 <p className="text-[10px] text-muted-foreground/60">
-                  {isExistingOwner
-                    ? "Use 0 if this flat is only being transferred back to an existing owner."
-                    : "This becomes the total agreement value used for later payment tracking."}
+                    {isExistingOwner
+                      ? "Use 0 if this flat is only being transferred back to an existing owner."
+                      : "This is the starting base price. GST, charges, discounts, and credits can be added later from the customer profile."}
                 </p>
                 {errors.sellingPrice && <p className="text-[10px] text-destructive">{errors.sellingPrice.message}</p>}
               </div>
@@ -1378,7 +1378,7 @@ function BookFlatPanel({
               {/* Summary */}
               <div className="border border-border divide-y divide-border mt-2">
                 <div className="flex justify-between items-center px-4 py-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total Price</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Base Price</span>
                   <span className="text-sm font-serif text-foreground">{formatINR(Number(sellingPrice))}</span>
                 </div>
                 <div className="flex justify-between items-center px-4 py-3">

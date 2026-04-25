@@ -13,7 +13,13 @@ import {
   updateCustomerSchema,
 } from "@/schemas/customer.schema"
 import { createFlatSchema } from "@/schemas/site.schema"
-import { useUpdateCustomer, useCancelDeal, useCustomerPayments, useRecordCustomerPayment } from "@/hooks/api/customer.hooks"
+import {
+  useUpdateCustomer,
+  useCancelDeal,
+  useCustomerAgreement,
+  useCustomerPayments,
+  useRecordCustomerPayment,
+} from "@/hooks/api/customer.hooks"
 import { useSite, useUpdateFlatDetails } from "@/hooks/api/site.hooks"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -23,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { getApiErrorMessage } from "@/lib/api-error"
 import { X, Loader2, Phone, Mail, Building2, Layers, Hash, CreditCard, Pencil, Trash2, IndianRupee, Download } from "lucide-react"
+import { CustomerAgreementPanel } from "./customer-agreement-panel"
 import { RecordPaymentModal } from "./record-payment-modal"
 import { ReceiptEditor } from "./receipt-editor"
 
@@ -347,9 +354,11 @@ export function CustomerProfile({
       onClose()
     },
   })
+  const { data: agreementData, isLoading: isAgreementLoading } = useCustomerAgreement(customer.id)
   const { data: paymentHistoryData } = useCustomerPayments(customer.id)
   const { data: siteData } = useSite(siteId)
 
+  const agreement = agreementData?.data?.agreement
   const paymentHistory = (paymentHistoryData?.data?.payments ?? []) as CustomerPaymentHistoryItem[]
   const receiptPayments = paymentHistory.filter(
     (payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT",
@@ -364,18 +373,21 @@ export function CustomerProfile({
   }, undefined)
   const displayCreatedAt = customer.createdAt || fallbackCreatedAt
   const isCancelled = customer.dealStatus === "CANCELLED"
-  const isSold = customer.flatStatus === "SOLD"
+  const agreementTotal = agreement?.totals.payableTotal ?? customer.sellingPrice
+  const collectedAmount = agreement?.amountPaid ?? customer.amountPaid
+  const remainingAmount = Math.max(agreement?.remaining ?? customer.remaining, 0)
+  const isSold = customer.flatStatus === "SOLD" || (!isCancelled && remainingAmount <= 0)
   const statusLabel = isCancelled ? "CANCELLED" : (customer.flatStatus ?? "ACTIVE")
   const flatDisplayName = getFlatDisplayName(customer)
   const floorDisplayName = getFloorDisplayName(customer)
   const canEdit = !isCancelled && Boolean(customer.flatId)
   const canCancel = !isCancelled && Boolean(customer.flatId)
-  const canAddPayment = !isCancelled && customer.remaining > 0
+  const canAddPayment = !isCancelled && remainingAmount > 0
   const canOpenReceipt = !isCancelled
 
-  const pct = customer.sellingPrice > 0
-    ? Math.min(100, (customer.amountPaid / customer.sellingPrice) * 100)
-    : customer.remaining <= 0
+  const pct = agreementTotal > 0
+    ? Math.min(100, (collectedAmount / agreementTotal) * 100)
+    : remainingAmount <= 0
       ? 100
       : 0
 
@@ -475,7 +487,7 @@ export function CustomerProfile({
                 "flex flex-col items-center justify-center border py-8",
                 isCancelled
                   ? "border-amber-500/20 bg-amber-500/5"
-                  : customer.remaining > 0
+                  : remainingAmount > 0
                     ? "border-red-500/20 bg-red-500/5"
                     : "border-emerald-500/20 bg-emerald-500/5",
               )}
@@ -485,31 +497,31 @@ export function CustomerProfile({
                   "mb-2 text-[10px] font-bold uppercase tracking-[0.3em]",
                   isCancelled
                     ? "text-amber-600/70"
-                    : customer.remaining > 0
+                    : remainingAmount > 0
                       ? "text-red-500/70"
                       : "text-emerald-600/70",
                 )}
               >
-                {isCancelled ? "Net Paid After Refunds" : customer.remaining > 0 ? "Remaining Balance" : "Fully Paid"}
+                {isCancelled ? "Net Paid After Refunds" : remainingAmount > 0 ? "Remaining Balance" : "Fully Paid"}
               </span>
               <span
                 className={cn(
                   "text-5xl font-sans font-bold tracking-tighter",
                   isCancelled
                     ? "text-amber-600"
-                    : customer.remaining > 0
+                    : remainingAmount > 0
                       ? "text-red-500"
                       : "text-emerald-600",
                 )}
               >
-                {formatINR(isCancelled ? customer.amountPaid : customer.remaining)}
+                {formatINR(isCancelled ? collectedAmount : remainingAmount)}
               </span>
             </div>
 
             <div className="divide-y divide-border border border-border">
               <div className="flex justify-between px-4 py-3">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Selling Price</span>
-                <span className="text-sm font-serif">{formatINR(customer.sellingPrice)}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Agreement Total</span>
+                <span className="text-sm font-serif">{formatINR(agreementTotal)}</span>
               </div>
               <div className="flex justify-between px-4 py-3">
                 <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Booking Amount</span>
@@ -517,7 +529,7 @@ export function CustomerProfile({
               </div>
               <div className="flex justify-between px-4 py-3">
                 <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Total Paid</span>
-                <span className="text-sm font-serif text-emerald-600">{formatINR(customer.amountPaid)}</span>
+                <span className="text-sm font-serif text-emerald-600">{formatINR(collectedAmount)}</span>
               </div>
             </div>
 
@@ -531,11 +543,19 @@ export function CustomerProfile({
                   <div className={cn("h-full transition-all", isSold ? "bg-emerald-500" : "bg-primary")} style={{ width: `${pct}%` }} />
                 </div>
                 <p className="mt-2 text-[10px] text-muted-foreground/60">
-                  Follow-up collections only need the newly received amount. The agreement value above stays linked to this record.
+                  Collections and agreement changes are now tracked separately. Edit price, GST, discounts, or charges below without creating fake payments.
                 </p>
               </div>
             )}
           </div>
+
+          <CustomerAgreementPanel
+            customerId={customer.id}
+            siteId={siteId}
+            canEdit={canEdit}
+            agreement={agreement}
+            isLoading={isAgreementLoading}
+          />
 
           {mode === "edit" && canEdit && <EditForm customer={customer} siteId={siteId} onClose={() => setMode("view")} />}
           {mode === "cancel" && canCancel && (
@@ -552,8 +572,8 @@ export function CustomerProfile({
         {isPaymentModalOpen && canAddPayment && (
         <RecordPaymentModal
           title={`Customer: ${customer.name}`}
-          totalAmount={customer.sellingPrice}
-          currentlyPaid={customer.amountPaid}
+          totalAmount={agreementTotal}
+          currentlyPaid={collectedAmount}
           entityType="customer-booking"
           entityId={customer.id}
           onSubmit={(paymentInput: RecordPaymentInput) => recordPayment({ customerId: customer.id, siteId, data: paymentInput })}
@@ -564,8 +584,7 @@ export function CustomerProfile({
 
         {isReceiptModalOpen && canOpenReceipt && (
           <ReceiptEditor
-            customer={{ ...customer, siteName }}
-            siteId={siteId}
+            customer={{ ...customer, siteName, sellingPrice: agreementTotal, amountPaid: collectedAmount, remaining: remainingAmount }}
             siteAddress={siteData?.data?.site?.address}
             payments={receiptPayments}
             onClose={() => setIsReceiptModalOpen(false)}

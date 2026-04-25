@@ -14,6 +14,10 @@ export interface SiteReportFinancialSummary {
   investorAllocatedFund: number;
   totalAllocatedFund: number;
   totalWithdrawnFund: number;
+  totalAgreementValue: number;
+  netSaleValue: number;
+  totalTaxAmount: number;
+  totalDiscounts: number;
   totalExpensesPaid: number;
   totalExpensesRecorded: number;
   totalExpensesOutstanding: number;
@@ -39,6 +43,9 @@ export interface SiteReportCustomerSummary {
   soldCustomers: number;
   existingOwners: number;
   totalAgreementValue: number;
+  netSaleValue: number;
+  totalTaxAmount: number;
+  totalDiscounts: number;
   totalBookingAmount: number;
   totalCollected: number;
   totalOutstanding: number;

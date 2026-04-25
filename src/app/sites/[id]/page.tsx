@@ -515,7 +515,7 @@ export default function SiteDetailPage() {
     { label: 'Total Allocated', value: site.allocatedFund },
     { label: 'Total Expenses', value: site.totalExpenses, red: true },
     { label: 'Remaining Fund', value: site.remainingFund, highlight: true },
-    { label: 'Total Profit', value: Number.isFinite(site.totalProfit) ? site.totalProfit : null, green: true },
+    { label: 'Projected Profit', value: Number.isFinite(site.totalProfit) ? site.totalProfit : null, green: true },
   ];
 
   const tabs = [

@@ -12,6 +12,28 @@ export const updateCustomerSchema = z.object({
 });
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
+export const customerAgreementLineTypeSchema = z.enum(['BASE_PRICE', 'CHARGE', 'TAX', 'DISCOUNT', 'CREDIT']);
+export type CustomerAgreementLineType = z.infer<typeof customerAgreementLineTypeSchema>;
+
+export const customerAgreementLineSchema = z.object({
+  type: customerAgreementLineTypeSchema,
+  label: z.string().trim().min(1, 'Label is required'),
+  amount: z.number().min(0, 'Amount must be zero or more'),
+  ratePercent: z.number().min(0).optional(),
+  calculationBase: z.number().min(0).optional(),
+  affectsProfit: z.boolean().optional(),
+  note: z.string().optional().or(z.literal('')),
+}).transform((data) => ({
+  type: data.type,
+  label: data.label.trim(),
+  amount: data.amount,
+  ratePercent: data.ratePercent,
+  calculationBase: data.calculationBase,
+  affectsProfit: data.affectsProfit,
+  note: data.note?.trim() || undefined,
+}));
+export type CustomerAgreementLineInput = z.infer<typeof customerAgreementLineSchema>;
+
 export const recordPaymentSchema = z.object({
   amount: z.number().positive('Amount is required'),
   note: optionalTextFieldSchema,
@@ -97,4 +119,40 @@ export interface CustomerPaymentHistoryItem {
 export interface CustomerPaymentsResponse {
   ok: boolean;
   data: { payments: CustomerPaymentHistoryItem[] };
+}
+
+export interface CustomerAgreementLine {
+  id: string;
+  type: CustomerAgreementLineType;
+  label: string;
+  amount: number;
+  signedAmount: number;
+  ratePercent: number | null;
+  calculationBase: number | null;
+  affectsProfit: boolean;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CustomerAgreementTotals {
+  basePrice: number;
+  charges: number;
+  tax: number;
+  discounts: number;
+  credits: number;
+  payableTotal: number;
+  profitRevenue: number;
+}
+
+export interface CustomerAgreement {
+  customerId: string;
+  lines: CustomerAgreementLine[];
+  totals: CustomerAgreementTotals;
+  amountPaid: number;
+  remaining: number;
+}
+
+export interface CustomerAgreementResponse {
+  ok: boolean;
+  data: { agreement: CustomerAgreement };
 }
