@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -14,18 +14,19 @@ import { toast } from 'sonner';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites } from '@/hooks/api/site.hooks';
 import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund, useCompany } from '@/hooks/api/company.hooks';
-import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors } from '@/hooks/api/investor.hooks';
+import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors, useAddTransaction } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
 import { useCreateEmployee, useDeleteEmployee, useEmployees, usePaySalary, useUpdateEmployee } from '@/hooks/api/employee.hooks';
 import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
-import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
+import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, BookFlatAgreementLineInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput } from '@/schemas/investor.schema';
 import { createVendorSchema, CreateVendorInput, updateVendorSchema, UpdateVendorInput } from '@/schemas/vendor.schema';
 import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, RecordPaymentInput, cancelDealSchema } from '@/schemas/customer.schema';
 import { createEmployeeSchema, CreateEmployeeInput, PaySalaryInput, paySalarySchema, UpdateEmployeeInput } from '@/schemas/employee.schema';
 import type { AttendanceStatus } from '@/schemas/attendance.schema';
+import { Field, FormError, FormShell, KeyToggle, SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 
@@ -47,12 +48,6 @@ interface CategoryDef {
   bg: string;
   border: string;
   actions: ActionDef[];
-}
-
-interface SearchableSelectOption {
-  value: string;
-  label: string;
-  keywords?: string[];
 }
 
 const CATEGORIES: CategoryDef[] = [
@@ -134,13 +129,10 @@ const ACTIONS_USING_SITE_SELECTOR = ['book-flat', 'add-site-expense', 'archive-s
 const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const;
 const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const;
 const COMMON_VENDOR_CATEGORIES = ['MATERIALS', 'LABOR', 'CONTRACTOR', 'TRANSPORT', 'ELECTRICAL', 'PLUMBING', 'MASONRY', 'CARPENTRY'] as const;
-
-
-// â”€â”€â”€ Shared Styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const BOOKING_AGREEMENT_LINE_TYPES = ['CHARGE', 'TAX', 'DISCOUNT', 'CREDIT'] as const;
 
 const INPUT_CLS = 'h-12 w-full bg-muted border-2 border-transparent rounded-none px-4 text-sm font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 outline-none focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all';
 const LABEL_CLS = 'text-[10px] font-bold uppercase tracking-widest text-foreground/40';
-const ERROR_CLS = 'text-[10px] text-destructive mt-1';
 
 function formatINR(n: number) { return 'INR ' + n.toLocaleString('en-IN'); }
 
@@ -156,177 +148,11 @@ function parseOptionalPositiveInteger(value: unknown) {
   return Number.isNaN(nextValue) ? undefined : nextValue;
 }
 
-function scoreSearchOption(option: SearchableSelectOption, normalizedQuery: string) {
-  if (!normalizedQuery) return 1;
-
-  const label = option.label.toLowerCase();
-  const value = option.value.toLowerCase();
-  const words = label.split(/[\s()-]+/).filter(Boolean);
-
-  if (label === normalizedQuery || value === normalizedQuery) return 100;
-  if (label.startsWith(normalizedQuery)) return 90;
-  if (words.some((word) => word.startsWith(normalizedQuery))) return 80;
-  if (label.includes(normalizedQuery)) return 70;
-  if (option.keywords?.some((keyword) => keyword.toLowerCase().includes(normalizedQuery))) return 60;
-  if (value.includes(normalizedQuery)) return 50;
-  return 0;
+function parseOptionalNumber(value: unknown) {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const nextValue = typeof value === 'number' ? value : Number(value);
+  return Number.isNaN(nextValue) ? undefined : nextValue;
 }
-
-function rankSearchOptions(options: SearchableSelectOption[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  return [...options]
-    .map((option) => ({ option, score: scoreSearchOption(option, normalizedQuery) }))
-    .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score || a.option.label.localeCompare(b.option.label))
-    .map((row) => row.option);
-}
-
-function SearchableSelect({
-  options,
-  value,
-  onValueChange,
-  placeholder,
-  searchPlaceholder,
-  emptyText,
-  onEnter,
-  onQueryChange,
-  renderNoResults,
-}: {
-  options: SearchableSelectOption[];
-  value: string;
-  onValueChange: (nextValue: string) => void;
-  placeholder: string;
-  searchPlaceholder?: string;
-  emptyText?: string;
-  onEnter?: () => void;
-  onQueryChange?: (query: string) => void;
-  renderNoResults?: (query: string) => React.ReactNode;
-}) {
-  const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const selectedOption = options.find((option) => option.value === value) || null;
-  const hasQuery = query.trim().length > 0;
-
-  const visibleOptions = useMemo(() => {
-    if (!hasQuery) return options;
-    return rankSearchOptions(options, query);
-  }, [options, query, hasQuery]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setQuery(selectedOption?.label || '');
-    }
-  }, [isOpen, selectedOption]);
-
-  useEffect(() => {
-    if (!visibleOptions.length) {
-      setActiveIndex(0);
-      return;
-    }
-    setActiveIndex((prev) => Math.min(prev, visibleOptions.length - 1));
-  }, [visibleOptions]);
-
-  const handleEnter = () => {
-    if (isOpen && visibleOptions.length > 0) {
-      const next = visibleOptions[activeIndex] || visibleOptions[0];
-      if (!next) return;
-      onValueChange(next.value);
-      setQuery(next.label);
-      setIsOpen(false);
-      onQueryChange?.(next.label);
-      return;
-    }
-
-    onEnter?.();
-  };
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setIsOpen(true);
-          setActiveIndex(0);
-          onQueryChange?.(e.target.value);
-        }}
-        onFocus={() => setIsOpen(true)}
-        onBlur={() => {
-          window.setTimeout(() => setIsOpen(false), 120);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setIsOpen(true);
-            if (!visibleOptions.length) return;
-            setActiveIndex((prev) => Math.min(prev + 1, visibleOptions.length - 1));
-            return;
-          }
-          if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setIsOpen(true);
-            if (!visibleOptions.length) return;
-            setActiveIndex((prev) => Math.max(prev - 1, 0));
-            return;
-          }
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            setIsOpen(false);
-            return;
-          }
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            handleEnter();
-            return;
-          }
-          if (e.key === 'Tab') {
-            setIsOpen(false);
-          }
-        }}
-        placeholder={searchPlaceholder || placeholder || 'Type to search...'}
-        className={cn(INPUT_CLS, 'h-11 text-[11px] tracking-[0.12em]')}
-        autoComplete="off"
-      />
-
-      {isOpen && visibleOptions.length > 0 && (
-        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto border border-border bg-background shadow-2xl">
-          {visibleOptions.map((option, idx) => (
-            <button
-              key={option.value}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onValueChange(option.value);
-                setQuery(option.label);
-                setIsOpen(false);
-                onQueryChange?.(option.label);
-              }}
-              className={cn(
-                'w-full px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest transition-colors',
-                idx === activeIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/40'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {isOpen && hasQuery && visibleOptions.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full border border-border bg-background p-2 shadow-2xl">
-          {renderNoResults ? (
-            <div>{renderNoResults(query)}</div>
-          ) : (
-            <p className="text-[10px] text-muted-foreground/60">{emptyText || 'No matching results.'}</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function formatShortDate(value?: string | null) {
   if (!value) return '-';
   const dateValue = new Date(value);
@@ -444,59 +270,6 @@ function KeyList<T extends { shortcut: string }>({
 }
 
 // â”€â”€â”€ Keyboard Toggle Group â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function KeyToggle<T extends string>({
-  options,
-  value,
-  onChange,
-  renderOption,
-}: {
-  options: T[];
-  value: T;
-  onChange: (val: T) => void;
-  renderOption: (opt: T, selected: boolean) => React.ReactNode;
-}) {
-  const idx = options.indexOf(value);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prev = (idx - 1 + options.length) % options.length;
-      onChange(options[prev]);
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      const next = (idx + 1) % options.length;
-      onChange(options[next]);
-    } else if (e.key >= '1' && e.key <= String(options.length)) {
-      e.preventDefault();
-      onChange(options[parseInt(e.key) - 1]);
-    }
-  };
-
-  return (
-    <div
-      tabIndex={0}
-      role="radiogroup"
-      onKeyDown={handleKeyDown}
-      className="grid gap-3 outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
-      style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}
-    >
-      {options.map((opt) => (
-        <button
-          key={opt}
-          type="button"
-          tabIndex={-1}
-          onClick={() => onChange(opt)}
-          className="outline-none"
-        >
-          {renderOption(opt, opt === value)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// â”€â”€â”€ FORM: Create Site â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useCreateSite({ onSuccess: () => { reset(); toast.success('Site created'); onSuccess(); } });
@@ -891,34 +664,116 @@ function WithdrawFundForm({ onSuccess, onBack }: { onSuccess: () => void; onBack
 
 function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { data: sitesData } = useSites();
-  const sites = sitesData?.data?.sites ?? [];
-  const { mutate, isPending, error } = useCreateInvestor({ onSuccess: () => { reset(); toast.success('Investor added'); onSuccess(); } });
+  const sites = sitesData?.data?.sites || [];
+  const { mutate: createInvestor, isPending: isCreatingInvestor, error: createError } = useCreateInvestor();
+  const { mutate: addTransaction, isPending: isAddingTransaction } = useAddTransaction();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { register, handleSubmit, watch, reset, resetField, setValue, setFocus, formState: { errors } } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
-    defaultValues: { type: 'EQUITY', equityPercentage: 0, fixedRate: 0 },
+    defaultValues: {
+      type: 'EQUITY',
+      equityPercentage: 0,
+      fixedRate: 0,
+      investmentAmount: 0,
+      amountPaidNow: 0,
+      paymentMode: 'CASH',
+      paymentDate: getTodayDateInputValue(),
+    },
   });
   const investorType = watch('type');
   const selectedEquitySiteId = watch('siteId') || '';
+  const investmentAmount = watch('investmentAmount') || 0;
+  const amountPaidNow = watch('amountPaidNow') || 0;
+  const paymentMode = watch('paymentMode') || 'CASH';
+
+  const isSubmitting = isCreatingInvestor || isAddingTransaction;
+
   useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
 
-  const onSubmit = (d: CreateInvestorInput) => {
+  const onSubmit = async (d: CreateInvestorInput) => {
+    setSubmitError(null);
+
     if (d.type === 'EQUITY' && !d.siteId) {
       toast.error('Select a site for equity investor');
       return;
     }
 
-    mutate({
-      ...d,
-      siteId: d.type === 'EQUITY' ? d.siteId : undefined,
-      equityPercentage: d.type === 'EQUITY' ? d.equityPercentage : undefined,
-      fixedRate: d.type === 'FIXED_RATE' ? d.fixedRate : undefined,
-    });
+    try {
+      // Step 1: create investor first
+      const investorResult = await new Promise<any>((resolve, reject) => {
+        createInvestor({
+          ...d,
+          siteId: d.type === 'EQUITY' ? d.siteId : undefined,
+          equityPercentage: d.equityPercentage,
+          fixedRate: d.fixedRate,
+          // Remove payment-related fields - backend doesn't expect them
+          investmentAmount: undefined,
+          amountPaidNow: undefined,
+          paymentMode: undefined,
+          referenceNumber: undefined,
+          paymentDate: undefined,
+        }, {
+          onSuccess: resolve,
+          onError: reject,
+        });
+      });
+
+      const createdInvestorId = investorResult?.data?.investor?.id ?? investorResult?.investor?.id;
+      if (!createdInvestorId) {
+        throw new Error('Investor created response was invalid.');
+      }
+
+      // Step 2: add transaction using amount and paid-now values
+      const totalAmount = Number(d.investmentAmount ?? 0);
+      const paidNowAmount = Number(d.amountPaidNow ?? 0);
+
+      if (totalAmount > 0) {
+        try {
+          await new Promise<any>((resolve, reject) => {
+            addTransaction({
+              investorId: createdInvestorId,
+              data: {
+                amount: totalAmount,
+                amountPaid: paidNowAmount,
+                note: 'Initial investment entry during investor creation',
+                paymentDate: d.paymentDate ? toIsoDate(d.paymentDate) : undefined,
+              },
+            }, {
+              onSuccess: resolve,
+              onError: reject,
+            });
+          });
+
+          if (paidNowAmount > 0) {
+            toast.success(`Investor added and transaction recorded. Paid now: ${formatINR(paidNowAmount)}`);
+          } else {
+            toast.success(`Investor added and transaction recorded with pending amount ${formatINR(totalAmount)}`);
+          }
+        } catch (error) {
+          const txError = getApiErrorMessage(error, 'Initial transaction could not be recorded.');
+          const message = `Investor created successfully, but transaction failed: ${txError}. Use Ledger & Actions to add it and avoid submitting this form again.`;
+          setSubmitError(message);
+          toast.error(message);
+          return;
+        }
+      } else {
+        toast.success('Investor added successfully.');
+      }
+
+      reset();
+      onSuccess();
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to create investor.');
+      setSubmitError(message);
+      toast.error(message);
+    }
   };
 
   return (
-    <FormShell title="Add Investor" onBack={onBack} isPending={isPending} submitLabel="Add Investor" formId="add-investor-form">
+    <FormShell title="Add Investor" onBack={onBack} isPending={isSubmitting} submitLabel="Add Investor" formId="add-investor-form">
       <form id="add-investor-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-        {error && <FormError msg={getApiErrorMessage(error, 'Failed to add investor')} />}
+        {submitError && <FormError msg={submitError} />}
+        {createError && <FormError msg={getApiErrorMessage(createError, 'Failed to add investor')} />}
 
         <Field label="Investor Type">
           <KeyToggle
@@ -970,12 +825,87 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
             <input type="number" step={0.01} min={0} className={INPUT_CLS} {...register('fixedRate', { valueAsNumber: true })} />
           </Field>
         )}
+
+        <Field label="Total Investment Amount (INR)" error={errors.investmentAmount?.message}>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            className={INPUT_CLS}
+            {...register('investmentAmount', { valueAsNumber: true })}
+            placeholder="e.g. 500000"
+          />
+        </Field>
+
+        {investmentAmount > 0 && (
+          <div className="border border-border bg-muted/20 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-3">
+              Immediate Payment (Optional)
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Amount Paid Now (INR)" error={errors.amountPaidNow?.message}>
+                <input
+                  type="number"
+                  min={0}
+                  max={investmentAmount}
+                  step="0.01"
+                  className={INPUT_CLS}
+                  {...register('amountPaidNow', { valueAsNumber: true })}
+                  placeholder="0.00"
+                />
+              </Field>
+
+              <Field label="Payment Mode">
+                <select className={INPUT_CLS} {...register('paymentMode')}>
+                  <option value="">Select payment mode</option>
+                  <option value="CASH">Cash</option>
+                  <option value="CHEQUE">Cheque</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="UPI">UPI</option>
+                </select>
+              </Field>
+            </div>
+
+            {amountPaidNow > 0 && paymentMode && paymentMode !== 'CASH' && (
+              <Field label="Reference Number" error={errors.referenceNumber?.message}>
+                <input
+                  className={INPUT_CLS}
+                  {...register('referenceNumber')}
+                  placeholder={
+                    paymentMode === 'CHEQUE' ? 'Cheque number' :
+                    paymentMode === 'UPI' ? 'UPI transaction ID' :
+                    'Bank transfer ref / UTR'
+                  }
+                />
+              </Field>
+            )}
+
+            <Field label="Payment Date">
+              <input
+                type="date"
+                className={INPUT_CLS}
+                {...register('paymentDate')}
+                defaultValue={getTodayDateInputValue()}
+              />
+            </Field>
+
+            {amountPaidNow > 0 && (
+              <div className="border border-amber-500/20 bg-amber-500/5 p-3">
+                <p className="text-[10px] text-amber-700">
+                  {formatINR(amountPaidNow)} will be recorded immediately as principal investment.
+                  Remaining {formatINR(investmentAmount - amountPaidNow)} will be pending.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </FormShell>
   );
 }
 
-// â”€â”€â”€ FORM: Add Vendor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Form: Add Vendor
 
 function AddVendorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useCreateVendor({ onSuccess: () => { reset(); toast.success('Vendor added'); onSuccess(); } });
@@ -1254,6 +1184,43 @@ function CancelDealForm({ entity, onSuccess, onBack }: { entity: any; onSuccess:
   );
 }
 
+const bookingAgreementCalculationModeSchema = z.enum(['FIXED_AMOUNT', 'PERCENTAGE']);
+
+const bookingAgreementLineDraftSchema = z.object({
+  type: z.enum(BOOKING_AGREEMENT_LINE_TYPES),
+  label: z.string().trim().min(1, 'Line label is required'),
+  amount: z.number().min(0, 'Line amount must be zero or more'),
+  ratePercent: z.number().min(0).optional(),
+  calculationMode: bookingAgreementCalculationModeSchema.optional(),
+  note: z.string().optional().or(z.literal('')),
+}).superRefine((line, ctx) => {
+  if (line.type === 'TAX' && (line.ratePercent === undefined || line.ratePercent <= 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ratePercent'],
+      message: 'Enter tax percentage',
+    });
+  }
+
+  if (line.type === 'DISCOUNT') {
+    const mode = line.calculationMode ?? 'FIXED_AMOUNT';
+    if (mode === 'PERCENTAGE' && (line.ratePercent === undefined || line.ratePercent <= 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ratePercent'],
+        message: 'Enter discount percentage',
+      });
+    }
+    if (mode === 'FIXED_AMOUNT' && line.amount <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['amount'],
+        message: 'Enter discount amount',
+      });
+    }
+  }
+});
+
 const bookFlatFlowSchema = bookFlatSchema.extend({
   floorNumber: z.number().int().min(1, 'Select a floor number'),
   customFlatId: z.string().trim().min(1, 'Flat name/ID is required'),
@@ -1262,6 +1229,7 @@ const bookFlatFlowSchema = bookFlatSchema.extend({
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).default('CUSTOMER'),
   customerMode: z.enum(['NEW', 'EXISTING']).default('NEW'),
   existingCustomerId: z.string().optional(),
+  agreementLines: z.array(bookingAgreementLineDraftSchema).default([]),
 }).superRefine((data, ctx) => {
   if (data.customerMode === 'EXISTING' && !data.existingCustomerId) {
     ctx.addIssue({
@@ -1297,6 +1265,12 @@ const bookFlatFlowSchema = bookFlatSchema.extend({
 });
 
 type BookFlatFlowInput = z.input<typeof bookFlatFlowSchema>;
+type BookFlatAgreementLineDraftInput = NonNullable<BookFlatFlowInput['agreementLines']>[number];
+type BookingAgreementCalculationMode = z.infer<typeof bookingAgreementCalculationModeSchema>;
+type BookingAgreementLineComputationInput = Pick<
+  BookFlatAgreementLineDraftInput,
+  'type' | 'amount' | 'ratePercent' | 'calculationMode'
+>;
 
 function getBookingReferenceLabel(paymentMode?: BookFlatInput['paymentMode']) {
   switch (paymentMode) {
@@ -1309,6 +1283,43 @@ function getBookingReferenceLabel(paymentMode?: BookFlatInput['paymentMode']) {
     default:
       return 'Reference Number';
   }
+}
+
+function defaultBookingAgreementLineAffectsProfit(type: BookFlatAgreementLineInput['type']) {
+  return type !== 'TAX';
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function getBookingAgreementLineCalculationMode(line: BookingAgreementLineComputationInput): BookingAgreementCalculationMode {
+  if (line.type === 'TAX') return 'PERCENTAGE';
+  if (line.type === 'DISCOUNT') return line.calculationMode ?? 'FIXED_AMOUNT';
+  return 'FIXED_AMOUNT';
+}
+
+function resolveBookingAgreementLineAmount(line: BookingAgreementLineComputationInput, sellingPrice: number) {
+  if (line.type === 'TAX') {
+    return roundMoney(sellingPrice * ((line.ratePercent ?? 0) / 100));
+  }
+
+  if (line.type === 'DISCOUNT' && getBookingAgreementLineCalculationMode(line) === 'PERCENTAGE') {
+    return roundMoney(sellingPrice * ((line.ratePercent ?? 0) / 100));
+  }
+
+  return roundMoney(line.amount ?? 0);
+}
+
+function createDefaultBookingAgreementLine(): BookFlatAgreementLineDraftInput {
+  return {
+    type: 'CHARGE',
+    label: '',
+    amount: 0,
+    ratePercent: undefined,
+    calculationMode: 'FIXED_AMOUNT',
+    note: '',
+  };
 }
 
 function BookFlatForm({
@@ -1341,7 +1352,7 @@ function BookFlatForm({
 
   const fallbackFloorNumber = floorNumbers[0] ?? 1;
 
-  const { register, handleSubmit, watch, setValue, setFocus, formState: { errors } } = useForm<BookFlatFlowInput>({
+  const { register, control, handleSubmit, watch, setValue, setFocus, formState: { errors } } = useForm<BookFlatFlowInput>({
     resolver: zodResolver(bookFlatFlowSchema),
     defaultValues: {
       floorNumber: fallbackFloorNumber,
@@ -1358,7 +1369,16 @@ function BookFlatForm({
       bookingAmount: 0,
       paymentMode: 'CASH',
       referenceNumber: '',
+      agreementLines: [],
     },
+  });
+  const {
+    fields: agreementLineFields,
+    append: appendAgreementLine,
+    remove: removeAgreementLine,
+  } = useFieldArray({
+    control,
+    name: 'agreementLines',
   });
 
   const floorNumber = Number(watch('floorNumber') || 0);
@@ -1477,6 +1497,20 @@ function BookFlatForm({
         bookingAmount: data.bookingAmount,
         paymentMode: data.bookingAmount > 0 ? data.paymentMode : undefined,
         referenceNumber: data.bookingAmount > 0 ? data.referenceNumber?.trim() || undefined : undefined,
+        agreementLines: (data.agreementLines ?? []).map((line) => {
+          const calculationMode = getBookingAgreementLineCalculationMode(line);
+          const isPercentageLine = line.type === 'TAX' || (line.type === 'DISCOUNT' && calculationMode === 'PERCENTAGE');
+
+          return {
+            type: line.type,
+            label: line.label.trim(),
+            amount: resolveBookingAgreementLineAmount(line, data.sellingPrice),
+            ratePercent: isPercentageLine ? line.ratePercent : undefined,
+            calculationBase: isPercentageLine ? data.sellingPrice : undefined,
+            affectsProfit: defaultBookingAgreementLineAffectsProfit(line.type),
+            note: line.note?.trim() || undefined,
+          };
+        }),
       },
     });
 
@@ -1645,6 +1679,186 @@ function BookFlatForm({
           </div>
         )}
 
+        <div className="border border-border bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
+              <p className="text-[10px] text-muted-foreground/60">
+                Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
+              </p>
+            </div>
+            <button
+              type="button"
+              data-navbtn="true"
+              onClick={() => appendAgreementLine(createDefaultBookingAgreementLine())}
+              className="h-10 border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+            >
+              Add Line
+            </button>
+          </div>
+
+          {agreementLineFields.length === 0 ? (
+            <p className="mt-4 text-[10px] text-muted-foreground/60">
+              No additional agreement rows yet. Base price line is created automatically from selling price.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-col gap-4">
+              {agreementLineFields.map((line, index) => {
+                const typePath = `agreementLines.${index}.type` as const;
+                const labelPath = `agreementLines.${index}.label` as const;
+                const amountPath = `agreementLines.${index}.amount` as const;
+                const ratePercentPath = `agreementLines.${index}.ratePercent` as const;
+                const calculationModePath = `agreementLines.${index}.calculationMode` as const;
+                const notePath = `agreementLines.${index}.note` as const;
+                const lineType = (watch(typePath) || 'CHARGE') as BookFlatAgreementLineInput['type'];
+                const discountCalculationMode = (watch(calculationModePath) || 'FIXED_AMOUNT') as BookingAgreementCalculationMode;
+                const ratePercent = Number(watch(ratePercentPath) || 0);
+                const watchedLine = watch(`agreementLines.${index}` as const);
+                const resolvedAmount = resolveBookingAgreementLineAmount({
+                  type: lineType,
+                  amount: Number(watchedLine?.amount ?? 0),
+                  calculationMode: discountCalculationMode,
+                  ratePercent: Number.isFinite(ratePercent) ? ratePercent : 0,
+                }, sellingPrice);
+                const shouldUsePercentage = lineType === 'TAX' || (lineType === 'DISCOUNT' && discountCalculationMode === 'PERCENTAGE');
+
+                return (
+                  <div key={line.id} className="border border-border bg-background p-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <p className={LABEL_CLS}>Line {index + 1}</p>
+                      <button
+                        type="button"
+                        data-navbtn="true"
+                        onClick={() => removeAgreementLine(index)}
+                        className="h-9 border border-border px-3 text-[9px] font-bold uppercase tracking-widest text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
+                    <input type="hidden" {...register(typePath)} />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field label="Line Type" error={errors.agreementLines?.[index]?.type?.message}>
+                        <select
+                          className={INPUT_CLS}
+                          value={lineType}
+                          onChange={(event) => {
+                            const nextType = event.target.value as BookFlatAgreementLineInput['type'];
+                            setValue(typePath, nextType, { shouldValidate: true });
+                            if (nextType === 'TAX') {
+                              setValue(calculationModePath, 'PERCENTAGE', { shouldValidate: true });
+                              setValue(amountPath, 0, { shouldValidate: true });
+                            } else if (nextType === 'DISCOUNT') {
+                              setValue(calculationModePath, 'FIXED_AMOUNT', { shouldValidate: true });
+                            } else {
+                              setValue(calculationModePath, 'FIXED_AMOUNT', { shouldValidate: true });
+                              setValue(ratePercentPath, undefined, { shouldValidate: true });
+                            }
+                          }}
+                        >
+                          {BOOKING_AGREEMENT_LINE_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      {lineType === 'DISCOUNT' ? (
+                        <Field label="Discount Mode" error={errors.agreementLines?.[index]?.calculationMode?.message}>
+                          <select
+                            className={INPUT_CLS}
+                            value={discountCalculationMode}
+                            onChange={(event) => {
+                              const nextMode = event.target.value as BookingAgreementCalculationMode;
+                              setValue(calculationModePath, nextMode, { shouldValidate: true });
+                              if (nextMode === 'PERCENTAGE') {
+                                setValue(amountPath, 0, { shouldValidate: true });
+                              } else {
+                                setValue(ratePercentPath, undefined, { shouldValidate: true });
+                              }
+                            }}
+                          >
+                            <option value="FIXED_AMOUNT">Fixed Amount</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                        </Field>
+                      ) : lineType === 'TAX' ? (
+                        <Field label="Tax Basis">
+                          <div className="flex h-12 items-center border border-dashed border-border bg-muted px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                            Percentage of base price
+                          </div>
+                        </Field>
+                      ) : (
+                        <Field label="Amount (INR)" error={errors.agreementLines?.[index]?.amount?.message}>
+                          <input
+                            type="number"
+                            min={0}
+                            className={INPUT_CLS}
+                            {...register(amountPath, { valueAsNumber: true })}
+                          />
+                        </Field>
+                      )}
+                    </div>
+
+                    {shouldUsePercentage ? (
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        <Field
+                          label={lineType === 'TAX' ? 'Tax Percentage (%)' : 'Discount Percentage (%)'}
+                          error={errors.agreementLines?.[index]?.ratePercent?.message}
+                        >
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={INPUT_CLS}
+                            {...register(ratePercentPath, { setValueAs: parseOptionalNumber })}
+                          />
+                        </Field>
+                        <Field label="Calculated Amount">
+                          <div className="flex h-12 items-center border border-border bg-muted px-4 text-[11px] font-bold uppercase tracking-widest text-foreground">
+                            {formatINR(resolvedAmount)}
+                          </div>
+                        </Field>
+                      </div>
+                    ) : lineType === 'DISCOUNT' ? (
+                      <div className="mt-4">
+                        <Field label="Discount Amount (INR)" error={errors.agreementLines?.[index]?.amount?.message}>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={INPUT_CLS}
+                            {...register(amountPath, { valueAsNumber: true })}
+                          />
+                        </Field>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 grid grid-cols-1 gap-4">
+                      <Field label="Line Label" error={errors.agreementLines?.[index]?.label?.message}>
+                        <input
+                          className={INPUT_CLS}
+                          placeholder="e.g. GST, Parking Charge, Festival Discount"
+                          {...register(labelPath)}
+                        />
+                      </Field>
+                      <Field label="Note (optional)" error={errors.agreementLines?.[index]?.note?.message}>
+                        <input
+                          className={INPUT_CLS}
+                          placeholder="Optional note for this line"
+                          {...register(notePath)}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="border border-border divide-y divide-border">
           <div className="flex justify-between items-center px-4 py-3">
             <span className={LABEL_CLS}>Selected Floor</span>
@@ -1692,275 +1906,6 @@ function ActionConfirmForm({
 }
 
 // â”€â”€â”€ Shared Form Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className={LABEL_CLS}>{label}</label>
-      {children}
-      {error && <p className={ERROR_CLS}>{error}</p>}
-    </div>
-  );
-}
-
-function FormError({ msg }: { msg: string }) {
-  return <div className="bg-destructive/10 border border-destructive/30 p-3 text-[11px] font-bold text-destructive">{msg}</div>;
-}
-
-function FormShell({ title, onBack, isPending, submitLabel, formId, destructive, children }: {
-  title: string; onBack: () => void; isPending: boolean; submitLabel: string; formId: string; destructive?: boolean; children: React.ReactNode;
-}) {
-  const navRef = useRef<HTMLDivElement>(null);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [cancelChoice, setCancelChoice] = useState<'keep' | 'confirm'>('keep');
-  const keepEditingBtnRef = useRef<HTMLButtonElement>(null);
-  const confirmCancelBtnRef = useRef<HTMLButtonElement>(null);
-  const FOCUSABLE = 'input:not([type="hidden"]), textarea, select, [role="radiogroup"], [data-navbtn]';
-
-  const requestCancel = () => {
-    setCancelChoice('keep');
-    setShowCancelConfirm(true);
-  };
-  const dismissCancel = () => setShowCancelConfirm(false);
-  const confirmCancel = () => {
-    setShowCancelConfirm(false);
-    onBack();
-  };
-
-  useEffect(() => {
-    if (!showCancelConfirm) return;
-    const target = cancelChoice === 'keep' ? keepEditingBtnRef.current : confirmCancelBtnRef.current;
-    requestAnimationFrame(() => target?.focus());
-  }, [showCancelConfirm, cancelChoice]);
-
-  useEffect(() => {
-    const el = navRef.current;
-    if (!el) return;
-
-    const focusables: HTMLElement[] = Array.from(el.querySelectorAll(FOCUSABLE));
-    const primaryFocusable =
-      focusables.find((node) => !node.hasAttribute('data-navbtn')) ||
-      focusables.find((node) => node.getAttribute('data-submitbtn') === 'true') ||
-      focusables[0];
-
-    if (!primaryFocusable) return;
-    requestAnimationFrame(() => {
-      primaryFocusable.focus();
-      primaryFocusable.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-    });
-  }, [title]);
-
-  // â”€â”€ Keyboard navigation: Enter=next, â†‘â†“=move, â†â†’ for buttons â”€â”€
-  useEffect(() => {
-    const el = navRef.current;
-    if (!el) return;
-
-    const getFocusables = (): HTMLElement[] =>
-      Array.from(el.querySelectorAll(FOCUSABLE));
-
-    const getIdx = (): number => {
-      const active = document.activeElement as HTMLElement;
-      const items = getFocusables();
-      let idx = items.indexOf(active);
-      if (idx === -1) {
-        const rg = active?.closest('[role="radiogroup"]');
-        if (rg) idx = items.indexOf(rg as HTMLElement);
-      }
-      return idx;
-    };
-
-    const focusItem = (items: HTMLElement[], idx: number) => {
-      if (idx >= 0 && idx < items.length) {
-        items[idx].focus();
-        items[idx].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-      }
-    };
-
-    const handler = (e: KeyboardEvent) => {
-      if (showCancelConfirm) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          dismissCancel();
-          return;
-        }
-
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice('keep');
-          return;
-        }
-
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice('confirm');
-          return;
-        }
-
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice((prev) => (prev === 'keep' ? 'confirm' : 'keep'));
-          return;
-        }
-
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (cancelChoice === 'keep') {
-            dismissCancel();
-          } else {
-            confirmCancel();
-          }
-        }
-        return;
-      }
-
-      const active = document.activeElement as HTMLElement;
-      const items = getFocusables();
-      const idx = getIdx();
-      if (idx === -1) return;
-
-      const tag = active?.tagName;
-      const isBtn = !!active?.getAttribute('data-navbtn');
-      const isRadioGroup = active?.getAttribute('role') === 'radiogroup' || !!active?.closest('[role="radiogroup"]');
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        requestCancel();
-        return;
-      }
-
-      // â”€â”€ Enter: move to next item. On buttons, let them fire natively â”€â”€
-      if (e.key === 'Enter') {
-        if (isBtn) return; // native click/submit
-        e.preventDefault();
-        e.stopPropagation();
-        focusItem(items, idx + 1);
-        return;
-      }
-
-      // â”€â”€ ArrowDown / ArrowRight: next item â”€â”€
-      if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && isBtn)) {
-        if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
-        e.preventDefault();
-        focusItem(items, idx + 1);
-        return;
-      }
-
-      // â”€â”€ ArrowUp / ArrowLeft: previous item â”€â”€
-      if (e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && isBtn)) {
-        if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
-        e.preventDefault();
-        focusItem(items, idx - 1);
-        return;
-      }
-    };
-
-    el.addEventListener('keydown', handler, true);
-    return () => el.removeEventListener('keydown', handler, true);
-  }, [showCancelConfirm]);
-
-  const BTN_FOCUS = 'outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary';
-
-  return (
-    <div ref={navRef} className="flex flex-col gap-6">
-      {/* Header */}
-      <button onClick={requestCancel} tabIndex={-1} className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group">
-        <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-        Back
-      </button>
-      <h2 className="text-2xl font-serif tracking-tight text-foreground">{title}</h2>
-
-      {/* Form content */}
-      {children}
-
-      {/* Action buttons â€” Cancel + Submit */}
-      <div className="grid grid-cols-2 gap-3 mt-2">
-        <button
-          data-navbtn="true"
-          type="button"
-          onClick={requestCancel}
-          className={cn(
-            'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] border border-border text-muted-foreground transition-all flex items-center justify-center gap-2',
-            'hover:bg-muted/30',
-            BTN_FOCUS,
-          )}
-        >
-          Cancel
-        </button>
-        <button
-          data-navbtn="true"
-          data-submitbtn="true"
-          type="submit"
-          form={formId}
-          disabled={isPending}
-          className={cn(
-            'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2',
-            destructive
-              ? 'bg-red-500 text-white hover:bg-red-600'
-              : 'bg-primary text-black hover:bg-primary/90',
-            isPending && 'opacity-60 cursor-not-allowed',
-            BTN_FOCUS,
-          )}
-        >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
-        </button>
-      </div>
-
-      {/* Keyboard hint */}
-      <p className="text-center text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">
-        Enter next | Up/Down move | Left/Right buttons | Esc back
-      </p>
-
-      {showCancelConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-          <div className="w-full max-w-md border border-border bg-background p-6 shadow-2xl">
-            <p className="text-sm font-bold uppercase tracking-widest text-foreground">Cancel This Action?</p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Any unsaved inputs in this form will be lost.
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button
-                ref={keepEditingBtnRef}
-                type="button"
-                onClick={dismissCancel}
-                onFocus={() => setCancelChoice('keep')}
-                className={cn(
-                  'h-11 w-full font-bold text-[10px] uppercase tracking-[0.18em] border border-border text-muted-foreground transition-all',
-                  'hover:bg-muted/30',
-                  cancelChoice === 'keep' && 'border-primary text-foreground bg-muted/40',
-                  BTN_FOCUS,
-                )}
-              >
-                Keep Editing
-              </button>
-              <button
-                ref={confirmCancelBtnRef}
-                type="button"
-                onClick={confirmCancel}
-                onFocus={() => setCancelChoice('confirm')}
-                className={cn(
-                  'h-11 w-full font-bold text-[10px] uppercase tracking-[0.18em] transition-all',
-                  'bg-primary text-black hover:bg-primary/90',
-                  cancelChoice === 'confirm' && 'ring-2 ring-primary/50',
-                  BTN_FOCUS,
-                )}
-              >
-                Yes, Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// â”€â”€â”€ Main Command Center Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Phase = 'categories' | 'actions' | 'selector' | 'sub-selector' | 'form';
 
@@ -3212,6 +3157,10 @@ export default function CommandCenter() {
     </DashboardShell>
   );
 }
+
+
+
+
 
 
 

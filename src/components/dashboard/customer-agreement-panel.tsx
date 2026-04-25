@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   useAddCustomerAgreementLine,
   useDeleteCustomerAgreementLine,
@@ -50,10 +51,10 @@ const LINE_TYPE_LABELS: Record<CustomerAgreementLineType, string> = {
   CHARGE: "Charge",
   TAX: "Tax / GST",
   DISCOUNT: "Discount",
-  CREDIT: "Credit",
+  CREDIT: "Credit", // Keep for existing lines but don't allow new ones
 }
 
-const MUTABLE_LINE_TYPES: CustomerAgreementLineType[] = ["CHARGE", "TAX", "DISCOUNT", "CREDIT"]
+const MUTABLE_LINE_TYPES: CustomerAgreementLineType[] = ["CHARGE", "TAX", "DISCOUNT"] // Removed CREDIT
 
 function defaultAffectsProfit(type: CustomerAgreementLineType) {
   return type !== "TAX"
@@ -80,6 +81,8 @@ type AgreementDraft = {
   type: CustomerAgreementLineType
   label: string
   amount: string
+  ratePercent?: string
+  calculationMode?: string
   note: string
   affectsProfit: boolean
 }
@@ -91,6 +94,8 @@ function createDraft(line?: CustomerAgreementLine | null): AgreementDraft {
     type,
     label: line?.label ?? "",
     amount: line ? String(line.amount) : "",
+    ratePercent: line?.ratePercent ? String(line.ratePercent) : undefined,
+    calculationMode: line?.ratePercent ? "PERCENTAGE" : "FIXED_AMOUNT",
     note: line?.note ?? "",
     affectsProfit: line?.affectsProfit ?? defaultAffectsProfit(type),
   }
@@ -202,15 +207,41 @@ export function CustomerAgreementPanel({
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
-    const parsed = customerAgreementLineSchema.safeParse({
+    let submissionData: any = {
       type: draft.type,
       label: draft.label,
-      amount: Number(draft.amount || 0),
       note: draft.note,
       affectsProfit: draft.affectsProfit,
-    })
+    }
+
+    // Handle different calculation modes
+    if (draft.type === "TAX") {
+      submissionData.calculationMode = "PERCENTAGE"
+      submissionData.ratePercent = draft.ratePercent ? Number(draft.ratePercent) : 0
+      submissionData.calculationBase = "BASE_PRICE"
+      submissionData.amount = 0 // Tax amounts calculated on backend
+    } else if (draft.type === "DISCOUNT") {
+      if (draft.calculationMode === "PERCENTAGE") {
+        submissionData.calculationMode = "PERCENTAGE"
+        submissionData.ratePercent = draft.ratePercent ? Number(draft.ratePercent) : 0
+        submissionData.calculationBase = "BASE_PRICE"
+        submissionData.amount = 0 // Calculated on backend
+      } else {
+        submissionData.calculationMode = "FIXED_AMOUNT"
+        submissionData.amount = draft.amount ? Number(draft.amount) : 0
+      }
+    } else {
+      // CHARGE or BASE_PRICE
+      submissionData.amount = draft.amount ? Number(draft.amount) : 0
+    }
+
+    // Debug: Log what we're sending
+    console.log('Submission data:', submissionData)
+
+    const parsed = customerAgreementLineSchema.safeParse(submissionData)
 
     if (!parsed.success) {
+      console.log('Validation errors:', parsed.error.issues)
       setFormError(parsed.error.issues[0]?.message ?? "Please check the agreement details.")
       return
     }
@@ -421,18 +452,111 @@ export function CustomerAgreementPanel({
                     </NativeSelect>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Amount</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={draft.amount}
-                      onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))}
-                      className="h-10 rounded-none border-none bg-muted text-sm"
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {/* Type-specific amount/percentage fields */}
+                  {draft.type === "TAX" && (
+                    // Tax: Percentage only
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Percentage (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        value={draft.ratePercent || ''}
+                        onChange={(event) => setDraft((current) => ({ ...current, ratePercent: event.target.value }))}
+                        className="h-10 rounded-none border-none bg-muted text-sm"
+                        placeholder="e.g. 18"
+                      />
+                    </div>
+                  )}
+
+                  {draft.type === "DISCOUNT" && (
+                    // Discount: Toggle between percentage and amount
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Discount Type</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="flex items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
+                            <input
+                              type="radio"
+                              name="discountType"
+                              value="PERCENTAGE"
+                              checked={draft.calculationMode === 'PERCENTAGE'}
+                              onChange={(e) => setDraft((current) => ({ 
+                                ...current, 
+                                calculationMode: e.target.value,
+                                ratePercent: e.target.value === 'PERCENTAGE' ? current.ratePercent : undefined,
+                                amount: e.target.value === 'FIXED_AMOUNT' ? current.amount : '',
+                              }))}
+                              className="text-primary"
+                            />
+                            <span className="text-[10px] font-bold tracking-widest uppercase">Percentage</span>
+                          </label>
+                          <label className="flex items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
+                            <input
+                              type="radio"
+                              name="discountType"
+                              value="FIXED_AMOUNT"
+                              checked={draft.calculationMode === 'FIXED_AMOUNT'}
+                              onChange={(e) => setDraft((current) => ({ 
+                                ...current, 
+                                calculationMode: e.target.value,
+                                ratePercent: e.target.value === 'PERCENTAGE' ? current.ratePercent : undefined,
+                                amount: e.target.value === 'FIXED_AMOUNT' ? current.amount : '',
+                              }))}
+                              className="text-primary"
+                            />
+                            <span className="text-[10px] font-bold tracking-widest uppercase">Fixed Amount</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {draft.calculationMode === 'PERCENTAGE' ? (
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Percentage (%)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step="0.01"
+                            value={draft.ratePercent || ''}
+                            onChange={(event) => setDraft((current) => ({ ...current, ratePercent: event.target.value }))}
+                            className="h-10 rounded-none border-none bg-muted text-sm"
+                            placeholder="e.g. 5"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Amount (₹)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={draft.amount || ''}
+                            onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))}
+                            className="h-10 rounded-none border-none bg-muted text-sm"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {(draft.type === "CHARGE" || draft.type === "BASE_PRICE") && (
+                    // Charge and Base Price: Amount only
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Amount (₹)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={draft.amount || ''}
+                        onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))}
+                        className="h-10 rounded-none border-none bg-muted text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.5">

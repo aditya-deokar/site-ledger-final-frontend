@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { toast } from "sonner"
 import { useSiteInvestors, useCreateInvestor, useUpdateInvestor, useTransactions, useAddTransaction, usePayInterest, useUpdateInvestorPayment } from "@/hooks/api/investor.hooks"
 import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { useSite } from "@/hooks/api/site.hooks"
@@ -19,6 +20,11 @@ function getCurrentDateTimeLocalInput() {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
   return local.toISOString().slice(0, 16)
+}
+function getTodayDateInputValue() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
 }
 
 const COLORS = ["bg-teal-600","bg-blue-600","bg-amber-500","bg-rose-600","bg-violet-600","bg-emerald-600"]
@@ -303,11 +309,84 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
 // ── Add Investor Panel ─────────────────────────────
 function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: string; onClose: () => void }) {
-  const { mutate: create, isPending } = useCreateInvestor({ onSuccess: onClose })
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateInvestorInput>({
+  const { mutate: createInvestor, isPending: isCreatingInvestor } = useCreateInvestor({ onSuccess: () => {} })
+  const { mutate: addTransaction, isPending: isAddingTransaction } = useAddTransaction()
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
-    defaultValues: { name: '', phone: '', type: "EQUITY" as const, siteId, equityPercentage: 0 },
+    defaultValues: { 
+      name: '', 
+      phone: '', 
+      type: "EQUITY" as const, 
+      siteId, 
+      equityPercentage: 0,
+      investmentAmount: 0,
+      amountPaidNow: 0,
+      paymentMode: 'CASH',
+      paymentDate: getTodayDateInputValue(),
+    },
   })
+  
+  const investmentAmount = watch('investmentAmount') || 0;
+  const amountPaidNow = watch('amountPaidNow') || 0;
+  const paymentMode = watch('paymentMode') || 'CASH';
+  const isSubmitting = isCreatingInvestor || isAddingTransaction;
+
+  // Debug: Log investment amount changes
+  console.log('Investment amount:', investmentAmount, 'Type:', typeof investmentAmount);
+
+  const onSubmit = async (data: CreateInvestorInput) => {
+    try {
+      // Step 1: Create investor (existing API, unchanged)
+      const investorResult = await new Promise<any>((resolve, reject) => {
+        createInvestor({
+          ...data,
+          type: "EQUITY",
+          siteId,
+          equityPercentage: data.equityPercentage,
+          // Remove payment-related fields - backend doesn't expect them
+          investmentAmount: undefined,
+          amountPaidNow: undefined,
+          paymentMode: undefined,
+          referenceNumber: undefined,
+          paymentDate: undefined,
+        }, {
+          onSuccess: resolve,
+          onError: reject,
+        });
+      });
+
+      if (!investorResult?.investor?.id) {
+        throw new Error('Failed to create investor');
+      }
+
+      // Step 2: Add immediate transaction if amountPaidNow > 0
+      if (data.amountPaidNow && data.amountPaidNow > 0 && data.investmentAmount) {
+        await new Promise<any>((resolve, reject) => {
+          addTransaction({
+            investorId: investorResult.investor.id,
+            data: {
+              amount: data.investmentAmount || 0,
+              amountPaid: data.amountPaidNow,
+              note: 'Initial investment payment during investor creation',
+              paymentDate: data.paymentDate || getTodayDateInputValue(),
+            },
+          }, {
+            onSuccess: resolve,
+            onError: reject,
+          });
+        });
+
+        toast.success(`Investor added and ₹${formatINR(data.amountPaidNow)} recorded immediately`);
+      } else {
+        toast.success('Investor added successfully');
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Investor creation failed:', error);
+      // Error handling is already handled by the mutation hooks
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -322,7 +401,7 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
             <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
           </div>
         </div>
-        <form onSubmit={handleSubmit((data) => create({ ...data, type: "EQUITY", siteId }))} className="px-8 py-6 flex flex-col gap-5 flex-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="px-8 py-6 flex flex-col gap-5 flex-1">
           <input type="hidden" {...register("type")} />
           <input type="hidden" {...register("siteId")} />
           <div className="border border-primary/20 bg-primary/5 p-4 text-[11px] leading-relaxed text-muted-foreground">
@@ -344,11 +423,99 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
             </div>
           </div>
+
+          {/* NEW: Investment Amount */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Total Investment Amount (₹)</Label>
+            <Input 
+              type="number" 
+              min={0} 
+              step="0.01" 
+              className="h-11 bg-muted border-none rounded-none text-sm" 
+              {...register("investmentAmount", { valueAsNumber: true })}
+              placeholder="e.g. 500000"
+            />
+          </div>
+
+          {/* NEW: Immediate Payment Section (shown if investmentAmount > 0) */}
+          {(investmentAmount && Number(investmentAmount) > 0) && (
+            <div className="border border-border bg-muted/20 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-3">
+                Immediate Payment (Optional)
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount Paid Now (₹)</Label>
+                  <Input 
+                    type="number" 
+                    min={0} 
+                    max={investmentAmount}
+                    step="0.01" 
+                    className="h-11 bg-muted border-none rounded-none text-sm" 
+                    {...register("amountPaidNow", { valueAsNumber: true })}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Mode</Label>
+                  <select 
+                    className="h-11 bg-muted border-none text-sm px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest"
+                    {...register("paymentMode")}
+                  >
+                    <option value="">Select payment mode</option>
+                    <option value="CASH">Cash</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
+                  </select>
+                </div>
+              </div>
+              
+              {amountPaidNow > 0 && paymentMode && paymentMode !== 'CASH' && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Reference Number</Label>
+                  <Input 
+                    className="h-11 bg-muted border-none rounded-none text-sm"
+                    {...register("referenceNumber")}
+                    placeholder={
+                      paymentMode === 'CHEQUE' ? 'Cheque number' : 
+                      paymentMode === 'UPI' ? 'UPI transaction ID' : 
+                      'Bank transfer ref / UTR'
+                    }
+                  />
+                </div>
+              )}
+              
+              {amountPaidNow > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Date</Label>
+                  <Input 
+                    type="date"
+                    className="h-11 bg-muted border-none rounded-none text-sm"
+                    {...register("paymentDate")}
+                    defaultValue={getTodayDateInputValue()}
+                  />
+                </div>
+              )}
+              
+              {amountPaidNow > 0 && (
+                <div className="border border-amber-500/20 bg-amber-500/5 p-3">
+                  <p className="text-[10px] text-amber-700">
+                    ₹{formatINR(amountPaidNow)} will be recorded immediately as principal investment.
+                    Remaining ₹{formatINR(investmentAmount - amountPaidNow)} will be pending.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-primary/5 border border-primary/10 p-4 text-[10px] text-muted-foreground">
             This investor will be automatically linked to <strong className="text-foreground">{siteName}</strong> and their investment will be added to the site&apos;s allocated fund.
           </div>
-          <Button type="submit" disabled={isPending} className="h-14 rounded-none font-bold text-[11px] tracking-[0.2em] uppercase gap-2 mt-auto">
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Investor"}
+          <Button type="submit" disabled={isSubmitting} className="h-14 rounded-none font-bold text-[11px] tracking-[0.2em] uppercase gap-2 mt-auto">
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Investor"}
           </Button>
         </form>
       </div>

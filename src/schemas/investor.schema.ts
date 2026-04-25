@@ -10,6 +10,39 @@ export const createInvestorSchema = z.object({
   siteId: z.string().optional(),
   equityPercentage: z.number().min(0).max(100).optional(),
   fixedRate: z.number().min(0).optional(),
+  investmentAmount: z.number().min(0).optional(),
+  amountPaidNow: z.number().min(0).optional(),
+  paymentMode: z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI']).optional(),
+  referenceNumber: z.string().optional(),
+  paymentDate: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Validation: amountPaidNow cannot exceed investmentAmount
+  if (data.amountPaidNow && data.investmentAmount && data.amountPaidNow > data.investmentAmount) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Amount paid now cannot exceed total investment amount',
+      path: ['amountPaidNow'],
+    });
+  }
+  
+  // Validation: payment details required if amountPaidNow > 0
+  if (data.amountPaidNow && data.amountPaidNow > 0) {
+    if (!data.paymentMode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Payment mode is required when recording payment',
+        path: ['paymentMode'],
+      });
+    }
+    
+    if (data.paymentMode !== 'CASH' && !data.referenceNumber?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Reference number required for non-cash payments',
+        path: ['referenceNumber'],
+      });
+    }
+  }
 });
 export type CreateInvestorInput = z.infer<typeof createInvestorSchema>;
 

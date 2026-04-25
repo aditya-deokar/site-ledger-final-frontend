@@ -1,6 +1,19 @@
 import { z } from 'zod';
 import { paymentModeSchema } from './customer.schema';
 
+export const bookFlatAgreementLineTypeSchema = z.enum(['CHARGE', 'TAX', 'DISCOUNT', 'CREDIT']);
+
+export const bookFlatAgreementLineSchema = z.object({
+  type: bookFlatAgreementLineTypeSchema,
+  label: z.string().trim().min(1, 'Line label is required'),
+  amount: z.number().min(0, 'Line amount must be zero or more'),
+  ratePercent: z.number().min(0).optional(),
+  calculationBase: z.number().min(0).optional(),
+  affectsProfit: z.boolean().optional(),
+  note: z.string().optional().or(z.literal('')),
+});
+export type BookFlatAgreementLineInput = z.infer<typeof bookFlatAgreementLineSchema>;
+
 export const bookFlatSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   phone: z.string().min(1, 'Phone is required'),
@@ -9,6 +22,7 @@ export const bookFlatSchema = z.object({
   bookingAmount: z.number().min(0),
   paymentMode: paymentModeSchema.optional(),
   referenceNumber: z.string().optional().or(z.literal('')),
+  agreementLines: z.array(bookFlatAgreementLineSchema).optional(),
 });
 export type BookFlatInput = z.infer<typeof bookFlatSchema>;
 

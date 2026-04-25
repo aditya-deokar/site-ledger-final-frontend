@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import {
   useInvestors, useCreateInvestor, useUpdateInvestor, useDeleteInvestor,
@@ -26,6 +27,26 @@ import {
 function formatINR(n: number) { return '₹' + n.toLocaleString('en-IN'); }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+}
+function getTodayDateInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+function toIsoDateTime(value?: string) {
+  if (!value) return undefined;
+  const parsed = value.includes('T') ? new Date(value) : new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+}
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object') {
+    const apiError = (error as { error?: unknown; message?: unknown }).error;
+    if (typeof apiError === 'string' && apiError.trim()) return apiError;
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
 }
 
 const AVATAR_COLORS = ['bg-teal-600','bg-blue-600','bg-amber-500','bg-rose-600','bg-violet-600','bg-emerald-600'];
@@ -60,23 +81,101 @@ function transactionKindClasses(kind: Transaction['kind']) {
 
 // ── Add Investor Form ───────────────────────────────
 function AddInvestorForm({ onClose }: { onClose: () => void }) {
-  const { mutate: create, isPending } = useCreateInvestor({ onSuccess: onClose });
+  const { mutate: createInvestor, isPending: isCreatingInvestor } = useCreateInvestor({ onSuccess: () => {} });
+  const { mutate: addTransaction, isPending: isAddingTransaction } = useAddTransaction();
   const { data: sitesData } = useSites();
-  const sites = sitesData?.data?.sites ?? [];
+  const sites = sitesData?.data?.sites || [];
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { register, handleSubmit, watch, control, formState: { errors } } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
-    defaultValues: { type: 'EQUITY', equityPercentage: 0, fixedRate: 0 },
+    defaultValues: { 
+      type: 'EQUITY', 
+      equityPercentage: 0, 
+      fixedRate: 0,
+      investmentAmount: 0,
+      amountPaidNow: 0,
+      paymentMode: 'CASH',
+      paymentDate: getTodayDateInputValue(),
+    },
   });
   const investorType = watch('type');
+  const investmentAmount = watch('investmentAmount') || 0;
+  const amountPaidNow = watch('amountPaidNow') || 0;
+  const paymentMode = watch('paymentMode') || 'CASH';
 
-  const onSubmit = (data: CreateInvestorInput) => {
-    create({
-      ...data,
-      siteId: data.type === 'EQUITY' ? data.siteId : undefined,
-      equityPercentage: data.type === 'EQUITY' ? data.equityPercentage : undefined,
-      fixedRate: data.type === 'FIXED_RATE' ? data.fixedRate : undefined,
-    });
+  const isSubmitting = isCreatingInvestor || isAddingTransaction;
+
+  const onSubmit = async (data: CreateInvestorInput) => {
+    setSubmitError(null);
+
+    try {
+      // Step 1: create investor first
+      const investorResult = await new Promise<any>((resolve, reject) => {
+        createInvestor({
+          ...data,
+          siteId: data.type === 'EQUITY' ? data.siteId : undefined,
+          equityPercentage: data.equityPercentage,
+          // Remove payment-related fields - backend doesn't expect them
+          investmentAmount: undefined,
+          amountPaidNow: undefined,
+          paymentMode: undefined,
+          referenceNumber: undefined,
+          paymentDate: undefined,
+        }, {
+          onSuccess: resolve,
+          onError: reject,
+        });
+      });
+
+      const createdInvestorId = investorResult?.data?.investor?.id ?? investorResult?.investor?.id;
+      if (!createdInvestorId) {
+        throw new Error('Investor created response was invalid.');
+      }
+
+      // Step 2: add transaction using amount and paid-now values
+      const totalAmount = Number(data.investmentAmount ?? 0);
+      const paidAmount = Number(data.amountPaidNow ?? 0);
+
+      if (totalAmount > 0) {
+        try {
+          await new Promise<any>((resolve, reject) => {
+            addTransaction({
+              investorId: createdInvestorId,
+              data: {
+                amount: totalAmount,
+                amountPaid: paidAmount,
+                note: 'Initial investment entry during investor creation',
+                paymentDate: paidAmount > 0 ? toIsoDateTime(data.paymentDate) : undefined,
+              },
+            }, {
+              onSuccess: resolve,
+              onError: reject,
+            });
+          });
+
+          if (paidAmount > 0) {
+            toast.success(`Investor added and transaction recorded. Paid now: ${formatINR(paidAmount)}`);
+          } else {
+            toast.success(`Investor added and transaction recorded with pending amount ${formatINR(totalAmount)}`);
+          }
+        } catch (error) {
+          const txError = getApiErrorMessage(error, 'Initial transaction could not be recorded.');
+          const message = `Investor created successfully, but transaction failed: ${txError}. Use Ledger & Actions to add it and avoid submitting this form again.`;
+          setSubmitError(message);
+          toast.error(message);
+          return;
+        }
+      } else {
+        toast.success('Investor added successfully.');
+      }
+
+      onClose();
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to create investor.');
+      setSubmitError(message);
+      toast.error(message);
+    }
   };
 
   return (
@@ -97,6 +196,12 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           )} />
+
+          {submitError && (
+            <div className="border border-destructive/30 bg-destructive/10 px-4 py-3 text-[10px] font-semibold tracking-wide text-destructive">
+              {submitError}
+            </div>
+          )}
 
           <div className={cn(
             'border p-4 text-[11px] leading-relaxed',
@@ -124,7 +229,7 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
                 <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Select Site</Label>
                 <select {...register('siteId')} className="h-12 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest">
                   <option value="">Choose site...</option>
-                  {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {sites && sites.length > 0 && sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
@@ -162,6 +267,73 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           )}
+          
+          {/* NEW: Investment Amount */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Total Investment Amount (₹)</Label>
+            <Input 
+              type="number" 
+              min={0} 
+              step="0.01" 
+              className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20" 
+              {...register('investmentAmount', { valueAsNumber: true })}
+              placeholder="e.g. 500000"
+            />
+          </div>
+
+          {/* NEW: Amount Paid Now Section */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Amount Paid Now (₹)</Label>
+            <Input 
+              type="number" 
+              min={0} 
+              step="0.01" 
+              className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20" 
+              {...register('amountPaidNow', { valueAsNumber: true })}
+              placeholder="0.00"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Payment Mode</Label>
+            <select 
+              className="h-12 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest"
+              {...register('paymentMode')}
+            >
+              <option value="">Select payment mode</option>
+              <option value="CASH">Cash</option>
+              <option value="CHEQUE">Cheque</option>
+              <option value="BANK_TRANSFER">Bank Transfer</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </div>
+
+          {amountPaidNow > 0 && paymentMode && paymentMode !== 'CASH' && (
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Reference Number</Label>
+              <Input 
+                className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20"
+                {...register('referenceNumber')}
+                placeholder={
+                  paymentMode === 'CHEQUE' ? 'Cheque number' : 
+                  paymentMode === 'UPI' ? 'UPI transaction ID' : 
+                  'Bank transfer ref / UTR'
+                }
+              />
+            </div>
+          )}
+          
+          {amountPaidNow > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Payment Date</Label>
+              <Input 
+                type="date"
+                className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest focus-visible:bg-card focus-visible:ring-primary/20"
+                {...register('paymentDate')}
+                defaultValue={getTodayDateInputValue()}
+              />
+            </div>
+          )}
         </form>
       </div>
 
@@ -169,8 +341,8 @@ function AddInvestorForm({ onClose }: { onClose: () => void }) {
         <SheetClose className="text-[10px] font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-all px-4 py-2 text-foreground">
           Cancel
         </SheetClose>
-        <Button form="add-investor-form" type="submit" disabled={isPending} className="h-14 flex-1 bg-primary text-black font-bold text-[11px] tracking-[0.2em] uppercase hover:bg-primary/90 rounded-none gap-2">
-          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Add Investor</span><ArrowRight className="w-4 h-4" /></>}
+        <Button form="add-investor-form" type="submit" disabled={isSubmitting} className="h-14 flex-1 bg-primary text-black font-bold text-[11px] tracking-[0.2em] uppercase hover:bg-primary/90 rounded-none gap-2">
+          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Add Investor</span><ArrowRight className="w-4 h-4" /></>}
         </Button>
       </div>
     </>
@@ -843,7 +1015,7 @@ export default function InvestorsPage() {
       </div>
 
       {addOpen && (
-        <Sheet open={addOpen} onOpenChange={() => setAddOpen(false)}>
+        <Sheet open={addOpen} onOpenChange={setAddOpen}>
           <SheetContent className="w-full sm:max-w-[500px] border-l border-border p-0 flex flex-col overflow-hidden bg-background">
             <SheetHeader className="p-10 pb-6 flex-row justify-start items-center space-y-0">
               <SheetTitle className="text-3xl font-serif tracking-tight text-foreground italic">Add Investor</SheetTitle>
