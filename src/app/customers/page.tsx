@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
-import { CustomerProfile } from '@/components/dashboard/customer-profile';
 import { useAllCustomers } from '@/hooks/api/customer.hooks';
 import { Customer } from '@/schemas/customer.schema';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,6 @@ function ini(n: string) { const p = n.trim().split(' '); return (p[0][0] + (p[1]
 
 type StatusFilter = undefined | 'BOOKED' | 'SOLD';
 
-import { useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function CustomersListSkeleton() {
@@ -71,10 +70,10 @@ function CustomersSkeleton() {
 }
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(undefined);
   const { data, isLoading } = useAllCustomers(statusFilter);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<(Customer & { siteId: string | null; siteName: string | null }) | null>(null);
 
   const allCustomers = useMemo(() => {
     const raw = (data as any)?.data?.customers ?? [];
@@ -98,10 +97,12 @@ export default function CustomersPage() {
     return { totalReceivable, totalReceived, totalRemaining };
   }, [filtered]);
 
-  const handleSelectCustomer = useCallback((customer: Customer & { siteId: string | null; siteName: string | null }) => {
-    if (!customer.siteId) return;
-    setSelected(customer as any);
-  }, []);
+  const handleSelectCustomer = useCallback(
+    (customer: Customer & { siteId: string | null; siteName: string | null }) => {
+      router.push(`/customers/${customer.id}`);
+    },
+    [router],
+  );
 
   const tabs: { key: StatusFilter; label: string }[] = useMemo(() => [
     { key: undefined, label: 'All' },
@@ -258,15 +259,6 @@ export default function CustomersPage() {
           </>
         )}
       </div>
-
-      {selected?.siteId && (
-        <CustomerProfile
-          customer={selected}
-          siteId={selected.siteId}
-          siteName={selected.siteName ?? undefined}
-          onClose={() => setSelected(null)}
-        />
-      )}
     </DashboardShell>
   );
 }

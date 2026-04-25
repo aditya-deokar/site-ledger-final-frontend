@@ -7,7 +7,6 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { FloorsFlatsTab } from '@/components/dashboard/floors-flats-tab';
 import { ExpensesTab } from '@/components/dashboard/expenses-tab';
 import { InvestorsTab } from '@/components/dashboard/investors-tab';
-import { CustomerProfile } from '@/components/dashboard/customer-profile';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
@@ -330,10 +329,10 @@ function InventoryBar({ available, booked, sold, total }: { available: number; b
   );
 }
 function ExistingOwnersTab({ siteId, siteName }: { siteId: string; siteName?: string }) {
+  const router = useRouter()
   const { data, isLoading } = useSiteCustomers(siteId)
   const customers = (data?.data?.customers ?? []) as any[]
   const owners = customers.filter((c) => c.customerType === 'EXISTING_OWNER')
-  const [selectedOwner, setSelectedOwner] = useState<any | null>(null)
 
   if (isLoading) {
     return (
@@ -371,7 +370,7 @@ function ExistingOwnersTab({ siteId, siteName }: { siteId: string; siteName?: st
           {owners.map((c) => (
             <button
               key={c.id}
-              onClick={() => setSelectedOwner(c)}
+              onClick={() => router.push(`/customers/${c.id}`)}
               className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/20 transition-colors items-center text-left"
             >
               <div className="lg:col-span-3 min-w-0">
@@ -420,15 +419,6 @@ function ExistingOwnersTab({ siteId, siteName }: { siteId: string; siteName?: st
             </button>
           ))}
         </div>
-      )}
-
-      {selectedOwner && (
-        <CustomerProfile
-          customer={selectedOwner}
-          siteId={siteId}
-          siteName={siteName}
-          onClose={() => setSelectedOwner(null)}
-        />
       )}
     </div>
   )

@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { bookFlatSchema, BookFlatInput, Floor, Flat, Wing, createFloorSchema, CreateFloorInput, createFlatSchema, CreateFlatInput, updateFlatDetailsSchema, UpdateFlatDetailsInput } from "@/schemas/site.schema"
-import { CustomerProfile } from "@/components/dashboard/customer-profile"
 import {
   useFloors,
   useWings,
@@ -1760,10 +1760,10 @@ export function FloorsFlatsTab({
   siteName?: string
   projectType: 'NEW_CONSTRUCTION' | 'REDEVELOPMENT'
 }) {
+  const router = useRouter()
   const { data, isLoading } = useFloors(siteId)
   const { data: wingsData } = useWings(siteId)
   const [booking, setBooking] = useState<{ initialFlatId?: string; preferredFloorId?: string } | null>(null)
-  const [customerView, setCustomerView] = useState<{ flat: Flat; floorName: string } | null>(null)
   const [addingFloor, setAddingFloor] = useState(false)
   const [editingFloor, setEditingFloor] = useState<Floor | null>(null)
   const [deletingFloor, setDeletingFloor] = useState<Floor | null>(null)
@@ -1912,7 +1912,9 @@ export function FloorsFlatsTab({
                 floor={floor}
                 defaultOpen={i === 0}
                 onBook={(flat) => setBooking({ initialFlatId: flat.id })}
-                onCustomerClick={(flat, floorName) => setCustomerView({ flat, floorName })}
+                onCustomerClick={(flat) => {
+                  if (flat.customer?.id) router.push(`/customers/${flat.customer.id}`)
+                }}
                 onBookFloor={(selectedFloor) => setBooking({ preferredFloorId: selectedFloor.id })}
                 onEditFloor={(selectedFloor) => setEditingFloor(selectedFloor)}
                 onDeleteFloor={(selectedFloor) => setDeletingFloor(selectedFloor)}
@@ -1981,39 +1983,6 @@ export function FloorsFlatsTab({
         />
       )}
 
-      {customerView && customerView.flat.customer && (
-        <CustomerProfile
-          customer={{
-            id: customerView.flat.customer.id,
-            name: customerView.flat.customer.name,
-            phone: customerView.flat.customer.phone ?? null,
-            email: customerView.flat.customer.email ?? null,
-            sellingPrice: customerView.flat.customer.sellingPrice,
-            bookingAmount: customerView.flat.customer.bookingAmount,
-            amountPaid: customerView.flat.customer.amountPaid,
-            remaining: customerView.flat.customer.remaining,
-            dealStatus: 'ACTIVE',
-            flatId: customerView.flat.id,
-            flatNumber: customerView.flat.flatNumber || 0,
-            customFlatId: customerView.flat.customFlatId || undefined,
-            floorNumber: floors.find(f => f.flats.some(fl => fl.id === customerView.flat.id))?.floorNumber || 0,
-            floorName: customerView.floorName,
-            flatStatus: customerView.flat.status,
-            cancelledAt: null,
-            cancellationReason: null,
-            cancelledByUserId: null,
-            cancelledFromFlatStatus: null,
-            cancelledFlatId: null,
-            cancelledFlatDisplay: null,
-            cancelledFloorNumber: null,
-            cancelledFloorName: null,
-            createdAt: customerView.flat.customer.createdAt,
-          }}
-          siteId={siteId}
-          siteName={siteName}
-          onClose={() => setCustomerView(null)}
-        />
-      )}
     </>
   )
 }

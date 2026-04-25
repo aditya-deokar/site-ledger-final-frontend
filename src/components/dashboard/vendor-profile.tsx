@@ -271,7 +271,9 @@ export function VendorProfile({ vendorId, vendorName, onClose }: { vendorId: str
                           <Eye className="h-3 w-3" /> View
                         </button>
                         <button
-                          onClick={() => downloadVendorReceipt(receipt)}
+                          onClick={() => {
+                            void downloadVendorReceipt(receipt)
+                          }}
                           className="inline-flex h-8 items-center gap-1 border border-border px-2 text-[9px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
                         >
                           <Download className="h-3 w-3" /> Download

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useCustomerAgreement } from "@/hooks/api/customer.hooks"
+import { useCompany } from "@/hooks/api/company.hooks"
 import {
   type Customer,
   type CustomerAgreementLine,
@@ -16,6 +17,8 @@ import {
   type CustomerPaymentHistoryItem,
 } from "@/schemas/customer.schema"
 import { cn } from "@/lib/utils"
+import { generateReceiptPDF, generateStatementPDF, type ReceiptData, type StatementData } from "@/lib/pdf-generator"
+import { toast } from "sonner"
 
 type WorkspaceMode = "receipt" | "statement"
 
@@ -25,7 +28,7 @@ type StatementRow = {
   balance: number
 }
 
-type RecordedAgreementRow = Pick<CustomerAgreementLine, "type" | "label" | "signedAmount" | "affectsProfit">
+type RecordedAgreementRow = Pick<CustomerAgreementLine, "type" | "label" | "signedAmount" | "affectsProfit" | "createdAt">
 
 type PrintDetails = {
   customerName: string
@@ -182,99 +185,6 @@ function buildStatementRows(payments: CustomerPaymentHistoryItem[], agreementVal
   })
 }
 
-function convertLabColorToRgb(element: HTMLElement) {
-  const computedStyle = window.getComputedStyle(element)
-  const colorProperties = ['color', 'backgroundColor', 'borderColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor']
-  
-  colorProperties.forEach(prop => {
-    const value = computedStyle.getPropertyValue(prop)
-    if (value && value.includes('lab(')) {
-      // Get the computed RGB value by creating a temporary element
-      const tempDiv = document.createElement('div')
-      tempDiv.style.color = value
-      document.body.appendChild(tempDiv)
-      const rgbValue = window.getComputedStyle(tempDiv).color
-      document.body.removeChild(tempDiv)
-      element.style.setProperty(prop, rgbValue, 'important')
-    }
-  })
-}
-
-function cloneAndFixColors(element: HTMLElement): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement
-  
-  // Fix colors on the clone and all its children
-  const allElements = [clone, ...Array.from(clone.querySelectorAll('*'))] as HTMLElement[]
-  allElements.forEach(el => {
-    const computedStyle = window.getComputedStyle(el)
-    
-    // Convert computed colors to inline styles to avoid lab() parsing
-    const colorProps = ['color', 'backgroundColor', 'borderColor']
-    colorProps.forEach(prop => {
-      const value = computedStyle.getPropertyValue(prop)
-      if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
-        el.style.setProperty(prop, value, 'important')
-      }
-    })
-  })
-  
-  return clone
-}
-
-async function exportElementToPdf(element: HTMLElement, filename: string) {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ])
-
-  // Clone the element and fix color issues
-  const clonedElement = cloneAndFixColors(element)
-  
-  // Temporarily add to DOM for rendering
-  clonedElement.style.position = 'absolute'
-  clonedElement.style.left = '-9999px'
-  clonedElement.style.top = '0'
-  document.body.appendChild(clonedElement)
-
-  try {
-    const canvas = await html2canvas(clonedElement, {
-      backgroundColor: "#ffffff",
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      windowWidth: clonedElement.scrollWidth,
-      windowHeight: clonedElement.scrollHeight,
-    })
-
-    const imageData = canvas.toDataURL("image/png")
-    const pdf = new jsPDF("p", "mm", "a4")
-    const margin = 8
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const contentWidth = pageWidth - margin * 2
-    const contentHeight = (canvas.height * contentWidth) / canvas.width
-    const printableHeight = pageHeight - margin * 2
-
-    let remainingHeight = contentHeight
-    let offsetY = margin
-
-    pdf.addImage(imageData, "PNG", margin, offsetY, contentWidth, contentHeight, undefined, "FAST")
-    remainingHeight -= printableHeight
-
-    while (remainingHeight > 0) {
-      pdf.addPage()
-      offsetY = margin - (contentHeight - remainingHeight)
-      pdf.addImage(imageData, "PNG", margin, offsetY, contentWidth, contentHeight, undefined, "FAST")
-      remainingHeight -= printableHeight
-    }
-
-    pdf.save(filename)
-  } finally {
-    // Clean up the cloned element
-    document.body.removeChild(clonedElement)
-  }
-}
-
 function PreviewField({
   label,
   value,
@@ -302,10 +212,10 @@ function PreviewSection({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-[2px] border border-slate-200 bg-white p-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{title}</h3>
-      </div>
+    <section>
+      <h3 className="mb-3 border-b border-slate-200 pb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+        {title}
+      </h3>
       {children}
     </section>
   )
@@ -319,10 +229,10 @@ function DocumentShell({
   previewRef: RefObject<HTMLDivElement | null>
 }) {
   return (
-    <div className="mx-auto min-w-[820px] max-w-[920px] px-4">
+    <div className="mx-auto w-full max-w-[820px] px-2 sm:px-4">
       <div
         ref={previewRef}
-        className="mx-auto w-full max-w-[860px] bg-white text-slate-900 shadow-[0_24px_80px_rgba(15,23,42,0.16)]"
+        className="receipt-pdf-root w-full overflow-hidden border border-slate-200 bg-white text-slate-900 shadow-sm"
       >
         {children}
       </div>
@@ -354,45 +264,70 @@ function ReceiptPreview({
 
   return (
     <DocumentShell previewRef={previewRef}>
-      <div className="border-b border-slate-900 px-10 py-10">
-        <div className="flex items-start justify-between gap-10">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Builder Collection Receipt</p>
-            <h1 className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">Payment Receipt</h1>
-            <p className="mt-4 text-lg font-medium text-slate-900">{printDetails.projectName || "Project Name"}</p>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">{printDetails.siteAddress || "Add the site address in the details panel."}</p>
+      <div className="h-2 w-full bg-teal-600" aria-hidden />
+      <div className="border-b border-slate-200 bg-slate-50/60 px-6 py-7 sm:px-10 sm:py-8">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-teal-800/80">Payment receipt</p>
+            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Money receipt</h1>
+            <p className="mt-2 text-base font-medium text-slate-800">{printDetails.projectName || "Project name"}</p>
+            <p className="mt-1 max-w-xl text-sm leading-relaxed text-slate-600">
+              {printDetails.siteAddress || "Site address (edit in print details if needed)."}
+            </p>
           </div>
-
-          <div className="w-full max-w-[300px] border border-slate-200 bg-slate-50 px-5 py-4">
-            <PreviewField label="Receipt No" value={receiptNumber} />
-            <PreviewField label="Receipt Date" value={receiptDate} />
-            <PreviewField label="Posted At" value={formatDateTime(selectedPayment.createdAt)} />
-            <PreviewField label="Mode" value={paymentMode} muted={paymentMode === "Not recorded"} />
-          </div>
-        </div>
-      </div>
-
-      <div className="border-b border-slate-200 px-10 py-8">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_300px]">
-          <div className="border border-emerald-200 bg-emerald-50 px-6 py-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">Received Amount</p>
-            <p className="mt-4 text-5xl font-semibold tracking-tight text-emerald-700">{formatINR(selectedPayment.amount)}</p>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-700">{paymentAmountWords}</p>
-          </div>
-
-          <div className="border border-slate-200 px-6 py-6">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Received From</p>
-            <p className="mt-4 text-2xl font-semibold text-slate-950">{printDetails.customerName || "Customer Name"}</p>
-            <div className="mt-4 space-y-2 text-sm text-slate-600">
-              <p>{printDetails.customerPhone || "Phone number not added"}</p>
-              <p>{printDetails.flatNumber || "Flat / Unit pending"}</p>
-              <p>{printDetails.floorNumber || "Floor pending"}</p>
+          <div className="w-full shrink-0 border border-slate-200 bg-white p-4 sm:max-w-[280px] sm:p-5">
+            <div className="space-y-0 divide-y divide-slate-200">
+              <div className="flex justify-between gap-4 py-2.5 first:pt-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Receipt no.</span>
+                <span className="text-right font-mono text-sm font-semibold text-slate-900">{receiptNumber}</span>
+              </div>
+              <div className="flex justify-between gap-4 py-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Date</span>
+                <span className="text-right text-sm font-medium text-slate-900">{receiptDate}</span>
+              </div>
+              <div className="flex justify-between gap-4 py-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Posted</span>
+                <span className="text-right text-xs text-slate-700">{formatDateTime(selectedPayment.createdAt)}</span>
+              </div>
+              <div className="flex justify-between gap-4 py-2.5 last:pb-0">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Mode</span>
+                <span
+                  className={cn(
+                    "text-right text-sm font-medium",
+                    paymentMode === "Not recorded" ? "text-slate-500" : "text-slate-900",
+                  )}
+                >
+                  {paymentMode}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 px-10 py-8 md:grid-cols-2">
+      <div className="px-6 py-6 sm:px-10 sm:py-7">
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_300px]">
+          <div className="border border-teal-200/80 bg-gradient-to-br from-teal-50/90 to-white px-5 py-5 sm:px-6 sm:py-6">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-800/90">Amount received</p>
+            <p className="mt-2 font-sans text-3xl font-bold tabular-nums tracking-tight text-teal-700 sm:text-4xl">
+              {formatINR(selectedPayment.amount)}
+            </p>
+            <p className="mt-3 border-t border-teal-200/60 pt-3 text-sm leading-relaxed text-slate-700">{paymentAmountWords}</p>
+          </div>
+          <div className="border border-slate-200 bg-white px-5 py-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Received from</p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">{printDetails.customerName || "Customer name"}</p>
+            <ul className="mt-3 list-none space-y-1.5 text-sm text-slate-600">
+              <li>{printDetails.customerPhone || "—"}</li>
+              <li>
+                {printDetails.flatNumber || "Flat / unit"} · {printDetails.floorNumber || "Floor"}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-8 border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8 md:grid-cols-2">
         <PreviewSection title="Customer Details">
           <PreviewField label="Customer" value={printDetails.customerName} />
           <PreviewField label="Phone" value={printDetails.customerPhone} muted={!printDetails.customerPhone} />
@@ -410,47 +345,54 @@ function ReceiptPreview({
         </PreviewSection>
       </div>
 
-      <div className="border-t border-slate-200 px-10 py-8">
-        <PreviewSection title="Payment Details">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Reference</p>
-              <p className="mt-3 text-base font-semibold text-slate-950">{selectedPayment.referenceNumber || "-"}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Payment Mode</p>
-              <p className="mt-3 text-base font-semibold text-slate-950">{paymentMode}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Receipt Date</p>
-              <p className="mt-3 text-base font-semibold text-slate-950">{receiptDate}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Amount</p>
-              <p className="mt-3 text-base font-semibold text-emerald-700">{formatINR(selectedPayment.amount)}</p>
-            </div>
-          </div>
-          <div className="mt-4 border border-slate-200 px-4 py-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Note</p>
-            <p className="mt-3 text-sm leading-6 text-slate-700">{selectedPayment.note || "No note recorded for this payment."}</p>
+      <div className="border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8">
+        <PreviewSection title="Transaction">
+          <div className="overflow-hidden rounded-sm border border-slate-200">
+            <table className="w-full border-collapse text-sm">
+              <tbody>
+                <tr className="border-b border-slate-200 bg-slate-50/80">
+                  <td className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Reference</td>
+                  <td className="px-4 py-2.5 text-right font-medium text-slate-900">{selectedPayment.referenceNumber || "—"}</td>
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Mode</td>
+                  <td className="px-4 py-2.5 text-right font-medium text-slate-900">{paymentMode}</td>
+                </tr>
+                <tr className="border-b border-slate-200 bg-slate-50/50">
+                  <td className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">This payment</td>
+                  <td className="px-4 py-2.5 text-right font-bold tabular-nums text-teal-700">{formatINR(selectedPayment.amount)}</td>
+                </tr>
+                <tr>
+                  <td className="align-top px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Note</td>
+                  <td className="px-4 py-3 text-right text-sm leading-relaxed text-slate-700">
+                    {selectedPayment.note || "—"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </PreviewSection>
       </div>
 
-      <div className="border-t border-slate-200 px-10 py-8">
-        <PreviewSection title="Running Account Summary">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="border border-slate-200 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Agreement Value</p>
-              <p className="mt-3 text-2xl font-semibold text-slate-950">{formatINR(agreementValue)}</p>
+      <div className="border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8">
+        <PreviewSection title="Account position (after this receipt)">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="border border-slate-200 bg-white px-4 py-3 text-center sm:text-left">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Agreement value</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{formatINR(agreementValue)}</p>
             </div>
-            <div className="border border-slate-200 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Collected Till This Receipt</p>
-              <p className="mt-3 text-2xl font-semibold text-emerald-700">{formatINR(selectedStatementRow.cumulativePaid)}</p>
+            <div className="border border-slate-200 bg-white px-4 py-3 text-center sm:text-left">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total collected</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-teal-700">{formatINR(selectedStatementRow.cumulativePaid)}</p>
             </div>
-            <div className="border border-slate-200 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Outstanding Balance</p>
-              <p className={cn("mt-3 text-2xl font-semibold", selectedStatementRow.balance > 0 ? "text-red-600" : "text-emerald-700")}>
+            <div className="border border-slate-200 bg-white px-4 py-3 text-center sm:text-left">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Balance due</p>
+              <p
+                className={cn(
+                  "mt-1 text-xl font-bold tabular-nums",
+                  selectedStatementRow.balance > 0 ? "text-red-600" : "text-teal-700",
+                )}
+              >
                 {formatINR(selectedStatementRow.balance)}
               </p>
             </div>
@@ -458,30 +400,37 @@ function ReceiptPreview({
         </PreviewSection>
       </div>
 
-      <div className="border-t border-slate-200 px-10 py-8">
-        <PreviewSection title="Recorded Agreement Breakdown">
+      <div className="border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8">
+        <PreviewSection title="Recorded agreement lines">
           {recordedAgreementRows.length === 0 ? (
-            <div className="border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
-              No recorded agreement rows found for this customer.
+            <div className="border border-dashed border-slate-300 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-500">
+              No agreement line items to list.
             </div>
           ) : (
             <div className="overflow-hidden border border-slate-200">
               <table className="min-w-full border-collapse text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Type</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Label</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Profit Effect</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Impact</th>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-teal-50/90">
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Type</th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Particulars</th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Profit</th>
+                    <th className="px-3 py-2.5 text-right text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recordedAgreementRows.map((row, index) => (
-                    <tr key={`${row.type}-${row.label}-${index}`} className="border-b border-slate-200 last:border-b-0">
-                      <td className="px-4 py-3">{getAgreementTypeLabel(row.type)}</td>
-                      <td className="px-4 py-3">{row.label}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.affectsProfit ? "Affects profit" : "Pass-through"}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-950">{formatSignedINR(row.signedAmount)}</td>
+                    <tr
+                      key={`${row.type}-${row.label}-${index}`}
+                      className={index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+                    >
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-800">{getAgreementTypeLabel(row.type)}</td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-800">{row.label}</td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-600">
+                        {row.affectsProfit ? "In profit" : "Pass-through"}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        {formatSignedINR(row.signedAmount)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -489,18 +438,18 @@ function ReceiptPreview({
             </div>
           )}
 
-          <p className="mt-4 text-xs leading-6 text-slate-500">
-            This receipt uses only recorded agreement and payment data. Price changes, GST rows, and discounts shown here come from the stored customer ledger.
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            Figures above reflect your saved agreement. They do not create duplicate ledger payments.
           </p>
         </PreviewSection>
       </div>
 
-      <div className="flex justify-between gap-8 border-t border-slate-200 px-10 pb-12 pt-14">
-        <div className="w-full max-w-[260px] border-t border-slate-400 pt-4 text-center text-sm text-slate-600">
-          Customer Signature
+      <div className="flex flex-col justify-between gap-6 border-t border-slate-200 px-6 pb-10 pt-8 sm:px-10 sm:flex-row sm:pb-12">
+        <div className="flex-1 border-t border-slate-300 pt-3 text-center text-xs text-slate-600 sm:text-left">
+          Customer
         </div>
-        <div className="w-full max-w-[260px] border-t border-slate-400 pt-4 text-center text-sm text-slate-600">
-          Authorized Signatory
+        <div className="flex-1 border-t border-slate-300 pt-3 text-center text-xs text-slate-600 sm:text-right">
+          For {printDetails.projectName || "the developer"}
         </div>
       </div>
     </DocumentShell>
@@ -525,43 +474,52 @@ function StatementPreview({
 
   return (
     <DocumentShell previewRef={previewRef}>
-      <div className="border-b border-slate-900 px-10 py-10">
-        <div className="flex items-start justify-between gap-10">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Customer Account Statement</p>
-            <h1 className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">Account Statement</h1>
-            <p className="mt-4 text-lg font-medium text-slate-900">{printDetails.projectName || "Project Name"}</p>
-            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">{printDetails.siteAddress || "Add the site address in the details panel."}</p>
+      <div className="h-2 w-full bg-teal-600" aria-hidden />
+      <div className="border-b border-slate-200 bg-slate-50/60 px-6 py-7 sm:px-10 sm:py-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-teal-800/80">Account statement</p>
+            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Statement of account</h1>
+            <p className="mt-2 text-base font-medium text-slate-800">{printDetails.projectName || "Project name"}</p>
+            <p className="mt-1 max-w-xl text-sm text-slate-600">{printDetails.siteAddress || "Site address"}</p>
           </div>
-
-          <div className="w-full max-w-[300px] border border-slate-200 bg-slate-50 px-5 py-4">
-            <PreviewField label="Generated On" value={formatDateTime(new Date().toISOString())} />
-            <PreviewField label="Customer" value={printDetails.customerName} />
-            <PreviewField label="Flat / Unit" value={printDetails.flatNumber} muted={!printDetails.flatNumber} />
+          <div className="w-full shrink-0 space-y-2 border border-slate-200 bg-white p-4 text-sm sm:max-w-[260px]">
+            <div className="flex justify-between gap-2 text-xs text-slate-500">
+              <span>Generated</span>
+              <span className="text-right text-slate-800">{formatDateTime(new Date().toISOString())}</span>
+            </div>
+            <div className="flex justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
+              <span>Customer</span>
+              <span className="text-right font-medium text-slate-900">{printDetails.customerName}</span>
+            </div>
+            <div className="flex justify-between gap-2 text-xs text-slate-500">
+              <span>Unit</span>
+              <span className="text-right text-slate-800">{printDetails.flatNumber || "—"}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="border-b border-slate-200 px-10 py-8">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Agreement Value</p>
-            <p className="mt-3 text-3xl font-semibold text-slate-950">{formatINR(agreementValue)}</p>
+      <div className="border-b border-slate-200 px-6 py-6 sm:px-10 sm:py-7">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="border border-slate-200 bg-white px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Agreement value</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatINR(agreementValue)}</p>
           </div>
-          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Total Collected</p>
-            <p className="mt-3 text-3xl font-semibold text-emerald-700">{formatINR(totalReceived)}</p>
+          <div className="border border-slate-200 bg-white px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total received</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-teal-700">{formatINR(totalReceived)}</p>
           </div>
-          <div className="border border-slate-200 bg-slate-50 px-5 py-5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Outstanding Balance</p>
-            <p className={cn("mt-3 text-3xl font-semibold", latestBalance > 0 ? "text-red-600" : "text-emerald-700")}>
+          <div className="border border-slate-200 bg-white px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Outstanding</p>
+            <p className={cn("mt-1 text-2xl font-bold tabular-nums", latestBalance > 0 ? "text-red-600" : "text-teal-700")}>
               {formatINR(latestBalance)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 px-10 py-8 md:grid-cols-2">
+      <div className="grid gap-6 px-6 py-6 sm:px-10 sm:py-8 md:grid-cols-2">
         <PreviewSection title="Customer Details">
           <PreviewField label="Customer" value={printDetails.customerName} />
           <PreviewField label="Phone" value={printDetails.customerPhone} muted={!printDetails.customerPhone} />
@@ -579,31 +537,37 @@ function StatementPreview({
         </PreviewSection>
       </div>
 
-      <div className="border-t border-slate-200 px-10 py-8">
-        <PreviewSection title="Payment Ledger">
-          <div className="overflow-hidden border border-slate-200">
+      <div className="border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8">
+        <PreviewSection title="Payment ledger">
+          <div className="overflow-x-auto border border-slate-200">
             <table className="min-w-full border-collapse text-sm">
-              <thead className="bg-slate-50">
-                <tr className="border-b border-slate-200">
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Date</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Mode</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Reference</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Note</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Amount</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Cumulative</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Balance</th>
+              <thead>
+                <tr className="border-b border-slate-200 bg-teal-50/90">
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Date</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Mode</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Ref.</th>
+                  <th className="min-w-[100px] px-2 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Note</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Amount</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Total in</th>
+                  <th className="whitespace-nowrap px-2 py-2.5 text-right text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Balance</th>
                 </tr>
               </thead>
               <tbody>
                 {statementRows.map((row) => (
-                  <tr key={row.payment.id} className="border-b border-slate-200 last:border-b-0">
-                    <td className="px-4 py-3">{formatDateTime(row.payment.createdAt)}</td>
-                    <td className="px-4 py-3">{getPaymentModeLabel(row.payment.paymentMode)}</td>
-                    <td className="px-4 py-3">{row.payment.referenceNumber || "-"}</td>
-                    <td className="px-4 py-3">{row.payment.note || "-"}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-emerald-700">{formatINR(row.payment.amount)}</td>
-                    <td className="px-4 py-3 text-right">{formatINR(row.cumulativePaid)}</td>
-                    <td className="px-4 py-3 text-right">{formatINR(row.balance)}</td>
+                  <tr key={row.payment.id} className="border-b border-slate-100 last:border-0">
+                    <td className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-800">{formatDateTime(row.payment.createdAt)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-700">{getPaymentModeLabel(row.payment.paymentMode)}</td>
+                    <td className="max-w-[100px] truncate px-2 py-2.5 text-xs text-slate-700">{row.payment.referenceNumber || "—"}</td>
+                    <td className="max-w-[140px] px-2 py-2.5 text-xs text-slate-600">{row.payment.note || "—"}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-xs font-semibold tabular-nums text-teal-700">
+                      {formatINR(row.payment.amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-xs tabular-nums text-slate-800">
+                      {formatINR(row.cumulativePaid)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-xs font-medium tabular-nums text-slate-900">
+                      {formatINR(row.balance)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -612,8 +576,8 @@ function StatementPreview({
         </PreviewSection>
       </div>
 
-      <div className="border-t border-slate-200 px-10 py-8">
-        <PreviewSection title="Recorded Agreement Breakdown">
+      <div className="border-t border-slate-200 px-6 py-6 sm:px-10 sm:py-8">
+        <PreviewSection title="Recorded agreement lines">
           {recordedAgreementRows.length === 0 ? (
             <div className="border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
               No recorded agreement rows found for this customer.
@@ -621,21 +585,28 @@ function StatementPreview({
           ) : (
             <div className="overflow-hidden border border-slate-200">
               <table className="min-w-full border-collapse text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Type</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Label</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Profit Effect</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Ledger Impact</th>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-teal-50/90">
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Type</th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Particulars</th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Profit</th>
+                    <th className="px-3 py-2.5 text-right text-[9px] font-bold uppercase tracking-widest text-teal-900/80">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recordedAgreementRows.map((row, index) => (
-                    <tr key={`${row.type}-${row.label}-${index}`} className="border-b border-slate-200 last:border-b-0">
-                      <td className="px-4 py-3">{getAgreementTypeLabel(row.type)}</td>
-                      <td className="px-4 py-3">{row.label}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.affectsProfit ? "Affects profit" : "Pass-through"}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-950">{formatSignedINR(row.signedAmount)}</td>
+                    <tr
+                      key={`${row.type}-${row.label}-${index}`}
+                      className={index % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+                    >
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-800">{getAgreementTypeLabel(row.type)}</td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-800">{row.label}</td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-slate-600">
+                        {row.affectsProfit ? "In profit" : "Pass-through"}
+                      </td>
+                      <td className="border-b border-slate-100 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        {formatSignedINR(row.signedAmount)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -658,8 +629,8 @@ function PreviewPlaceholder({
   message: string
 }) {
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-14rem)] min-w-[820px] max-w-[920px] items-center justify-center px-4">
-      <div className="w-full max-w-[860px] border border-dashed border-slate-300 bg-white px-8 py-16 text-center shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
+    <div className="mx-auto flex min-h-[calc(100vh-14rem)] w-full max-w-[820px] min-w-0 items-center justify-center px-4">
+      <div className="w-full max-w-[800px] border border-dashed border-slate-300 bg-white px-8 py-16 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center bg-slate-100 text-slate-500">
           {icon}
         </div>
@@ -696,7 +667,9 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   })
 
   const { data: agreementData } = useCustomerAgreement(customer.id)
+  const { data: companyData } = useCompany()
   const agreement = agreementData?.data?.agreement
+  const company = companyData?.data?.company
   const agreementValue = agreement?.totals.payableTotal ?? customer.sellingPrice
   const recordedAgreementRows: RecordedAgreementRow[] = useMemo(
     () => (agreement?.lines ?? []).map((line) => ({
@@ -704,6 +677,7 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
       label: line.label,
       signedAmount: line.signedAmount,
       affectsProfit: line.affectsProfit,
+      createdAt: line.createdAt,
     })),
     [agreement?.lines],
   )
@@ -754,18 +728,107 @@ export function ReceiptEditor({ customer, siteAddress, payments, onClose }: Rece
   }
 
   const handleDownloadPdf = async () => {
-    const activePreviewRef = workspaceMode === "receipt" ? receiptPreviewRef : statementPreviewRef
-    const activeNode = activePreviewRef.current
-
-    if (!activeNode) return
-
     const fileName = workspaceMode === "receipt"
       ? `receipt-${sanitizeFilename(printDetails.customerName)}-${sanitizeFilename(receiptNumber)}.pdf`
       : `statement-${sanitizeFilename(printDetails.customerName)}.pdf`
 
     setIsExporting(true)
     try {
-      await exportElementToPdf(activeNode, fileName)
+      if (workspaceMode === "receipt") {
+        if (!selectedPayment || !selectedStatementRow) {
+          toast.error("Please select a payment to generate the receipt.")
+          return
+        }
+        
+        // Prepare receipt data
+        const receiptData: ReceiptData = {
+          receiptNumber,
+          receiptDate: formatShortDate(selectedPayment.createdAt),
+          postedAt: formatDateTime(selectedPayment.createdAt),
+          paymentMode: getPaymentModeLabel(selectedPayment.paymentMode),
+          paymentAmount: selectedPayment.amount,
+          paymentAmountWords,
+          referenceNumber: selectedPayment.referenceNumber || undefined,
+          note: selectedPayment.note || undefined,
+          
+          companyName: company?.name || "Company Name",
+          
+          customerName: printDetails.customerName,
+          customerPhone: printDetails.customerPhone || undefined,
+          customerAddress: printDetails.customerAddress || undefined,
+          customerPan: printDetails.customerPan || undefined,
+          
+          projectName: printDetails.projectName,
+          siteAddress: printDetails.siteAddress || undefined,
+          flatNumber: printDetails.flatNumber || undefined,
+          floorNumber: printDetails.floorNumber || undefined,
+          carpetArea: printDetails.carpetArea || undefined,
+          ratePerSqft: printDetails.ratePerSqft || undefined,
+          
+          agreementValue,
+          totalCollected: selectedStatementRow.cumulativePaid,
+          balanceDue: selectedStatementRow.balance,
+          
+          agreementLines: recordedAgreementRows.map(row => ({
+            type: getAgreementTypeLabel(row.type),
+            label: row.label,
+            affectsProfit: row.affectsProfit,
+            signedAmount: row.signedAmount,
+            createdAt: formatShortDate(row.createdAt),
+          })),
+        }
+        
+        await generateReceiptPDF(receiptData, fileName)
+      } else {
+        // Prepare statement data
+        const statementData: StatementData = {
+          generatedAt: formatDateTime(new Date().toISOString()),
+          
+          companyName: company?.name || "Company Name",
+          
+          customerName: printDetails.customerName,
+          customerPhone: printDetails.customerPhone || undefined,
+          customerAddress: printDetails.customerAddress || undefined,
+          customerPan: printDetails.customerPan || undefined,
+          
+          projectName: printDetails.projectName,
+          siteAddress: printDetails.siteAddress || undefined,
+          flatNumber: printDetails.flatNumber || undefined,
+          floorNumber: printDetails.floorNumber || undefined,
+          carpetArea: printDetails.carpetArea || undefined,
+          ratePerSqft: printDetails.ratePerSqft || undefined,
+          
+          agreementValue,
+          totalReceived: statementRows.at(-1)?.cumulativePaid ?? 0,
+          outstanding: statementRows.at(-1)?.balance ?? agreementValue,
+          
+          payments: statementRows.map(row => ({
+            date: formatDateTime(row.payment.createdAt),
+            mode: getPaymentModeLabel(row.payment.paymentMode),
+            reference: row.payment.referenceNumber || undefined,
+            note: row.payment.note || undefined,
+            amount: row.payment.amount,
+            cumulativePaid: row.cumulativePaid,
+            balance: row.balance,
+          })),
+          
+          agreementLines: recordedAgreementRows.map(row => ({
+            type: getAgreementTypeLabel(row.type),
+            label: row.label,
+            affectsProfit: row.affectsProfit,
+            signedAmount: row.signedAmount,
+            createdAt: formatShortDate(row.createdAt),
+          })),
+        }
+        
+        await generateStatementPDF(statementData, fileName)
+      }
+      
+      toast.success("PDF downloaded successfully")
+    } catch (e) {
+      console.error("PDF Export Error:", e)
+      const errorMessage = e instanceof Error ? e.message : "Unknown error occurred"
+      toast.error(`Failed to generate PDF: ${errorMessage}`)
     } finally {
       setIsExporting(false)
     }

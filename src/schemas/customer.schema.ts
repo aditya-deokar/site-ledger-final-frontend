@@ -18,9 +18,9 @@ export type CustomerAgreementLineType = z.infer<typeof customerAgreementLineType
 export const customerAgreementLineSchema = z.object({
   type: customerAgreementLineTypeSchema,
   label: z.string().trim().min(1, 'Label is required'),
-  amount: z.number().min(0, 'Amount must be zero or more'),
-  ratePercent: z.number().min(0).optional(),
-  calculationBase: z.number().min(0).optional(),
+  amount: z.coerce.number().min(0, 'Amount must be zero or more'),
+  ratePercent: z.coerce.number().min(0).optional(),
+  calculationBase: z.coerce.number().min(0).optional(),
   affectsProfit: z.boolean().optional(),
   note: z.string().optional().or(z.literal('')),
 }).transform((data) => ({

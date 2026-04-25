@@ -47,7 +47,9 @@ test.describe('customer agreement smoke', () => {
 
     await page.getByRole('button', { name: 'View', exact: true }).first().click()
 
-    await expect(page.getByText('Customer Profile', { exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/customers\/[^/?#]+$/)
+    await expect(page.getByRole('link', { name: 'Back to Customers' })).toBeVisible()
+    await expect(page.getByText('Financial Summary', { exact: true })).toBeVisible()
     await expect(page.getByText('Agreement Total', { exact: true })).toBeVisible()
     await expect(
       page.getByText(
@@ -74,9 +76,9 @@ test.describe('customer agreement smoke', () => {
     await page.getByRole('button', { name: 'Receipt / Statement', exact: true }).click()
 
     await expect(page.getByText('Customer Receipt & Statement', { exact: true })).toBeVisible()
-    await expect(page.getByText('Payment Receipt', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Money receipt', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Download PDF', exact: true })).toBeVisible()
-    await expect(page.getByText('Recorded Agreement Breakdown', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Recorded agreement lines', { exact: true }).first()).toBeVisible()
     await expect(
       page.getByText(
         'Review the actual document, adjust print details, and export a PDF instead of downloading raw HTML.',

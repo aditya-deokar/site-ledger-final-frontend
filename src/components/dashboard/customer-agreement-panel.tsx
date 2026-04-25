@@ -235,13 +235,9 @@ export function CustomerAgreementPanel({
       submissionData.amount = draft.amount ? Number(draft.amount) : 0
     }
 
-    // Debug: Log what we're sending
-    console.log('Submission data:', submissionData)
-
     const parsed = customerAgreementLineSchema.safeParse(submissionData)
 
     if (!parsed.success) {
-      console.log('Validation errors:', parsed.error.issues)
       setFormError(parsed.error.issues[0]?.message ?? "Please check the agreement details.")
       return
     }
