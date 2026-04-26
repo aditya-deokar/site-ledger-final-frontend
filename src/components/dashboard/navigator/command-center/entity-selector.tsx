@@ -27,9 +27,21 @@ export function EntitySelector({
   title,
 }: EntitySelectorProps) {
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <button 
+          onClick={onBack} 
+          data-navbtn="true"
+          className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group"
+        >
+          <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+          Back
+        </button>
+      </div>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
+      </div>
     </div>
   );
 

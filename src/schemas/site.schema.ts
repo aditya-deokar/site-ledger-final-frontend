@@ -94,6 +94,8 @@ export const createExpenseSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   amountPaid: z.number().min(0).optional(),
   paymentDate: z.string().optional(),
+  paymentMode: paymentModeSchema.optional(),
+  referenceNumber: z.string().optional().or(z.literal('')),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 

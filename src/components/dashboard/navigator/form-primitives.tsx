@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const INPUT_CLS = 'h-12 w-full bg-muted border-2 border-transparent rounded-none px-4 text-sm font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 outline-none focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all';
@@ -102,7 +102,10 @@ export function SearchableSelect({
     if (isOpen && listRef.current) {
       const activeElement = listRef.current.children[activeIndex] as HTMLElement;
       if (activeElement) {
-        activeElement.scrollIntoView({ block: 'nearest' });
+        // Use requestAnimationFrame to ensure the list is rendered before scrolling
+        requestAnimationFrame(() => {
+          activeElement.scrollIntoView({ block: 'nearest' });
+        });
       }
     }
   }, [activeIndex, isOpen]);
@@ -160,17 +163,19 @@ export function SearchableSelect({
           e.target.select();
         }}
         onBlur={() => {
+          // Increased timeout to allow for scrollbar interaction and option selection
           window.setTimeout(() => {
             setIsOpen(false);
             setIsTyping(false);
             if (allowCustom && query) {
               onValueChange(query);
             }
-          }, 120);
+          }, 200);
         }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
+            e.stopPropagation(); // Prevent FormShell from navigating fields
             setIsOpen(true);
             if (!visibleOptions.length) return;
             setActiveIndex((prev) => Math.min(prev + 1, visibleOptions.length - 1));
@@ -178,20 +183,28 @@ export function SearchableSelect({
           }
           if (e.key === 'ArrowUp') {
             e.preventDefault();
+            e.stopPropagation(); // Prevent FormShell from navigating fields
             setIsOpen(true);
             if (!visibleOptions.length) return;
             setActiveIndex((prev) => Math.max(prev - 1, 0));
             return;
           }
           if (e.key === 'Escape') {
-            e.preventDefault();
-            setIsOpen(false);
+            if (isOpen) {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsOpen(false);
+            }
             return;
           }
           if (e.key === 'Enter') {
-            e.preventDefault();
-            handleEnter();
-            return;
+            if (isOpen && visibleOptions.length > 0) {
+              e.preventDefault();
+              e.stopPropagation(); // Prevent FormShell from moving to next field
+              handleEnter();
+              return;
+            }
+            // If dropdown is closed, let Enter bubble up to FormShell for navigation
           }
           if (e.key === 'Tab') {
             setIsOpen(false);
@@ -203,7 +216,11 @@ export function SearchableSelect({
       />
 
       {isOpen && visibleOptions.length > 0 && (
-        <div ref={listRef} className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overscroll-contain border border-border bg-background shadow-2xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20">
+        <div 
+          ref={listRef} 
+          onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking scrollbar/container
+          className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto overscroll-contain border border-border bg-background shadow-2xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20"
+        >
           {visibleOptions.map((option, idx) => (
             <button
               key={option.value}
@@ -239,7 +256,10 @@ export function SearchableSelect({
       )}
 
       {isOpen && hasQuery && visibleOptions.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full border border-border bg-background p-2 shadow-2xl">
+        <div 
+          className="absolute z-50 mt-1 w-full border border-border bg-background p-1 shadow-xl max-h-60 overflow-y-auto"
+          onMouseDown={(e) => e.preventDefault()}
+        >
           {renderNoResults ? (
             <div>{renderNoResults(query)}</div>
           ) : (
@@ -313,16 +333,22 @@ export function Field({ label, error, children }: { label: string; error?: strin
 }
 
 export function FormError({ msg }: { msg: string }) {
-  return <div className="bg-destructive/10 border border-destructive/30 p-3 text-[11px] font-bold text-destructive">{msg}</div>;
+  return (
+    <div className="bg-destructive/10 border border-destructive/30 p-3 text-[11px] font-bold text-destructive flex items-start gap-2">
+      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+      <span>{msg}</span>
+    </div>
+  );
 }
 
-export function FormShell({ title, onBack, isPending, submitLabel, formId, destructive, children }: {
+export function FormShell({ title, onBack, isPending, submitLabel, formId, destructive, sidePanel, children }: {
   title: string;
   onBack: () => void;
   isPending: boolean;
   submitLabel: string;
   formId: string;
   destructive?: boolean;
+  sidePanel?: ReactNode;
   children: ReactNode;
 }) {
   const navRef = useRef<HTMLDivElement>(null);
@@ -349,123 +375,142 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
     });
   }, [title]);
 
-  useEffect(() => {
-    const el = navRef.current;
-    if (!el) return;
+  const getFocusables = (): HTMLElement[] => {
+    if (!navRef.current) return [];
+    return Array.from(navRef.current.querySelectorAll(FOCUSABLE));
+  };
 
-    const getFocusables = (): HTMLElement[] =>
-      Array.from(el.querySelectorAll(FOCUSABLE));
+  const getIdx = (): number => {
+    const active = document.activeElement as HTMLElement;
+    const items = getFocusables();
+    let idx = items.indexOf(active);
+    if (idx === -1) {
+      const rg = active?.closest('[role="radiogroup"]');
+      if (rg) idx = items.indexOf(rg as HTMLElement);
+    }
+    return idx;
+  };
 
-    const getIdx = (): number => {
-      const active = document.activeElement as HTMLElement;
-      const items = getFocusables();
-      let idx = items.indexOf(active);
-      if (idx === -1) {
-        const rg = active?.closest('[role="radiogroup"]');
-        if (rg) idx = items.indexOf(rg as HTMLElement);
+  const focusItem = (items: HTMLElement[], idx: number) => {
+    if (idx >= 0 && idx < items.length) {
+      items[idx].focus();
+      items[idx].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const active = document.activeElement as HTMLElement;
+    const items = getFocusables();
+    const idx = getIdx();
+    if (idx === -1) return;
+
+    const tag = active?.tagName;
+    const isBtn = !!active?.getAttribute('data-navbtn');
+    const isRadioGroup = active?.getAttribute('role') === 'radiogroup' || !!active?.closest('[role="radiogroup"]');
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      requestCancel();
+      return;
+    }
+
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const el = navRef.current;
+      if (!el) return;
+      const submitBtn = el.querySelector('[data-submitbtn="true"]') as HTMLButtonElement;
+      if (submitBtn && !submitBtn.disabled) {
+        submitBtn.click();
       }
-      return idx;
-    };
+      return;
+    }
 
-    const focusItem = (items: HTMLElement[], idx: number) => {
-      if (idx >= 0 && idx < items.length) {
-        items[idx].focus();
-        items[idx].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-      }
-    };
+    if (e.key === 'Enter') {
+      if (isBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusItem(items, idx + 1);
+      return;
+    }
 
-    const handler = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && isBtn)) {
+      if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusItem(items, idx + 1);
+      return;
+    }
 
-      const active = document.activeElement as HTMLElement;
-      const items = getFocusables();
-      const idx = getIdx();
-      if (idx === -1) return;
-
-      const tag = active?.tagName;
-      const isBtn = !!active?.getAttribute('data-navbtn');
-      const isRadioGroup = active?.getAttribute('role') === 'radiogroup' || !!active?.closest('[role="radiogroup"]');
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        requestCancel();
-        return;
-      }
-
-      if (e.key === 'Enter') {
-        if (isBtn) return;
-        e.preventDefault();
-        e.stopPropagation();
-        focusItem(items, idx + 1);
-        return;
-      }
-
-      if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && isBtn)) {
-        if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
-        e.preventDefault();
-        focusItem(items, idx + 1);
-        return;
-      }
-
-      if (e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && isBtn)) {
-        if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
-        e.preventDefault();
-        focusItem(items, idx - 1);
-      }
-    };
-
-    el.addEventListener('keydown', handler, true);
-    return () => el.removeEventListener('keydown', handler, true);
-  }, []);
+    if (e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && isBtn)) {
+      if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusItem(items, idx - 1);
+    }
+  };
 
   const BTN_FOCUS = 'outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary';
 
   return (
-    <div ref={navRef} className="flex flex-col gap-6">
+    <div ref={navRef} onKeyDown={handleKeyDown} className="flex flex-col gap-6">
       <button onClick={requestCancel} tabIndex={-1} className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group">
         <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
         Back
       </button>
-      <h2 className="text-2xl font-serif tracking-tight text-foreground">{title}</h2>
+      
+      <div className={cn(
+        "grid gap-12 items-start",
+        sidePanel ? "lg:grid-cols-[1fr_20rem]" : "grid-cols-1"
+      )}>
+        <div className="flex flex-col gap-6">
+          <h2 className="text-2xl font-serif tracking-tight text-foreground">{title}</h2>
+          {children}
+          
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <button
+              data-navbtn="true"
+              type="button"
+              onClick={requestCancel}
+              className={cn(
+                'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] border border-border text-muted-foreground transition-all flex items-center justify-center gap-2',
+                'hover:bg-muted/30',
+                BTN_FOCUS,
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              data-navbtn="true"
+              data-submitbtn="true"
+              type="submit"
+              form={formId}
+              disabled={isPending}
+              className={cn(
+                'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2',
+                destructive
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'bg-primary text-black hover:bg-primary/90',
+                isPending && 'opacity-60 cursor-not-allowed',
+                BTN_FOCUS,
+              )}
+            >
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
+            </button>
+          </div>
+          
+          <p className="text-center text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">
+            Enter next | Ctrl+Enter save | Up/Down move | Left/Right buttons | Esc back
+          </p>
+        </div>
 
-      {children}
-
-      <div className="grid grid-cols-2 gap-3 mt-2">
-        <button
-          data-navbtn="true"
-          type="button"
-          onClick={requestCancel}
-          className={cn(
-            'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] border border-border text-muted-foreground transition-all flex items-center justify-center gap-2',
-            'hover:bg-muted/30',
-            BTN_FOCUS,
-          )}
-        >
-          Cancel
-        </button>
-        <button
-          data-navbtn="true"
-          data-submitbtn="true"
-          type="submit"
-          form={formId}
-          disabled={isPending}
-          className={cn(
-            'h-12 w-full font-bold text-[11px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2',
-            destructive
-              ? 'bg-red-500 text-white hover:bg-red-600'
-              : 'bg-primary text-black hover:bg-primary/90',
-            isPending && 'opacity-60 cursor-not-allowed',
-            BTN_FOCUS,
-          )}
-        >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
-        </button>
+        {sidePanel && (
+          <div className="lg:sticky lg:top-0 h-fit">
+            {sidePanel}
+          </div>
+        )}
       </div>
-
-      <p className="text-center text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30">
-        Enter next | Up/Down move | Left/Right buttons | Esc back
-      </p>
-
     </div>
   );
 }

@@ -24,6 +24,12 @@ export function getTodayDateInputValue() {
   return local.toISOString().slice(0, 10);
 }
 
+export function getTodayDateTimeInputValue() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
 export function parseOptionalPositiveInteger(value: unknown) {
   if (value === '' || value === null || value === undefined) return undefined;
   const nextValue = typeof value === 'number' ? value : Number(value);
@@ -74,4 +80,15 @@ export function getFlatWing(flat: Flat) {
   if (prefixWing?.[1] && prefixWing[1].length <= 3) return prefixWing[1].toUpperCase();
 
   return '-';
+}
+
+export function toIsoDate(dateValue: string) {
+  if (!dateValue) return '';
+  const date = new Date(dateValue);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+export function toIsoDateTime(dateValue: string, timeValue?: string) {
+  if (!timeValue) return undefined;
+  return new Date(`${dateValue}T${timeValue}:00`).toISOString();
 }

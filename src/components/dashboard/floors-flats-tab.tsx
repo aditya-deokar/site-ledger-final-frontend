@@ -54,7 +54,9 @@ function getBookingReferenceLabel(paymentMode?: BookFlatInput["paymentMode"]) {
 }
 
 function getFloorDisplayName(floor: Pick<Floor, "floorName" | "floorNumber">) {
-  return floor.floorName || `Floor ${floor.floorNumber}`
+  if (floor.floorName) return floor.floorName;
+  if (floor.floorNumber === 0) return "Ground Floor";
+  return `Floor ${floor.floorNumber}`;
 }
 
 function getFlatDisplayName(flat: Pick<Flat, "customFlatId" | "flatNumber">) {

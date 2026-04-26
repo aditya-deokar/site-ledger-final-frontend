@@ -16,7 +16,7 @@ import {
 import { toast } from 'sonner';
 
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
-import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites } from '@/hooks/api/site.hooks';
+import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useExpenses } from '@/hooks/api/site.hooks';
 import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund, useCompany } from '@/hooks/api/company.hooks';
 import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors, useAddTransaction } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
@@ -31,7 +31,6 @@ import { updateCustomerSchema, UpdateCustomerInput, recordPaymentSchema, RecordP
 import { createEmployeeSchema, CreateEmployeeInput, PaySalaryInput, paySalarySchema, UpdateEmployeeInput } from '@/schemas/employee.schema';
 import type { AttendanceStatus } from '@/schemas/attendance.schema';
 import { Field, FormError, FormShell, KeyToggle, SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
-import { BookedFlatsTable } from '@/components/dashboard/navigator/command-center/booked-flats-table';
 import {
   ACTIONS_NEEDING_SELECTOR,
   ACTIONS_NEEDING_SUB_SELECTOR,
@@ -54,10 +53,13 @@ import {
   formatINR,
   getShortcutNumber,
   getTodayDateInputValue,
+  getTodayDateTimeInputValue,
   parseOptionalNumber,
   parseOptionalPositiveInteger,
   toDateInputValue,
   formatShortDate,
+  toIsoDate,
+  toIsoDateTime,
 } from '@/components/dashboard/navigator/command-center/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
@@ -266,7 +268,7 @@ function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
 
 // â”€â”€â”€ FORM: Add Partner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function AddSiteExpenseForm({ site, onSuccess, onBack }: { site: any; onSuccess: () => void; onBack: () => void }) {
+function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site: any; onSuccess: () => void; onBack: () => void; onVendorChange: (id: string | null) => void }) {
   const { data: vendorsData } = useVendors();
   const vendors = vendorsData?.data?.vendors ?? [];
   const { mutateAsync: createVendorQuick, isPending: isCreatingVendorQuick } = useCreateVendor();
@@ -283,20 +285,37 @@ function AddSiteExpenseForm({ site, onSuccess, onBack }: { site: any; onSuccess:
   });
   const { register, handleSubmit, watch, reset, setValue, setFocus, formState: { errors } } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
-    defaultValues: { type: 'GENERAL', reason: '', vendorId: '', description: '', amount: 0, amountPaid: 0, paymentDate: getTodayDateInputValue() },
+    defaultValues: {
+      type: 'GENERAL',
+      reason: '',
+      vendorId: '',
+      description: '',
+      amount: 0,
+      amountPaid: 0,
+      paymentDate: getTodayDateTimeInputValue(),
+      paymentMode: 'CASH',
+      referenceNumber: '',
+    },
   });
   const expenseType = watch('type') || 'GENERAL';
   const selectedVendorId = watch('vendorId') || '';
-  useEffect(() => { setTimeout(() => setFocus('amount'), 50); }, [setFocus]);
+
+  useEffect(() => {
+    onVendorChange(expenseType === 'VENDOR' ? (selectedVendorId || null) : null);
+  }, [expenseType, selectedVendorId, onVendorChange]);
+
+  // No manual focus override to let FormShell handle it naturally from the first field
 
   const onSubmit = (d: CreateExpenseInput) => {
     const payload: CreateExpenseInput = {
       ...d,
       reason: d.reason || undefined,
       description: d.description || undefined,
-      paymentDate: d.paymentDate || undefined,
+      paymentDate: d.paymentDate ? toIsoDate(d.paymentDate) : undefined,
       vendorId: d.type === 'VENDOR' ? d.vendorId || undefined : undefined,
       amountPaid: d.amountPaid === 0 ? undefined : d.amountPaid,
+      paymentMode: d.amountPaid > 0 ? d.paymentMode : undefined,
+      referenceNumber: d.amountPaid > 0 && d.paymentMode !== 'CASH' ? d.referenceNumber?.trim() || undefined : undefined,
     };
 
     if (payload.type === 'VENDOR' && !payload.vendorId) {
@@ -335,27 +354,20 @@ function AddSiteExpenseForm({ site, onSuccess, onBack }: { site: any; onSuccess:
     }
   };
 
+  const paymentMode = watch('paymentMode') || 'CASH';
+  const amountPaid = watch('amountPaid') || 0;
+
   return (
-    <FormShell title={`Add Expense in ${site?.name}`} onBack={onBack} isPending={isPending || isCreatingVendorQuick} submitLabel="Save Expense" formId="add-site-expense-form">
+    <FormShell 
+      title={`Add Expense in ${site?.name}`} 
+      onBack={onBack} 
+      isPending={isPending || isCreatingVendorQuick} 
+      submitLabel="Save Expense" 
+      formId="add-site-expense-form"
+    >
       <form id="add-site-expense-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to add expense')} />}
-        <div className="border border-border bg-muted/20 p-4">
-          <p className={LABEL_CLS}>Site Snapshot</p>
-          <div className="mt-2 grid grid-cols-3 gap-3 text-[10px] font-bold uppercase tracking-widest">
-            <div>
-              <p className="text-muted-foreground/60">Expenses</p>
-              <p className="mt-1 text-foreground">{formatINR(Number(site?.totalExpenses ?? 0))}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground/60">Collections</p>
-              <p className="mt-1 text-foreground">{formatINR(Number(site?.customerPayments ?? 0))}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground/60">Balance</p>
-              <p className="mt-1 text-primary">{formatINR(Number(site?.remainingFund ?? 0))}</p>
-            </div>
-          </div>
-        </div>
+        
         <Field label="Expense Type">
           <input type="hidden" {...register('type')} />
           <KeyToggle
@@ -407,46 +419,39 @@ function AddSiteExpenseForm({ site, onSuccess, onBack }: { site: any; onSuccess:
             />
             {showQuickVendorCreate && (
               <div className="mt-3 border border-border bg-muted/20 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Create Vendor</p>
-                <input
-                  value={quickVendorName}
-                  onChange={(e) => setQuickVendorName(e.target.value)}
-                  placeholder="Vendor name"
-                  className={cn(INPUT_CLS, 'mt-2 h-10')}
-                />
-                <select
-                  value={quickVendorCategory}
-                  onChange={(e) => setQuickVendorCategory(e.target.value as (typeof COMMON_VENDOR_CATEGORIES)[number] | 'CUSTOM')}
-                  className={cn(INPUT_CLS, 'mt-2 h-10 appearance-none cursor-pointer')}
-                >
-                  {COMMON_VENDOR_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                  <option value="CUSTOM">CUSTOM</option>
-                </select>
-                {quickVendorCategory === 'CUSTOM' && (
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Create Vendor</p>
+                  <button type="button" onClick={() => setShowQuickVendorCreate(false)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                </div>
+                <div className="grid gap-2">
                   <input
-                    value={quickVendorCustomCategory}
-                    onChange={(e) => setQuickVendorCustomCategory(e.target.value)}
-                    placeholder="Custom category"
-                    className={cn(INPUT_CLS, 'mt-2 h-10')}
+                    value={quickVendorName}
+                    onChange={(e) => setQuickVendorName(e.target.value)}
+                    placeholder="Vendor name"
+                    className={cn(INPUT_CLS, 'h-10')}
                   />
-                )}
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickVendorCreate(false)}
-                    className="h-9 border border-border text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-muted/30"
-                  >
-                    Cancel
-                  </button>
+                  <SearchableSelect
+                    options={[...COMMON_VENDOR_CATEGORIES.map(c => ({ value: c, label: c })), { value: 'CUSTOM', label: 'Other (Custom Category)' }]}
+                    value={quickVendorCategory}
+                    onValueChange={(v) => setQuickVendorCategory(v as any)}
+                    placeholder="Select category..."
+                    searchPlaceholder="Search category..."
+                  />
+                  {quickVendorCategory === 'CUSTOM' && (
+                    <input
+                      value={quickVendorCustomCategory}
+                      onChange={(e) => setQuickVendorCustomCategory(e.target.value)}
+                      placeholder="Enter custom category"
+                      className={cn(INPUT_CLS, 'h-10')}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={handleQuickVendorCreate}
                     disabled={isCreatingVendorQuick}
-                    className="h-9 bg-primary text-black text-[10px] font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-60"
+                    className="mt-1 h-10 bg-primary text-black text-[10px] font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-60"
                   >
-                    {isCreatingVendorQuick ? 'Creating...' : 'Create'}
+                    {isCreatingVendorQuick ? 'Creating...' : 'Create & Select Vendor'}
                   </button>
                 </div>
               </div>
@@ -465,11 +470,152 @@ function AddSiteExpenseForm({ site, onSuccess, onBack }: { site: any; onSuccess:
             <input type="number" min={0} className={INPUT_CLS} {...register('amountPaid', { valueAsNumber: true })} />
           </Field>
         </div>
-        <Field label="Payment Date (optional)">
-          <input type="date" className={INPUT_CLS} {...register('paymentDate')} />
-        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Initial Payment Date (optional)">
+            <input type="datetime-local" className={INPUT_CLS} {...register('paymentDate')} />
+          </Field>
+          {amountPaid > 0 && (
+            <Field label="Payment Mode" error={errors.paymentMode?.message}>
+              <SearchableSelect
+                options={[
+                  { value: 'CASH', label: 'Cash' },
+                  { value: 'CHEQUE', label: 'Cheque' },
+                  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                  { value: 'UPI', label: 'UPI' },
+                ]}
+                value={paymentMode}
+                onValueChange={(v) => setValue('paymentMode', v as any, { shouldValidate: true })}
+                placeholder="Select mode..."
+                searchPlaceholder="Search mode..."
+              />
+            </Field>
+          )}
+        </div>
+
+        {amountPaid > 0 && paymentMode !== 'CASH' && (
+          <Field label={getBookingReferenceLabel(paymentMode)} error={errors.referenceNumber?.message}>
+            <input 
+              placeholder={getBookingReferenceLabel(paymentMode)} 
+              className={INPUT_CLS} 
+              {...register('referenceNumber')} 
+            />
+          </Field>
+        )}
         <Field label="Description (optional)">
           <textarea className={cn(INPUT_CLS, 'min-h-16 resize-none py-3')} {...register('description')} />
+        </Field>
+      </form>
+    </FormShell>
+  );
+}
+
+
+function ManageFundsForm({ site, onSuccess, onBack }: { site: any; onSuccess: () => void; onBack: () => void }) {
+  const [mode, setMode] = useState<'ADD' | 'PULL'>('ADD');
+  const { data: companyData } = useCompany();
+  const companyFunds = companyData?.data;
+  const maxAvailableToAdd = companyFunds?.available_fund || 0;
+  const maxAvailableToPull = site.remainingFund || 0;
+
+  const { mutate: addFund, isPending: adding, error: addError } = useAddFund(site.id, {
+    onSuccess: () => {
+      toast.success(`Transferred ${formatINR(Number(amount))} to ${site.name}`);
+      onSuccess();
+    }
+  });
+
+  const { mutate: pullFund, isPending: pulling, error: pullError } = useWithdrawFund(site.id, {
+    onSuccess: () => {
+      toast.success(`Pulled ${formatINR(Number(amount))} from ${site.name}`);
+      onSuccess();
+    }
+  });
+
+  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm({
+    defaultValues: { amount: 0, note: '' }
+  });
+
+  const amount = watch('amount') || 0;
+  const isPending = adding || pulling;
+  const error = mode === 'ADD' ? addError : pullError;
+
+  const onSubmit = (data: any) => {
+    if (mode === 'ADD') {
+      if (data.amount > maxAvailableToAdd) {
+        toast.error('Insufficient funds in company wallet');
+        return;
+      }
+      addFund({ amount: Number(data.amount), note: data.note });
+    } else {
+      if (data.amount > maxAvailableToPull) {
+        toast.error('Insufficient funds in site balance');
+        return;
+      }
+      pullFund({ amount: Number(data.amount), note: data.note });
+    }
+  };
+
+  return (
+    <FormShell
+      title={`Manage Funds: ${site.name}`}
+      onBack={onBack}
+      isPending={isPending}
+      submitLabel={mode === 'ADD' ? 'Inject Fund' : 'Pull Fund'}
+      formId="manage-funds-form"
+    >
+      <form id="manage-funds-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-8">
+        {error && <FormError msg={getApiErrorMessage(error, 'Fund operation failed')} />}
+        
+        <Field label="Operation Type">
+          <KeyToggle
+            options={['ADD', 'PULL']}
+            value={mode}
+            onChange={(v) => setMode(v as any)}
+            renderOption={(opt, selected) => (
+              <div className={cn(
+                'border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
+                selected 
+                  ? opt === 'ADD' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-600' : 'border-red-500 bg-red-500/5 text-red-600'
+                  : 'border-border text-muted-foreground hover:border-muted-foreground/30',
+              )}>
+                {opt === 'ADD' ? 'Add Fund (Inject)' : 'Pull Fund (Reclaim)'}
+              </div>
+            )}
+          />
+        </Field>
+
+        <Field label="Amount (INR)" error={errors.amount?.message as string}>
+          <div className="relative">
+             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 font-bold">₹</span>
+             <input
+              type="number"
+              min={1}
+              className={cn(INPUT_CLS, 'pl-8')}
+              {...register('amount', { valueAsNumber: true, min: { value: 1, message: 'Amount must be greater than 0' } })}
+            />
+          </div>
+          <div className="mt-2 flex justify-between items-center">
+            <p className="text-[9px] text-muted-foreground/50 italic font-bold uppercase tracking-widest">
+              {mode === 'ADD' ? `Available: ${formatINR(maxAvailableToAdd)}` : `Remaning: ${formatINR(maxAvailableToPull)}`}
+            </p>
+            {mode === 'PULL' && (
+              <button 
+                type="button" 
+                onClick={() => reset({ amount: maxAvailableToPull })}
+                className="text-[9px] font-black text-primary hover:underline uppercase tracking-tighter"
+              >
+                Pull Max
+              </button>
+            )}
+          </div>
+        </Field>
+
+        <Field label="Narration / Note (Optional)">
+          <textarea
+            placeholder={mode === 'ADD' ? 'e.g. Budget increase for materials' : 'e.g. Project finished, reclaiming surplus'}
+            className={cn(INPUT_CLS, 'min-h-24 py-3')}
+            {...register('note')}
+          />
         </Field>
       </form>
     </FormShell>
@@ -1164,7 +1310,8 @@ const bookingAgreementLineDraftSchema = z.object({
 });
 
 const bookFlatFlowSchema = bookFlatSchema.extend({
-  floorNumber: z.number().int().min(1, 'Select a floor number'),
+  wingId: z.string().optional(),
+  floorNumber: z.number().int().min(0, 'Select a floor number'),
   customFlatId: z.string().trim().min(1, 'Flat name/ID is required'),
   unitType: z.string().trim().min(1, 'Unit type is required'),
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).default('CUSTOMER'),
@@ -1194,6 +1341,11 @@ const bookFlatFlowSchema = bookFlatSchema.extend({
       path: ['referenceNumber'],
       message: 'Reference number is required for non-cash booking payments',
     });
+  }
+
+  // Wing requirement
+  if (data.wingId === undefined && !!(ctx as any).site?.hasMultipleWings) {
+    // Note: Since site is not available in schema, we'll handle this in superRefine or form-level
   }
 });
 
@@ -1246,7 +1398,7 @@ function resolveBookingAgreementLineAmount(line: BookingAgreementLineComputation
 
 function createDefaultBookingAgreementLine(): BookFlatAgreementLineDraftInput {
   return {
-    type: 'CHARGE',
+    type: '' as any, // Don't prefill
     label: '',
     amount: 0,
     ratePercent: undefined,
@@ -1260,15 +1412,19 @@ function BookFlatForm({
   onSuccess,
   onBack,
   onFloorChange,
+  onWingChange,
 }: {
   site: any;
   onSuccess: () => void;
   onBack: () => void;
   onFloorChange?: (floorNumber: number | null) => void;
+  onWingChange?: (wingId: string | null) => void;
 }) {
   const { data: floorsData, isLoading: floorsLoading, refetch: refetchFloors } = useFloors(site.id);
+  const { data: wingsData, isLoading: wingsLoading } = useWings(site.id);
   const { data: allCustomersData } = useAllCustomers();
   const floors: Floor[] = floorsData?.data?.floors ?? [];
+  const wings: any[] = wingsData?.data?.wings ?? [];
   const availableCustomers = (allCustomersData?.data?.customers ?? []).filter((customer: any) => customer.dealStatus === 'ACTIVE');
 
   const { mutateAsync: createFloor, isPending: isCreatingFloor, error: createFloorError } = useCreateFloor(site.id);
@@ -1276,21 +1432,13 @@ function BookFlatForm({
   const { mutateAsync: updateFlatDetails, isPending: isUpdatingFlatDetails, error: updateFlatDetailsError } = useUpdateFlatDetails(site.id);
   const { mutateAsync: bookFlat, isPending: isBooking, error: bookingError } = useBookFlat(site.id);
 
-  const floorNumbers: number[] = (() => {
-    const declaredTotal = Number(site?.totalFloors ?? 0);
-    if (declaredTotal > 0) return Array.from({ length: declaredTotal }, (_, idx) => idx + 1);
-    const fromFloors = Array.from(new Set(floors.map((floor) => floor.floorNumber).filter((n): n is number => Number.isFinite(n) && n > 0)));
-    return fromFloors.length ? fromFloors.sort((a, b) => a - b) : [1];
-  })();
-
-  const fallbackFloorNumber = floorNumbers[0] ?? 1;
-
   const { register, control, handleSubmit, watch, setValue, setFocus, formState: { errors } } = useForm<BookFlatFlowInput>({
     resolver: zodResolver(bookFlatFlowSchema),
     defaultValues: {
-      floorNumber: 0,
+      wingId: '',
+      floorNumber: -1,
       customFlatId: '',
-      unitType: '2BHK',
+      unitType: '', // Don't prefill
       flatType: 'CUSTOMER',
       customerMode: 'NEW',
       existingCustomerId: '',
@@ -1313,6 +1461,39 @@ function BookFlatForm({
     name: 'agreementLines',
   });
 
+  const wingId = watch('wingId');
+  const hasWings = wings.length > 0;
+
+  const floorNumbers: number[] = (() => {
+    // Filter floors by selected wing if applicable
+    const filteredFloors = hasWings 
+      ? floors.filter(f => f.wingId === wingId)
+      : floors;
+
+    const selectedWing = wings.find(w => w.id === wingId);
+    const declaredTotal = hasWings 
+      ? Number(selectedWing?.floorsCount ?? 0)
+      : Number(site?.totalFloors ?? 0);
+    
+    // For wings, we don't know includeGroundFloor easily from the Wing object,
+    // so we rely on existing floors or assume false if not found.
+    const includeGF = hasWings 
+      ? filteredFloors.some(f => f.floorNumber === 0)
+      : !!site?.includeGroundFloor;
+    
+    let base: number[] = [];
+    if (declaredTotal > 0) {
+      base = Array.from({ length: declaredTotal }, (_, idx) => idx + 1);
+      if (includeGF) base.unshift(0);
+    } else {
+      const fromFloors = Array.from(new Set(filteredFloors.map((floor) => floor.floorNumber).filter((n): n is number => Number.isFinite(n) && n >= 0)));
+      base = fromFloors.length ? fromFloors.sort((a, b) => a - b) : (includeGF ? [0, 1] : [1]);
+    }
+    return base;
+  })();
+
+  const fallbackFloorNumber = floorNumbers[0] ?? 1;
+
   const floorNumber = Number(watch('floorNumber') || 0);
   const customerMode = watch('customerMode') || 'NEW';
   const selectedExistingCustomerId = watch('existingCustomerId');
@@ -1324,16 +1505,26 @@ function BookFlatForm({
   const remaining = Math.max(0, sellingPrice - bookingAmount);
 
   const selectedExistingCustomer = availableCustomers.find((customer: any) => customer.id === selectedExistingCustomerId);
-  const selectedFloor = floors.find((floor: Floor) => floor.floorNumber === floorNumber);
-  const bookedFlatsOnSelectedFloor = selectedFloor?.flats.filter((flat: Flat) => flat.status === 'BOOKED' || flat.status === 'SOLD') ?? [];
+  const selectedFloor = floors.find((floor: Floor) => 
+    floor.floorNumber === floorNumber && 
+    (!hasWings || floor.wingId === wingId)
+  );
 
-  useEffect(() => { setTimeout(() => setFocus('floorNumber'), 50); }, [setFocus]);
+  // Conditional focus based on wings
+  useEffect(() => {
+    const target = hasWings ? 'wingId' : 'floorNumber';
+    const timer = setTimeout(() => {
+      setFocus(target);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [setFocus, hasWings]);
 
   useEffect(() => {
-    if (!floorNumbers.includes(floorNumber)) {
-      setValue('floorNumber', fallbackFloorNumber, { shouldValidate: true });
+    if (hasWings && !wingId && wings.length === 1) {
+      setValue('wingId', wings[0].id, { shouldValidate: true });
+      onWingChange?.(wings[0].id);
     }
-  }, [floorNumber, floorNumbers, fallbackFloorNumber, setValue]);
+  }, [hasWings, wingId, wings, setValue, onWingChange]);
 
   useEffect(() => {
     if (customerMode === 'EXISTING' && selectedExistingCustomer) {
@@ -1349,7 +1540,7 @@ function BookFlatForm({
   }, [customerMode, selectedExistingCustomer, setValue]);
 
   useEffect(() => {
-    onFloorChange?.(Number.isFinite(floorNumber) && floorNumber > 0 ? floorNumber : null);
+    onFloorChange?.(Number.isFinite(floorNumber) && floorNumber >= 0 ? floorNumber : null);
     return () => onFloorChange?.(null);
   }, [floorNumber, onFloorChange]);
 
@@ -1363,13 +1554,24 @@ function BookFlatForm({
     const normalizedFlatId = data.customFlatId.trim().toLowerCase();
     const resolvedUnitType = data.unitType.trim();
     let workingFloors = floors;
-    let workingFloor = workingFloors.find((floor: Floor) => floor.floorNumber === data.floorNumber);
+    let workingFloor = workingFloors.find((floor: Floor) => 
+      floor.floorNumber === data.floorNumber && 
+      (!hasWings || floor.wingId === data.wingId)
+    );
 
     if (!workingFloor) {
-      await createFloor({ floorName: `Floor ${data.floorNumber}` });
+      const floorName = data.floorNumber === 0 ? 'Ground Floor' : `Floor ${data.floorNumber}`;
+
+      await createFloor({ 
+        floorName,
+        wingId: hasWings ? data.wingId : undefined 
+      });
       const refreshed = await refetchFloors();
       workingFloors = (refreshed.data?.data?.floors ?? []) as Floor[];
-      workingFloor = workingFloors.find((floor: Floor) => floor.floorNumber === data.floorNumber);
+      workingFloor = workingFloors.find((f: Floor) => 
+        f.floorNumber === data.floorNumber && 
+        (!hasWings || f.wingId === data.wingId)
+      );
     }
 
     if (!workingFloor) {
@@ -1459,26 +1661,40 @@ function BookFlatForm({
           <FormError msg={getApiErrorMessage(createFloorError || createFlatError || updateFlatDetailsError || bookingError, 'Failed to book flat')} />
         )}
 
+        {hasWings && (
+          <Field label="Select Wing" error={errors.wingId?.message}>
+            <input type="hidden" {...register('wingId')} />
+            <SearchableSelect
+              options={wings.map((w) => ({ value: w.id, label: w.name }))}
+              value={wingId || ''}
+              onValueChange={(v) => {
+                setValue('wingId', v, { shouldValidate: true });
+                setValue('floorNumber', -1); // Reset floor when wing changes
+                onWingChange?.(v || null);
+              }}
+              placeholder="Choose wing..."
+              searchPlaceholder="Type wing name..."
+            />
+          </Field>
+        )}
+
         <Field label="Floor Number" error={errors.floorNumber?.message}>
           <input type="hidden" {...register('floorNumber')} />
           <SearchableSelect
-            options={floorNumbers.map((number) => ({ value: String(number), label: `Floor ${number}` }))}
-            value={floorNumber > 0 ? String(floorNumber) : ''}
-            onValueChange={(nextValue) => setValue('floorNumber', nextValue ? Number(nextValue) : fallbackFloorNumber, { shouldValidate: true })}
+            options={floorNumbers.map((number) => ({ 
+              value: String(number), 
+              label: number === 0 ? 'Ground Floor' : `Floor ${number}` 
+            }))}
+            value={floorNumber !== -1 ? String(floorNumber) : ''}
+            onValueChange={(nextValue) => setValue('floorNumber', nextValue ? Number(nextValue) : -1, { shouldValidate: true })}
             placeholder="Select floor..."
             searchPlaceholder="Type floor number..."
             emptyText="No matching floor found."
           />
         </Field>
 
-        <div className="border border-border bg-muted/20 p-4">
-          <p className={LABEL_CLS}>Booked Flats On Selected Floor</p>
-          <BookedFlatsTable
-            flats={bookedFlatsOnSelectedFloor}
-            floorNumber={selectedFloor?.floorNumber ?? floorNumber ?? null}
-            emptyMessage="No booked/sold flats on this floor yet."
-          />
-        </div>
+
+
 
         <Field label="Flat Name / ID" error={errors.customFlatId?.message}>
           <input placeholder="e.g. A-101" className={INPUT_CLS} {...register('customFlatId')} />
@@ -1580,16 +1796,18 @@ function BookFlatForm({
         {bookingAmount > 0 && (
           <div className="grid grid-cols-2 gap-4">
             <Field label="Payment Mode" error={errors.paymentMode?.message}>
-              <select
-                className={INPUT_CLS}
-                value={bookingPaymentMode}
-                onChange={(event) => setValue('paymentMode', event.target.value as BookFlatInput['paymentMode'], { shouldValidate: true })}
-              >
-                <option value="CASH">Cash</option>
-                <option value="CHEQUE">Cheque</option>
-                <option value="BANK_TRANSFER">Bank Transfer</option>
-                <option value="UPI">UPI</option>
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: 'CASH', label: 'Cash' },
+                  { value: 'CHEQUE', label: 'Cheque' },
+                  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+                  { value: 'UPI', label: 'UPI' },
+                ]}
+                value={bookingPaymentMode || 'CASH'}
+                onValueChange={(nextValue) => setValue('paymentMode', nextValue as BookFlatInput['paymentMode'], { shouldValidate: true })}
+                placeholder="Select payment mode..."
+                searchPlaceholder="Search mode..."
+              />
             </Field>
             {bookingPaymentMode !== 'CASH' ? (
               <Field label={getBookingReferenceLabel(bookingPaymentMode)} error={errors.referenceNumber?.message}>
@@ -1606,12 +1824,11 @@ function BookFlatForm({
         )}
 
         <div className="border border-border bg-muted/20 p-4">
-            <div>
-              <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
-              <p className="text-[10px] text-muted-foreground/60">
-                Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
-              </p>
-            </div>
+          <div>
+            <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
+            <p className="text-[10px] text-muted-foreground/60">
+              Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
+            </p>
           </div>
 
           {agreementLineFields.length === 0 ? (
@@ -1675,16 +1892,20 @@ function BookFlatForm({
                           }}
                           placeholder="Select type..."
                           searchPlaceholder="Search type..."
+                          autoFocus={index === agreementLineFields.length - 1} // Focus newly added line
                         />
                       </Field>
 
                       {lineType === 'DISCOUNT' ? (
                         <Field label="Discount Mode" error={errors.agreementLines?.[index]?.calculationMode?.message}>
-                          <select
-                            className={INPUT_CLS}
+                          <SearchableSelect
+                            options={[
+                              { value: 'FIXED_AMOUNT', label: 'Fixed Amount' },
+                              { value: 'PERCENTAGE', label: 'Percentage (%)' },
+                            ]}
                             value={discountCalculationMode}
-                            onChange={(event) => {
-                              const nextMode = event.target.value as BookingAgreementCalculationMode;
+                            onValueChange={(nextValue) => {
+                              const nextMode = nextValue as BookingAgreementCalculationMode;
                               setValue(calculationModePath, nextMode, { shouldValidate: true });
                               if (nextMode === 'PERCENTAGE') {
                                 setValue(amountPath, 0, { shouldValidate: true });
@@ -1692,10 +1913,9 @@ function BookFlatForm({
                                 setValue(ratePercentPath, undefined, { shouldValidate: true });
                               }
                             }}
-                          >
-                            <option value="FIXED_AMOUNT">Fixed Amount</option>
-                            <option value="PERCENTAGE">Percentage (%)</option>
-                          </select>
+                            placeholder="Select mode..."
+                            searchPlaceholder="Search mode..."
+                          />
                         </Field>
                       ) : lineType === 'TAX' ? (
                         <Field label="Tax Basis">
@@ -1784,7 +2004,11 @@ function BookFlatForm({
         <div className="border border-border divide-y divide-border">
           <div className="flex justify-between items-center px-4 py-3">
             <span className={LABEL_CLS}>Selected Floor</span>
-            <span className="text-sm font-bold uppercase tracking-widest">{selectedFloor ? `Floor ${selectedFloor.floorNumber}` : `Floor ${floorNumber}`}</span>
+            <span className="text-sm font-bold uppercase tracking-widest">
+              {selectedFloor 
+                ? (selectedFloor.floorNumber === 0 ? 'Ground Floor' : `Floor ${selectedFloor.floorNumber}`)
+                : (floorNumber === 0 ? 'Ground Floor' : `Floor ${floorNumber}`)}
+            </span>
           </div>
           <div className="flex justify-between items-center px-4 py-3">
             <span className={LABEL_CLS}>Remaining</span>
@@ -1857,7 +2081,7 @@ function AddEmployeeForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
 
   return (
     <FormShell title="Add Employee" onBack={onBack} isPending={isPending} submitLabel="Create Employee" formId="add-employee-form">
-      <form id="add-employee-form" onSubmit={handleSubmit((values) => mutate(values))} className="flex flex-col gap-6">
+      <form id="add-employee-form" onSubmit={handleSubmit((values) => mutate({ ...values, dateOfJoining: toIsoDate(values.dateOfJoining) }))} className="flex flex-col gap-6">
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to create employee')} />}
 
         <div className="border border-border bg-muted/20 p-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -2052,14 +2276,7 @@ const markEmployeeAttendanceSchema = z.object({
 
 type MarkEmployeeAttendanceInput = z.infer<typeof markEmployeeAttendanceSchema>;
 
-function toIsoDate(dateValue: string) {
-  return new Date(`${dateValue}T00:00:00`).toISOString();
-}
 
-function toIsoDateTime(dateValue: string, timeValue?: string) {
-  if (!timeValue) return undefined;
-  return new Date(`${dateValue}T${timeValue}:00`).toISOString();
-}
 
 function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useMarkAttendance({
@@ -2262,6 +2479,8 @@ export default function CommandCenter() {
   const [selectedEntity, setSelectedEntity] = useState<any | null>(null);
   const [selectedSubEntity, setSelectedSubEntity] = useState<any | null>(null);
   const [focusedFloorNumber, setFocusedFloorNumber] = useState<number | null>(null);
+  const [focusedWingId, setFocusedWingId] = useState<string | null>(null);
+  const [focusedVendorId, setFocusedVendorId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedCategory = CATEGORIES[catIdx];
@@ -2304,16 +2523,75 @@ export default function CommandCenter() {
     return [];
   })();
 
-  const selectorLoading = ssLoading || coLoading || inLoading || veLoading || cuLoading || emLoading;
+  const selectorLoading = useMemo(() => {
+    if (phase !== 'selector' && phase !== 'sub-selector') return false;
+    
+    // Site selectors for specific actions
+    if (selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction)) {
+      return ssLoading;
+    }
+    
+    // Category-based selectors
+    if (selectedCategory?.id === 'sites') return ssLoading;
+    if (selectedCategory?.id === 'customers') return cuLoading;
+    if (selectedCategory?.id === 'employees') return emLoading;
+    if (selectedCategory?.id === 'investors') return inLoading;
+    if (selectedCategory?.id === 'vendors') return veLoading;
+    if (selectedCategory?.id === 'company') return coLoading;
+
+    return ssLoading || cuLoading || emLoading || inLoading || veLoading || coLoading;
+  }, [phase, selectedCategory, selectedAction, ssLoading, cuLoading, emLoading, inLoading, veLoading, coLoading]);
+
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
 
-  // â”€â”€ Keyboard Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ──── Keyboard Navigation ────────────────────────────────────────────────
+
+  const handleEscape = useCallback(() => {
+    if (phase === 'form') {
+      handleFormBack();
+    } else if (phase === 'sub-selector') {
+      setPhase('selector');
+    } else if (phase === 'selector') {
+      setPhase('actions');
+    } else if (phase === 'actions') {
+      setPhase('categories');
+      setSelectedAction(null);
+    }
+  }, [phase, selectedAction]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Don't capture when typing in inputs
     const tag = (e.target as HTMLElement)?.tagName;
     const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    // Global Escape handling - always try to go back if possible
+    if (e.key === 'Escape') {
+      if (phase === 'form') {
+        e.preventDefault();
+        handleFormBack();
+        return;
+      }
+      if (phase === 'sub-selector') {
+        e.preventDefault();
+        setPhase('selector');
+        return;
+      }
+      if (phase === 'selector') {
+        e.preventDefault();
+        setPhase('actions');
+        return;
+      }
+      if (phase === 'actions') {
+        e.preventDefault();
+        setPhase('categories');
+        setSelectedAction(null);
+        return;
+      }
+      if (phase === 'categories') {
+        // Maybe close command center if it was a modal, but here it's the page
+        return;
+      }
+    }
 
     if (phase === 'categories' && !isInput) {
       if (e.key === 'ArrowDown' || e.key === 'j') {
@@ -2452,7 +2730,7 @@ export default function CommandCenter() {
 
   // Focus container on phase change so keyboard works
   useEffect(() => {
-    const isSiteSelector = phase === 'selector' && selectedAction && ['record-payment', 'add-expense', 'create-purchase-order', 'book-flat', 'mark-attendance', 'record-salary-payment'].includes(selectedAction);
+    const isSiteSelector = phase === 'selector' && selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
     if (phase !== 'form' && !isSiteSelector) {
       containerRef.current?.focus();
     }
@@ -2464,6 +2742,7 @@ export default function CommandCenter() {
     setSelectedEntity(null);
     setSelectedSubEntity(null);
     setFocusedFloorNumber(null);
+    setFocusedVendorId(null);
     setCatIdx(0);
   };
 
@@ -2476,12 +2755,14 @@ export default function CommandCenter() {
       setSelectedEntity(null);
       setSelectedSubEntity(null);
       setFocusedFloorNumber(null);
+      setFocusedVendorId(null);
     } else {
       setPhase('actions');
       setSelectedAction(null);
       setSelectedEntity(null);
       setSelectedSubEntity(null);
       setFocusedFloorNumber(null);
+      setFocusedVendorId(null);
     }
   };
 
@@ -2492,7 +2773,22 @@ export default function CommandCenter() {
 
     // Actions
     if (selectedAction === 'book-flat') {
-      return <BookFlatForm {...props} site={selectedEntity} onFloorChange={setFocusedFloorNumber} />;
+      return (
+        <BookFlatForm 
+          {...props} 
+          site={selectedEntity} 
+          onFloorChange={setFocusedFloorNumber} 
+          onWingChange={setFocusedWingId}
+        />
+      );
+    }
+
+    if (selectedAction === 'add-site-expense') {
+      return <AddSiteExpenseForm {...props} site={selectedEntity} onVendorChange={setFocusedVendorId} />;
+    }
+
+    if (selectedAction === 'manage-funds') {
+      return <ManageFundsForm {...props} site={selectedEntity} />;
     }
 
     // Site Actions Confirmations
@@ -2583,7 +2879,6 @@ export default function CommandCenter() {
 
     switch (selectedAction) {
       case 'create-site': return <CreateSiteForm {...props} />;
-      case 'add-site-expense': return <AddSiteExpenseForm {...props} site={selectedEntity} />;
       case 'edit-partner': return <EditPartnerForm {...props} entity={selectedEntity} />;
       case 'add-partner': return <AddPartnerForm {...props} />;
       case 'edit-company': return <EditCompanyForm {...props} />;
@@ -2830,6 +3125,8 @@ export default function CommandCenter() {
             site={contextSite}
             customer={selectedSubEntity}
             focusedFloorNumber={focusedFloorNumber}
+            focusedWingId={focusedWingId}
+            focusedVendorId={focusedVendorId}
           />
         </div>
       </div>

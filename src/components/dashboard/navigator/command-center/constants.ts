@@ -28,6 +28,7 @@ export const CATEGORIES: CategoryDef[] = [
       { id: 'add-site-expense', label: 'Add Site Expense', shortcut: '3', icon: IndianRupee },
       { id: 'archive-site', label: 'Archive/Restore Site', shortcut: '4', icon: Pencil },
       { id: 'delete-site', label: 'Delete Site', shortcut: '5', icon: Hammer },
+      { id: 'manage-funds', label: 'Manage Funds (Pull/Add)', shortcut: '6', icon: IndianRupee },
     ],
   },
   {
@@ -83,7 +84,7 @@ export const CATEGORIES: CategoryDef[] = [
 ];
 
 export const ACTIONS_NEEDING_SELECTOR = [
-  'book-flat', 'add-site-expense', 'archive-site', 'delete-site',
+  'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site',
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
   'edit-vendor', 'delete-vendor',
@@ -93,7 +94,7 @@ export const ACTIONS_NEEDING_SELECTOR = [
 ];
 
 export const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
-export const ACTIONS_USING_SITE_SELECTOR = ['book-flat', 'add-site-expense', 'archive-site', 'delete-site', 'record-payment'];
+export const ACTIONS_USING_SITE_SELECTOR = ['book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site', 'record-payment'];
 export const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const;
 export const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const;
 export const COMMON_VENDOR_CATEGORIES = ['MATERIALS', 'LABOR', 'CONTRACTOR', 'TRANSPORT', 'ELECTRICAL', 'PLUMBING', 'MASONRY', 'CARPENTRY'] as const;

@@ -23,16 +23,32 @@ export function SiteQuickPickerSelector({
   const activeSite = sites.find((site) => site.id === selectedSiteId) || null;
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading Sites...</p>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <button 
+          onClick={onBack} 
+          data-navbtn="true"
+          className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group"
+        >
+          <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+          Back
+        </button>
+      </div>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading Sites...</p>
+      </div>
     </div>
   );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <button onClick={onBack} className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group">
+        <button 
+          onClick={onBack} 
+          data-navbtn="true"
+          className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group"
+        >
           <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           Back
         </button>
@@ -47,32 +63,33 @@ export function SiteQuickPickerSelector({
             description: site.address,
             keywords: [site.address].filter(Boolean),
           }))}
-          value={activeSite?.id || ''}
-          onValueChange={setSelectedSiteId}
+          value={selectedSiteId}
+          onValueChange={(id) => {
+            setSelectedSiteId(id);
+            const site = sites.find(s => s.id === id);
+            if (site) {
+              // Immediate selection for faster navigation
+              onSelect(site);
+            }
+          }}
           placeholder="Select site..."
           searchPlaceholder="Type site name..."
           emptyText="No sites match your search."
           autoFocus
-          onEnter={() => {
-            if (activeSite) onSelect(activeSite);
-          }}
         />
 
-        {activeSite ? (
-          <>
-            <p className="mt-3 text-[10px] text-muted-foreground">{activeSite.address}</p>
-            <button
-              type="button"
-              onClick={() => onSelect(activeSite)}
-              className="mt-4 h-11 w-full bg-primary text-black text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-primary/90 transition-colors"
-            >
-              Continue
-            </button>
-          </>
-        ) : (
-          <p className="mt-3 text-[10px] text-muted-foreground">No site matches your search.</p>
-        )}
+        <div className="mt-4 flex flex-col gap-2">
+          {activeSite ? (
+            <p className="text-[10px] text-muted-foreground">
+              Selected: <span className="text-foreground font-bold">{activeSite.name}</span> - {activeSite.address}
+            </p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground italic">Select a site to continue.</p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
+
