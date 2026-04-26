@@ -364,6 +364,7 @@ export async function downloadReceiptPDF(
         day: "2-digit",
         month: "short",
         year: "numeric",
+        timeZone: "Asia/Kolkata",
       })
     }
 
@@ -377,6 +378,7 @@ export async function downloadReceiptPDF(
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Kolkata",
       })
     }
 
@@ -766,6 +768,7 @@ export async function downloadStatementPDF(
         day: "2-digit",
         month: "short",
         year: "numeric",
+        timeZone: "Asia/Kolkata",
       })
     }
 
@@ -779,6 +782,7 @@ export async function downloadStatementPDF(
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: "Asia/Kolkata",
       })
     }
 
@@ -851,7 +855,7 @@ export async function downloadStatementPDF(
 
     // Build StatementData object
     const statementData: StatementData = {
-      generatedAt: formatShortDate(new Date().toISOString()),
+      generatedAt: formatDateTime(new Date().toISOString()),
 
       companyName: companyData?.name || "Company Name",
 
@@ -883,7 +887,9 @@ export async function downloadStatementPDF(
     }
 
     // Generate filename with sanitization
-    const currentDate = formatShortDate(new Date().toISOString()).replace(/\s+/g, "-")
+    const now = new Date()
+    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" }).replace(":", "")
+    const currentDate = `${formatShortDate(now.toISOString()).replace(/\s+/g, "-")}-${timeStr}`
     const filename = `Statement-${sanitizeFilename(customer.name || "Customer")}-${sanitizeFilename(currentDate)}.pdf`
 
     // Call existing generateStatementPDF function

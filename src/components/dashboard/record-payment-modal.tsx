@@ -73,6 +73,8 @@ interface RecordPaymentModalProps {
   onSubmit: (payment: RecordPaymentInput) => void
   onClose: () => void
   isPending: boolean
+  onDownloadStatement?: () => void
+  isDownloadingStatement?: boolean
 }
 
 interface PaymentHistoryResponse {
@@ -101,6 +103,8 @@ export function RecordPaymentModal({
   onSubmit,
   onClose,
   isPending,
+  onDownloadStatement,
+  isDownloadingStatement,
 }: RecordPaymentModalProps) {
   const remaining = Math.max(totalAmount - currentlyPaid, 0)
   const requiresRecordedPaymentDetails = entityType === "customer-booking"
@@ -187,13 +191,30 @@ export function RecordPaymentModal({
               <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.3em] text-primary">Additive Ledger</p>
               <h3 className="text-lg font-serif text-foreground">{title}</h3>
             </div>
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="border-border px-4 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-muted"
-            >
-              Cancel
-            </Button>
+            <div className="flex items-center gap-2">
+              {onDownloadStatement && (
+                <Button
+                  variant="outline"
+                  onClick={onDownloadStatement}
+                  disabled={isDownloadingStatement}
+                  className="h-9 gap-1.5 border-border px-4 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-muted"
+                >
+                  {isDownloadingStatement ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  {isDownloadingStatement ? "Downloading..." : "Download Statement"}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="h-9 border-border px-4 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-muted"
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4 border-b border-border bg-muted/20 px-8 py-4">
@@ -212,6 +233,14 @@ export function RecordPaymentModal({
               </p>
             </div>
           </div>
+
+          {contextNote && (
+            <div className="border-b border-border bg-background px-8 py-3">
+              <p className="text-[10px] text-muted-foreground/70">
+                Payment For: <span className="font-semibold text-foreground">{contextNote}</span>
+              </p>
+            </div>
+          )}
 
           <div className="border-b border-border bg-background px-8 py-4">
             <p className="text-[10px] leading-relaxed text-muted-foreground">

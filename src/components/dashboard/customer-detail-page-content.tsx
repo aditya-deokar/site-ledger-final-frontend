@@ -96,6 +96,13 @@ function getFloorDisplayName(customer: Customer) {
   return customer.floorName || (customer.floorNumber !== null ? `Floor ${customer.floorNumber}` : "Floor -")
 }
 
+function getDealLocationLabel(deal: CustomerWithSite) {
+  const floor = deal.floorName || (deal.floorNumber !== null ? `Floor ${deal.floorNumber}` : "Floor -")
+  const flat = deal.customFlatId || (deal.flatNumber !== null ? `Flat ${deal.flatNumber}` : "Flat -")
+  const unitType = deal.unitType || deal.flatType || "Unit"
+  return [deal.siteName, deal.wingName, floor, flat, unitType].filter(Boolean).join(" / ")
+}
+
 function EditForm({ customer, siteId, onClose }: { customer: Customer; siteId: string; onClose: () => void }) {
   const { mutateAsync: updateCustomer, isPending: isUpdatingCustomer, error: customerError } = useUpdateCustomer()
   const { mutateAsync: updateFlat, isPending: isUpdatingFlat, error: flatError } = useUpdateFlatDetails(siteId)
@@ -324,9 +331,11 @@ export function CustomerDetailPageContent({
   const [editOpen, setEditOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  const [paymentPickerOpen, setPaymentPickerOpen] = useState(false)
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
   const [isDownloadingStatement, setIsDownloadingStatement] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState(initialCustomer.id)
+  const [paymentTargetCustomerId, setPaymentTargetCustomerId] = useState<string | null>(null)
 
   const customer = useMemo(
     () => customerDeals.find((deal) => deal.id === selectedCustomerId) ?? customerDeals[0] ?? initialCustomer,
@@ -374,9 +383,17 @@ export function CustomerDetailPageContent({
   const canCancel = !isCancelled && Boolean(customer.flatId) && Boolean(siteId)
   const canAddPayment = !isCancelled && remainingAmount > 0 && Boolean(siteId)
 
-  const allDealsTotal = customerDeals.reduce((sum, deal) => sum + deal.sellingPrice, 0)
-  const allDealsPaid = customerDeals.reduce((sum, deal) => sum + deal.amountPaid, 0)
-  const allDealsRemaining = customerDeals.reduce((sum, deal) => sum + deal.remaining, 0)
+  const payableDeals = useMemo(
+    () =>
+      customerDeals.filter(
+        (deal) => deal.dealStatus !== "CANCELLED" && deal.remaining > 0 && Boolean(deal.siteId) && Boolean(deal.flatId),
+      ),
+    [customerDeals],
+  )
+  const paymentTargetDeal = useMemo(
+    () => payableDeals.find((deal) => deal.id === paymentTargetCustomerId) ?? null,
+    [payableDeals, paymentTargetCustomerId],
+  )
 
   const pct = agreementTotal > 0
     ? Math.min(100, (collectedAmount / agreementTotal) * 100)
@@ -438,6 +455,21 @@ export function CustomerDetailPageContent({
     } finally {
       setIsDownloadingStatement(false)
     }
+  }
+
+  const openPaymentFlow = () => {
+    if (!canAddPayment) return
+
+    if (payableDeals.length <= 1) {
+      const directTarget = payableDeals[0] ?? customer
+      setPaymentTargetCustomerId(directTarget.id)
+      setIsPaymentModalOpen(true)
+      return
+    }
+
+    const initialTarget = payableDeals.find((deal) => deal.id === customer.id) ?? payableDeals[0]
+    setPaymentTargetCustomerId(initialTarget?.id ?? null)
+    setPaymentPickerOpen(true)
   }
 
   return (
@@ -505,11 +537,11 @@ export function CustomerDetailPageContent({
                   ) : (
                     <Download className="h-3.5 w-3.5" />
                   )}
-                  Download Statement
+                  {isDownloadingStatement ? "Downloading..." : "Download Statement"}
                 </Button>
                 {canAddPayment && (
                   <Button
-                    onClick={() => setIsPaymentModalOpen(true)}
+                    onClick={openPaymentFlow}
                     className="h-10 w-full gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest"
                   >
                     <IndianRupee className="h-3.5 w-3.5" /> Add Due Payment
@@ -588,24 +620,19 @@ export function CustomerDetailPageContent({
           <section className="border border-border bg-background">
             <div className="border-b border-border px-5 py-4 flex items-center justify-between">
               <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Customer Flats</h2>
-              <p className="text-[10px] text-muted-foreground/70">
-                Total {formatINR(allDealsTotal)} / Paid {formatINR(allDealsPaid)} / Remaining {formatINR(allDealsRemaining)}
-              </p>
+              <p className="text-[10px] text-muted-foreground/70">Select a flat to load its own agreement and payment data.</p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
+            <div>
+              <table className="w-full table-fixed text-left">
                 <thead className="border-b border-border bg-muted/20">
                   <tr className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">
-                    <th className="px-4 py-3">Site</th>
-                    <th className="px-4 py-3">Wing</th>
-                    <th className="px-4 py-3">Floor</th>
-                    <th className="px-4 py-3">Flat</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Cost</th>
-                    <th className="px-4 py-3">Paid</th>
-                    <th className="px-4 py-3">Remaining</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Date</th>
+                    <th className="px-3 py-3 w-[19%]">Site</th>
+                    <th className="px-3 py-3 w-[25%]">Unit Details</th>
+                    <th className="px-3 py-3 w-[12%]">Cost</th>
+                    <th className="px-3 py-3 w-[12%]">Paid</th>
+                    <th className="px-3 py-3 w-[12%]">Remaining</th>
+                    <th className="px-3 py-3 w-[10%]">Status</th>
+                    <th className="px-3 py-3 w-[10%]">Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -622,18 +649,21 @@ export function CustomerDetailPageContent({
                           selectedCustomerId === deal.id && "bg-primary/5"
                         )}
                       >
-                        <td className="px-4 py-3">{deal.siteName || "\u2014"}</td>
-                        <td className="px-4 py-3">{deal.wingName || "\u2014"}</td>
-                        <td className="px-4 py-3">{dealFloor}</td>
-                        <td className="px-4 py-3 font-semibold">{dealFlat}</td>
-                        <td className="px-4 py-3">{deal.unitType || deal.flatType || "\u2014"}</td>
-                        <td className="px-4 py-3 font-semibold">{formatINR(deal.sellingPrice)}</td>
-                        <td className="px-4 py-3 text-emerald-600 font-semibold">{formatINR(deal.amountPaid)}</td>
-                        <td className={cn("px-4 py-3 font-semibold", deal.remaining > 0 ? "text-red-500" : "text-emerald-600")}>
+                        <td className="px-3 py-3 align-top">
+                          <p className="font-semibold leading-snug break-words">{deal.siteName || "\u2014"}</p>
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          <p className="leading-snug break-words">{deal.wingName ? `${deal.wingName} / ` : ""}{dealFloor}</p>
+                          <p className="leading-snug break-words font-semibold">{dealFlat}</p>
+                          <p className="text-[11px] text-muted-foreground/70 leading-snug break-words">{deal.unitType || deal.flatType || "\u2014"}</p>
+                        </td>
+                        <td className="px-3 py-3 font-semibold align-top">{formatINR(deal.sellingPrice)}</td>
+                        <td className="px-3 py-3 text-emerald-600 font-semibold align-top">{formatINR(deal.amountPaid)}</td>
+                        <td className={cn("px-3 py-3 font-semibold align-top", deal.remaining > 0 ? "text-red-500" : "text-emerald-600")}>
                           {formatINR(deal.remaining)}
                         </td>
-                        <td className="px-4 py-3">{dealStatus}</td>
-                        <td className="px-4 py-3">{formatDate(deal.createdAt)}</td>
+                        <td className="px-3 py-3 align-top">{dealStatus}</td>
+                        <td className="px-3 py-3 align-top">{formatDate(deal.createdAt)}</td>
                       </tr>
                     )
                   })}
@@ -649,6 +679,7 @@ export function CustomerDetailPageContent({
               canEdit={canEdit}
               agreement={agreement}
               isLoading={isAgreementLoading}
+              contextLabel={getDealLocationLabel(customer)}
             />
           </section>
         </div>
@@ -660,8 +691,8 @@ export function CustomerDetailPageContent({
             </div>
             <div>
               <SummaryRow label="Name" value={customer.name} />
-              <SummaryRow label="Phone" value={customer.phone || "—"} />
-              <SummaryRow label="Email" value={customer.email || "—"} />
+              <SummaryRow label="Phone" value={customer.phone || "\u2014"} />
+              <SummaryRow label="Email" value={customer.email || "\u2014"} />
               <SummaryRow label="Status" value={String(statusDisplay)} />
             </div>
           </div>
@@ -680,50 +711,6 @@ export function CustomerDetailPageContent({
             </div>
           </div>
 
-          <div
-            className={cn(
-              "border px-5 py-6 shadow-sm",
-              isCancelled
-                ? "border-amber-500/20 bg-amber-500/5"
-                : remainingAmount > 0
-                  ? "border-red-500/20 bg-red-500/5"
-                  : "border-emerald-500/20 bg-emerald-500/5",
-            )}
-          >
-            <p
-              className={cn(
-                "text-[10px] font-bold uppercase tracking-[0.2em]",
-                isCancelled
-                  ? "text-amber-600/80"
-                  : remainingAmount > 0
-                    ? "text-red-500/80"
-                    : "text-emerald-600/80",
-              )}
-            >
-              {isCancelled ? "Net Paid After Refunds" : remainingAmount > 0 ? "Remaining Balance" : "Fully Paid"}
-            </p>
-            <p
-              className={cn(
-                "mt-2 font-sans text-3xl font-bold tabular-nums tracking-tight sm:text-4xl",
-                isCancelled
-                  ? "text-amber-600"
-                  : remainingAmount > 0
-                    ? "text-red-500"
-                    : "text-emerald-600",
-              )}
-            >
-              {formatINR(isCancelled ? collectedAmount : remainingAmount)}
-            </p>
-            {!isCancelled && (
-              <div className="mt-4 h-1.5 w-full overflow-hidden bg-background/50">
-                <div
-                  className={cn("h-full", isSold ? "bg-emerald-500" : "bg-primary")}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            )}
-          </div>
-
           {isCancelled && (
             <div className="border border-red-500/20 bg-red-500/5 p-4">
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-red-500/80">Cancellation</p>
@@ -734,11 +721,11 @@ export function CustomerDetailPageContent({
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Released from</p>
-                  <p className="mt-0.5">{customer.cancelledFromFlatStatus ?? "—"}</p>
+                  <p className="mt-0.5">{customer.cancelledFromFlatStatus ?? "\u2014"}</p>
                 </div>
                 <div className="sm:col-span-2">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Reason</p>
-                  <p className="mt-0.5 leading-relaxed">{customer.cancellationReason || "—"}</p>
+                  <p className="mt-0.5 leading-relaxed">{customer.cancellationReason || "\u2014"}</p>
                 </div>
               </div>
             </div>
@@ -779,16 +766,67 @@ export function CustomerDetailPageContent({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={paymentPickerOpen} onOpenChange={setPaymentPickerOpen}>
+        <DialogContent className="max-h-[min(90vh,90vh)] max-w-2xl overflow-y-auto rounded-none border-border p-0">
+          <DialogHeader className="border-b border-border px-8 py-6">
+            <DialogTitle className="text-2xl font-serif tracking-tight">Select Flat for Payment</DialogTitle>
+          </DialogHeader>
+          <div className="px-8 py-6 space-y-3">
+            {payableDeals.map((deal) => (
+              <button
+                key={deal.id}
+                type="button"
+                onClick={() => setPaymentTargetCustomerId(deal.id)}
+                className={cn(
+                  "w-full border px-4 py-3 text-left transition-colors",
+                  paymentTargetCustomerId === deal.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/20"
+                )}
+              >
+                <p className="text-sm font-semibold">{getDealLocationLabel(deal)}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Agreement {formatINR(deal.sellingPrice)} / Paid {formatINR(deal.amountPaid)} / Remaining {formatINR(deal.remaining)}
+                </p>
+              </button>
+            ))}
+            <div className="flex justify-end gap-2 pt-3">
+              <Button variant="outline" onClick={() => setPaymentPickerOpen(false)} className="h-10 rounded-none text-[9px] font-bold uppercase tracking-widest">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!paymentTargetCustomerId) return
+                  setPaymentPickerOpen(false)
+                  setIsPaymentModalOpen(true)
+                }}
+                disabled={!paymentTargetCustomerId}
+                className="h-10 rounded-none text-[9px] font-bold uppercase tracking-widest"
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {isPaymentModalOpen && canAddPayment && (
         <RecordPaymentModal
-          title={`Customer: ${customer.name}`}
-          totalAmount={agreementTotal}
-          currentlyPaid={collectedAmount}
+          title={`Customer: ${paymentTargetDeal?.name || customer.name}`}
+          totalAmount={paymentTargetDeal?.sellingPrice ?? agreementTotal}
+          currentlyPaid={paymentTargetDeal?.amountPaid ?? collectedAmount}
           entityType="customer-booking"
-          entityId={customer.id}
-          onSubmit={(paymentInput: RecordPaymentInput) => recordPayment({ customerId: customer.id, siteId, data: paymentInput })}
+          entityId={paymentTargetDeal?.id ?? customer.id}
+          onSubmit={(paymentInput: RecordPaymentInput) =>
+            recordPayment({
+              customerId: paymentTargetDeal?.id ?? customer.id,
+              siteId: paymentTargetDeal?.siteId ?? siteId,
+              data: paymentInput,
+            })
+          }
           onClose={() => setIsPaymentModalOpen(false)}
           isPending={isPaying}
+          onDownloadStatement={handleDownloadStatement}
+          isDownloadingStatement={isDownloadingStatement}
+          contextNote={paymentTargetDeal ? getDealLocationLabel(paymentTargetDeal) : getDealLocationLabel(customer)}
         />
       )}
     </div>
