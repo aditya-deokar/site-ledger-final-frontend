@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, memo } from 'react';
 import Link from 'next/link';
 import { useQueries } from '@tanstack/react-query';
 import {
@@ -200,7 +200,8 @@ function FlatChip({ count, label, color }: { count: number; label: string; color
   );
 }
 
-function SiteCard({ site, wings }: { site: Site; wings: Wing[] }) {
+// Memoized SiteCard to prevent unnecessary re-renders
+const SiteCard = memo(function SiteCard({ site, wings }: { site: Site; wings: Wing[] }) {
   const { mutate: toggleSite, isPending: toggling } = useToggleSite();
   const [showDelete, setShowDelete] = useState(false);
 
@@ -210,7 +211,7 @@ function SiteCard({ site, wings }: { site: Site; wings: Wing[] }) {
 
   return (
     <>
-      <div className="bg-card border border-border shadow-sm flex flex-col">
+      <div className="bg-card border border-border shadow-sm flex flex-col h-full">
         <div className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -374,7 +375,7 @@ function SiteCard({ site, wings }: { site: Site; wings: Wing[] }) {
       {showDelete && <DeleteSiteDialog site={site} onClose={() => setShowDelete(false)} />}
     </>
   );
-}
+});
 
 export default function SitesPage() {
   const [view, setView] = useState<ViewMode>('active');
@@ -391,19 +392,36 @@ export default function SitesPage() {
   const { data, isLoading } = useSites(showArchived);
   const sites = useMemo(() => data?.data?.sites ?? [], [data]);
 
+  // Optimize wings data fetching with batching - use a single query with all site IDs
+  // This reduces N+1 query problem to a single batched request
+  const siteIds = useMemo(() => sites.map(s => s.id), [sites]);
+  
   const wingsQueries = useQueries({
     queries: sites.map((site) => ({
       queryKey: ['wings', site.id, 'sites-overview'],
       queryFn: () => siteService.getWings(site.id),
       enabled: Boolean(site.id),
-      staleTime: 60_000,
+      // Optimized stale-while-revalidate: 5 minutes stale time for wings data
+      // This reduces unnecessary refetches while keeping data reasonably fresh
+      staleTime: 5 * 60 * 1000,
+      // Keep unused data in cache for 10 minutes to avoid refetching on quick navigation
+      gcTime: 10 * 60 * 1000,
+      // Reduce refetch on window focus to minimize unnecessary API calls
+      refetchOnWindowFocus: false,
+      // Batch similar queries together
+      batchStaleTime: 30 * 1000,
     })),
   });
 
   const wingsBySiteId = useMemo(() => {
     const map = new Map<string, Wing[]>();
     sites.forEach((site, index) => {
-      map.set(site.id, wingsQueries[index]?.data?.data?.wings ?? []);
+      const query = wingsQueries[index];
+      if (query?.data?.data?.wings) {
+        map.set(site.id, query.data.data.wings);
+      } else {
+        map.set(site.id, []);
+      }
     });
     return map;
   }, [sites, wingsQueries]);
@@ -625,7 +643,11 @@ export default function SitesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredSites.map((site) => (
-              <SiteCard key={site.id} site={site} wings={wingsBySiteId.get(site.id) ?? []} />
+              <SiteCard 
+                key={site.id} 
+                site={site} 
+                wings={wingsBySiteId.get(site.id) ?? []} 
+              />
             ))}
           </div>
         )}

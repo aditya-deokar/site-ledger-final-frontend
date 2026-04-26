@@ -20,10 +20,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
+        // Increase staleTime to reduce unnecessary refetches - 5 minutes for stable data
+        staleTime: 5 * 60 * 1000,
+        // Cache time - keep unused data for 10 minutes
+        gcTime: 10 * 60 * 1000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         retry: shouldRetryQuery,
+        // Reduce background refetching
+        refetchInterval: false,
       },
     },
   }));
