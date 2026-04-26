@@ -33,13 +33,15 @@ import {
   Pencil,
   Trash2,
   IndianRupee,
-  Download,
   ChevronLeft,
   Loader2,
+  Download,
 } from "lucide-react"
 import { CustomerAgreementPanel } from "./customer-agreement-panel"
 import { RecordPaymentModal } from "./record-payment-modal"
-import { ReceiptEditor } from "./receipt-editor"
+import { downloadReceiptPDF, downloadStatementPDF } from "@/lib/pdf-generator"
+import { toast } from "sonner"
+import { useCompany } from "@/hooks/api/company.hooks"
 
 function formatINR(n: number) {
   return "\u20B9" + n.toLocaleString("en-IN")
@@ -323,7 +325,8 @@ export function CustomerDetailPageContent({
   const [editOpen, setEditOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false)
+  const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
+  const [isDownloadingStatement, setIsDownloadingStatement] = useState(false)
 
   const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({
     onSuccess: () => {
@@ -333,12 +336,16 @@ export function CustomerDetailPageContent({
   const { data: agreementData, isLoading: isAgreementLoading, isError: isAgreementError, error: agreementError } = useCustomerAgreement(customer.id)
   const { data: paymentHistoryData, isError: isPaymentsError } = useCustomerPayments(customer.id)
   const { data: siteData, isError: isSiteError } = useSite(siteId)
+  const { data: companyData } = useCompany()
 
   const agreement = agreementData?.data?.agreement
   const paymentHistory = (paymentHistoryData?.data?.payments ?? []) as CustomerPaymentHistoryItem[]
+  
+  // Filter payments for receipts (incoming customer payments only)
   const receiptPayments = paymentHistory.filter(
-    (payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT",
+    (payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT"
   )
+  
   const fallbackCreatedAt = paymentHistory.reduce<string | undefined>((earliest, payment) => {
     const paymentDate = new Date(payment.createdAt)
     if (Number.isNaN(paymentDate.getTime())) return earliest
@@ -359,13 +366,68 @@ export function CustomerDetailPageContent({
   const canEdit = !isCancelled && Boolean(customer.flatId)
   const canCancel = !isCancelled && Boolean(customer.flatId)
   const canAddPayment = !isCancelled && remainingAmount > 0
-  const canOpenReceipt = !isCancelled
 
   const pct = agreementTotal > 0
     ? Math.min(100, (collectedAmount / agreementTotal) * 100)
     : remainingAmount <= 0
       ? 100
       : 0
+
+  const handleDownloadReceipt = async () => {
+    if (receiptPayments.length === 0) return
+    
+    // Use the most recent payment for the receipt
+    const latestPayment = receiptPayments[0]
+    
+    if (!agreement || !siteData?.data?.site || !companyData?.data?.company) {
+      toast.error("Missing required data to generate receipt")
+      return
+    }
+
+    setIsDownloadingReceipt(true)
+    try {
+      await downloadReceiptPDF(
+        customer.id,
+        latestPayment.id,
+        customer,
+        latestPayment,
+        agreement,
+        siteData.data.site,
+        companyData.data.company
+      )
+      toast.success("Receipt downloaded successfully")
+    } catch (error) {
+      console.error("Receipt generation failed:", error)
+      toast.error("Failed to generate receipt. Please try again.")
+    } finally {
+      setIsDownloadingReceipt(false)
+    }
+  }
+
+  const handleDownloadStatement = async () => {
+    if (!agreement || !siteData?.data?.site || !companyData?.data?.company) {
+      toast.error("Missing required data to generate statement")
+      return
+    }
+
+    setIsDownloadingStatement(true)
+    try {
+      await downloadStatementPDF(
+        customer.id,
+        customer,
+        paymentHistory,
+        agreement,
+        siteData.data.site,
+        companyData.data.company
+      )
+      toast.success("Statement downloaded successfully")
+    } catch (error) {
+      console.error("Statement generation failed:", error)
+      toast.error("Failed to generate statement. Please try again.")
+    } finally {
+      setIsDownloadingStatement(false)
+    }
+  }
 
   return (
     <div className="w-full min-w-0 max-w-6xl space-y-8">
@@ -409,21 +471,38 @@ export function CustomerDetailPageContent({
           <div className="flex w-full min-w-0 flex-wrap items-stretch justify-end gap-2 sm:justify-end lg:max-w-xl lg:shrink-0">
             {!isCancelled && (
               <>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadReceipt}
+                  disabled={isDownloadingReceipt || receiptPayments.length === 0}
+                  className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                >
+                  {isDownloadingReceipt ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Download Receipt
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadStatement}
+                  disabled={isDownloadingStatement}
+                  className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                >
+                  {isDownloadingStatement ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Download Statement
+                </Button>
                 {canAddPayment && (
                   <Button
                     onClick={() => setIsPaymentModalOpen(true)}
                     className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
                   >
                     <IndianRupee className="h-3.5 w-3.5" /> Add Due Payment
-                  </Button>
-                )}
-                {canOpenReceipt && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsReceiptModalOpen(true)}
-                    className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Receipt / Statement
                   </Button>
                 )}
                 {canEdit && (
@@ -635,15 +714,6 @@ export function CustomerDetailPageContent({
           onSubmit={(paymentInput: RecordPaymentInput) => recordPayment({ customerId: customer.id, siteId, data: paymentInput })}
           onClose={() => setIsPaymentModalOpen(false)}
           isPending={isPaying}
-        />
-      )}
-
-      {isReceiptModalOpen && canOpenReceipt && (
-        <ReceiptEditor
-          customer={{ ...customer, siteName, sellingPrice: agreementTotal, amountPaid: collectedAmount, remaining: remainingAmount }}
-          siteAddress={siteData?.data?.site?.address}
-          payments={receiptPayments}
-          onClose={() => setIsReceiptModalOpen(false)}
         />
       )}
     </div>

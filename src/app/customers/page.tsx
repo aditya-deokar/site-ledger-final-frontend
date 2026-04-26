@@ -191,7 +191,8 @@ export default function CustomersPage() {
                   <button
                     key={c.id}
                     onClick={() => handleSelectCustomer(c)}
-                    className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/20 transition-colors items-center text-left"
+                    aria-label={`View details for ${c.name}`}
+                    className="group w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/30 hover:border-l-4 hover:border-l-primary transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 cursor-pointer items-center text-left"
                   >
                     {/* Customer Info */}
                     <div className="lg:col-span-3 flex items-center gap-3">
@@ -245,11 +246,14 @@ export default function CustomersPage() {
                           <div className="h-full bg-primary" style={{ width: `${c.sellingPrice > 0 ? Math.min(100, (c.amountPaid / c.sellingPrice) * 100) : 0}%` }} />
                         </div>
                       </div>
-                      <div className="lg:col-span-2 lg:text-right">
-                        <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1 text-left">Remaining</p>
-                        <span className={cn('text-base lg:text-lg font-sans font-bold', c.remaining > 0 ? 'text-red-500' : 'text-emerald-600')}>
-                          {formatINR(c.remaining)}
-                        </span>
+                      <div className="lg:col-span-2 lg:text-right flex items-center justify-between lg:justify-end gap-2">
+                        <div>
+                          <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1 text-left">Remaining</p>
+                          <span className={cn('text-base lg:text-lg font-sans font-bold', c.remaining > 0 ? 'text-red-500' : 'text-emerald-600')}>
+                            {formatINR(c.remaining)}
+                          </span>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground/40 shrink-0 group-hover:text-primary transition-colors" />
                       </div>
                     </div>
                   </button>

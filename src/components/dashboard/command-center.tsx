@@ -1606,12 +1606,11 @@ function BookFlatForm({
         )}
 
         <div className="border border-border bg-muted/20 p-4">
-            <div>
-              <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
-              <p className="text-[10px] text-muted-foreground/60">
-                Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
-              </p>
-            </div>
+          <div>
+            <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
+            <p className="text-[10px] text-muted-foreground/60">
+              Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
+            </p>
           </div>
 
           {agreementLineFields.length === 0 ? (
