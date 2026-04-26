@@ -11,13 +11,17 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { getApiErrorMessage } from '@/lib/api-error';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export default function LoginPage() {
   const { mutate: signIn, isPending, error } = useSignIn();
+  // const { executeRecaptcha } = useGoogleReCaptcha();
   
   const {
     register,
     handleSubmit,
+    setValue,
+    setError,
     formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -25,7 +29,21 @@ export default function LoginPage() {
 
   const loginErrorMessage = error ? getApiErrorMessage(error, 'Authentication failed.') : null;
 
-  const onSubmit = (data: LoginInput) => {
+  const onSubmit = async (data: LoginInput) => {
+    // if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+    //   if (!executeRecaptcha) {
+    //     // Recaptcha library not ready or failed to load -> Bypass gracefully
+    //     data.recaptchaToken = 'BYPASS';
+    //   } else {
+    //     try {
+    //       const token = await executeRecaptcha('login');
+    //       data.recaptchaToken = token;
+    //     } catch (err) {
+    //       // Execution failed -> bypass
+    //       data.recaptchaToken = 'BYPASS';
+    //     }
+    //   }
+    // }
     signIn(data);
   };
 
@@ -66,6 +84,10 @@ export default function LoginPage() {
             {...register('password')}
           />
         </div>
+
+          {errors.recaptchaToken && (
+            <p className="mt-2 text-xs font-medium text-destructive">{errors.recaptchaToken.message}</p>
+          )}
 
         <Button type="submit" className="h-10 w-full" disabled={isPending}>
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Login'}

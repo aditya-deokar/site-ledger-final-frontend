@@ -4,6 +4,7 @@ import { strongPasswordSchema } from '../lib/password-policy';
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required.'),
+  recaptchaToken: z.string().optional(),
 });
 
 export const signUpSchema = z
@@ -13,6 +14,7 @@ export const signUpSchema = z
     confirmPassword: z.string().min(1, 'Please confirm your password.'),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
+    recaptchaToken: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match.',

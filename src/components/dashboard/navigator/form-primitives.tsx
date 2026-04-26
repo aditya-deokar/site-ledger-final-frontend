@@ -11,6 +11,7 @@ const ERROR_CLS = 'text-[10px] text-destructive mt-1';
 type SearchableSelectOption = {
   value: string;
   label: string;
+  description?: string;
   keywords?: string[];
 };
 
@@ -27,6 +28,7 @@ function scoreSearchOption(option: SearchableSelectOption, normalizedQuery: stri
   if (label.includes(normalizedQuery)) return 70;
   if (option.keywords?.some((keyword) => keyword.toLowerCase().includes(normalizedQuery))) return 60;
   if (value.includes(normalizedQuery)) return 50;
+  if (option.description?.toLowerCase().includes(normalizedQuery)) return 40;
   return 0;
 }
 
@@ -46,9 +48,11 @@ export function SearchableSelect({
   placeholder,
   searchPlaceholder,
   emptyText,
+  autoFocus,
   onEnter,
   onQueryChange,
   renderNoResults,
+  allowCustom = false,
 }: {
   options: SearchableSelectOption[];
   value: string;
@@ -56,34 +60,52 @@ export function SearchableSelect({
   placeholder: string;
   searchPlaceholder?: string;
   emptyText?: string;
+  autoFocus?: boolean;
   onEnter?: () => void;
   onQueryChange?: (query: string) => void;
   renderNoResults?: (query: string) => ReactNode;
+  allowCustom?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const selectedOption = options.find((option) => option.value === value) || null;
   const hasQuery = query.trim().length > 0;
 
   const visibleOptions = useMemo(() => {
-    if (!hasQuery) return options;
+    if (!hasQuery || !isTyping) return options;
     return rankSearchOptions(options, query);
-  }, [options, query, hasQuery]);
+  }, [options, query, hasQuery, isTyping]);
 
   useEffect(() => {
-    if (!isOpen) {
-      setQuery(selectedOption?.label || '');
+    if (isOpen && !isTyping) {
+      if (selectedOption) {
+        const idx = visibleOptions.findIndex((o) => o.value === selectedOption.value);
+        if (idx !== -1) setActiveIndex(idx);
+      } else {
+        setActiveIndex(0);
+      }
+    } else if (!isOpen) {
+      if (allowCustom) {
+        setQuery(selectedOption?.label || value || '');
+      } else {
+        setQuery(selectedOption?.label || '');
+      }
+      setIsTyping(false);
     }
-  }, [isOpen, selectedOption]);
+  }, [isOpen, selectedOption, visibleOptions, isTyping, allowCustom, value]);
 
   useEffect(() => {
-    if (!visibleOptions.length) {
-      setActiveIndex(0);
-      return;
+    if (isOpen && listRef.current) {
+      const activeElement = listRef.current.children[activeIndex] as HTMLElement;
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: 'nearest' });
+      }
     }
-    setActiveIndex((prev) => Math.min(prev, visibleOptions.length - 1));
-  }, [visibleOptions]);
+  }, [activeIndex, isOpen]);
 
   const handleEnter = () => {
     if (isOpen && visibleOptions.length > 0) {
@@ -93,7 +115,19 @@ export function SearchableSelect({
       setQuery(next.label);
       setIsOpen(false);
       onQueryChange?.(next.label);
+
+      if (allowCustom && next.value === 'CUSTOM') {
+        setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        }, 50);
+      }
       return;
+    }
+
+    if (allowCustom && hasQuery) {
+      onValueChange(query);
+      setIsOpen(false);
     }
 
     onEnter?.();
@@ -102,17 +136,37 @@ export function SearchableSelect({
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         type="text"
         value={query}
+        autoFocus={autoFocus}
         onChange={(e) => {
           setQuery(e.target.value);
           setIsOpen(true);
+          setIsTyping(true);
           setActiveIndex(0);
           onQueryChange?.(e.target.value);
+          if (allowCustom) {
+            onValueChange(e.target.value);
+          }
         }}
-        onFocus={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true);
+          setIsTyping(false);
+        }}
+        onFocus={(e) => {
+          setIsOpen(true);
+          setIsTyping(false);
+          e.target.select();
+        }}
         onBlur={() => {
-          window.setTimeout(() => setIsOpen(false), 120);
+          window.setTimeout(() => {
+            setIsOpen(false);
+            setIsTyping(false);
+            if (allowCustom && query) {
+              onValueChange(query);
+            }
+          }, 120);
         }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
@@ -149,7 +203,7 @@ export function SearchableSelect({
       />
 
       {isOpen && visibleOptions.length > 0 && (
-        <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto border border-border bg-background shadow-2xl">
+        <div ref={listRef} className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overscroll-contain border border-border bg-background shadow-2xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20">
           {visibleOptions.map((option, idx) => (
             <button
               key={option.value}
@@ -160,13 +214,25 @@ export function SearchableSelect({
                 setQuery(option.label);
                 setIsOpen(false);
                 onQueryChange?.(option.label);
+
+                if (allowCustom && option.value === 'CUSTOM') {
+                  setTimeout(() => {
+                    inputRef.current?.focus();
+                    inputRef.current?.select();
+                  }, 50);
+                }
               }}
               className={cn(
-                'w-full px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest transition-colors',
+                'w-full px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest transition-colors flex flex-col gap-0.5',
                 idx === activeIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/40'
               )}
             >
-              {option.label}
+              <span>{option.label}</span>
+              {option.description && (
+                <span className="text-[9px] font-medium normal-case tracking-normal text-muted-foreground/60 truncate w-full">
+                  {option.description}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -260,27 +326,11 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
   children: ReactNode;
 }) {
   const navRef = useRef<HTMLDivElement>(null);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [cancelChoice, setCancelChoice] = useState<'keep' | 'confirm'>('keep');
-  const keepEditingBtnRef = useRef<HTMLButtonElement>(null);
-  const confirmCancelBtnRef = useRef<HTMLButtonElement>(null);
   const FOCUSABLE = 'input:not([type="hidden"]), textarea, select, [role="radiogroup"], [data-navbtn]';
 
   const requestCancel = () => {
-    setCancelChoice('keep');
-    setShowCancelConfirm(true);
-  };
-  const dismissCancel = () => setShowCancelConfirm(false);
-  const confirmCancel = () => {
-    setShowCancelConfirm(false);
     onBack();
   };
-
-  useEffect(() => {
-    if (!showCancelConfirm) return;
-    const target = cancelChoice === 'keep' ? keepEditingBtnRef.current : confirmCancelBtnRef.current;
-    requestAnimationFrame(() => target?.focus());
-  }, [showCancelConfirm, cancelChoice]);
 
   useEffect(() => {
     const el = navRef.current;
@@ -325,46 +375,6 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
     };
 
     const handler = (e: KeyboardEvent) => {
-      if (showCancelConfirm) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          dismissCancel();
-          return;
-        }
-
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice('keep');
-          return;
-        }
-
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice('confirm');
-          return;
-        }
-
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          e.stopPropagation();
-          setCancelChoice((prev) => (prev === 'keep' ? 'confirm' : 'keep'));
-          return;
-        }
-
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          if (cancelChoice === 'keep') {
-            dismissCancel();
-          } else {
-            confirmCancel();
-          }
-        }
-        return;
-      }
 
       const active = document.activeElement as HTMLElement;
       const items = getFocusables();
@@ -406,7 +416,7 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
 
     el.addEventListener('keydown', handler, true);
     return () => el.removeEventListener('keydown', handler, true);
-  }, [showCancelConfirm]);
+  }, []);
 
   const BTN_FOCUS = 'outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary';
 
@@ -456,46 +466,6 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
         Enter next | Up/Down move | Left/Right buttons | Esc back
       </p>
 
-      {showCancelConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-          <div className="w-full max-w-md border border-border bg-background p-6 shadow-2xl">
-            <p className="text-sm font-bold uppercase tracking-widest text-foreground">Cancel This Action?</p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Any unsaved inputs in this form will be lost.
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button
-                ref={keepEditingBtnRef}
-                type="button"
-                onClick={dismissCancel}
-                onFocus={() => setCancelChoice('keep')}
-                className={cn(
-                  'h-11 w-full font-bold text-[10px] uppercase tracking-[0.18em] border border-border text-muted-foreground transition-all',
-                  'hover:bg-muted/30',
-                  cancelChoice === 'keep' && 'border-primary text-foreground bg-muted/40',
-                  BTN_FOCUS,
-                )}
-              >
-                Keep Editing
-              </button>
-              <button
-                ref={confirmCancelBtnRef}
-                type="button"
-                onClick={confirmCancel}
-                onFocus={() => setCancelChoice('confirm')}
-                className={cn(
-                  'h-11 w-full font-bold text-[10px] uppercase tracking-[0.18em] transition-all',
-                  'bg-primary text-black hover:bg-primary/90',
-                  cancelChoice === 'confirm' && 'ring-2 ring-primary/50',
-                  BTN_FOCUS,
-                )}
-              >
-                Yes, Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

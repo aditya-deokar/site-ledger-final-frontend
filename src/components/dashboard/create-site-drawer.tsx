@@ -59,6 +59,7 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
       wings: [],
       totalFloors: undefined,
       totalFlats: undefined,
+      includeGroundFloor: false,
     },
   })
   const { fields: wingFields, append: appendWing, remove: removeWing } = useFieldArray({
@@ -89,6 +90,7 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
     const payload: CreateSiteInput = {
       ...data,
       hasMultipleWings,
+      includeGroundFloor: data.includeGroundFloor,
       totalFloors: hasMultipleWings ? undefined : data.totalFloors,
       wings: hasMultipleWings
         ? (data.wings ?? []).map((wing) => ({
@@ -307,20 +309,40 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
             )}
 
             {!hasMultipleWings && (
-              <div className="flex flex-col gap-2">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-foreground opacity-40">Total Floors</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  placeholder="e.g. 5"
-                  className="h-12 rounded-none border-none bg-muted text-[10px] font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20"
-                  {...register("totalFloors", { setValueAs: parseOptionalPositiveInteger })}
-                />
-                <p className="text-[10px] text-muted-foreground/60">
-                  Optional. Leave blank to configure floors later from Site Structure.
-                </p>
-                {errors.totalFloors && <p className="text-[10px] text-destructive">{errors.totalFloors.message}</p>}
-              </div>
+              <>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-foreground opacity-40">Total Floors</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 5"
+                    className="h-12 rounded-none border-none bg-muted text-[10px] font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20"
+                    {...register("totalFloors", { setValueAs: parseOptionalPositiveInteger })}
+                  />
+                  <p className="text-[10px] text-muted-foreground/60">
+                    Optional. Leave blank to configure floors later from Site Structure.
+                  </p>
+                  {errors.totalFloors && <p className="text-[10px] text-destructive">{errors.totalFloors.message}</p>}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-foreground opacity-40">Ground Floor</Label>
+                  <div className="flex items-center gap-3 border border-border bg-muted/20 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      id="includeGroundFloor"
+                      className="h-4 w-4 rounded border-border bg-background"
+                      {...register("includeGroundFloor")}
+                    />
+                    <label htmlFor="includeGroundFloor" className="text-[10px] font-bold uppercase tracking-widest text-foreground/70 cursor-pointer">
+                      Include Ground Floor
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/60">
+                    Check this if the site includes a ground floor.
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">

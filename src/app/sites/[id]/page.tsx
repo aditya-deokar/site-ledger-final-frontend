@@ -592,7 +592,7 @@ export default function SiteDetailPage() {
 
         {/* Overview tab */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* Structural Data */}
             <div className="border-l-4 border-primary pl-8 flex flex-col gap-8">
@@ -666,17 +666,7 @@ export default function SiteDetailPage() {
               </div>
             </div>
 
-            {/* Fund Deployment */}
-            <div className="border border-border p-6 flex flex-col gap-4 items-center justify-center relative">
-              <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 self-start">Fund Deployment</p>
-              <FundDeploymentChart allocated={site.allocatedFund} expenses={site.totalExpenses} />
-              <button 
-                onClick={() => setActiveTab('ledger')}
-                className="mt-4 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase text-primary hover:underline group"
-              >
-                <History className="w-3.5 h-3.5 transition-transform group-hover:rotate-12" /> Open Ledger
-              </button>
-            </div>
+
 
           </div>
         )}

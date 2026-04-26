@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Loader2, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export default function RegisterPage() {
   const [verificationRequired, setVerificationRequired] = useState(false);
@@ -23,6 +24,7 @@ export default function RegisterPage() {
 
   const { mutate: signUp, isPending: isSignUpPending, error: signUpError } = useSignUp();
   const { mutate: verifySignUp, isPending: isVerifyPending } = useVerifySignUp();
+  // const { executeRecaptcha } = useGoogleReCaptcha();
   
   const {
     register,
@@ -30,6 +32,8 @@ export default function RegisterPage() {
     watch,
     formState: { errors, isValid },
     getValues,
+    setValue,
+    setError,
   } = useForm<SignUpInput>({
     resolver: zodResolver(signUpSchema),
     mode: 'onChange',
@@ -58,7 +62,19 @@ export default function RegisterPage() {
     });
   };
 
-  const onSubmit = (data: SignUpInput) => {
+  const onSubmit = async (data: SignUpInput) => {
+    // if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+    //   if (!executeRecaptcha) {
+    //     data.recaptchaToken = 'BYPASS';
+    //   } else {
+    //     try {
+    //       const token = await executeRecaptcha('signup');
+    //       data.recaptchaToken = token;
+    //     } catch (err) {
+    //       data.recaptchaToken = 'BYPASS';
+    //     }
+    //   }
+    // }
     requestVerificationCode(data);
   };
 
@@ -212,6 +228,10 @@ export default function RegisterPage() {
             error={errors.confirmPassword?.message}
             {...register('confirmPassword')}
           />
+
+          {errors.recaptchaToken && (
+            <p className="mt-2 text-[10px] font-medium text-destructive">{errors.recaptchaToken.message}</p>
+          )}
         </div>
 
         <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all shadow-lg shadow-primary/10" disabled={isSignUpPending || !isValid}>

@@ -127,11 +127,13 @@ export const createSiteSchema = z.object({
   totalFloors: z.number().int('Total floors must be a whole number').min(1, 'Total floors must be at least 1').optional(),
   totalFlats: z.number().int('Total flats must be a whole number').min(1, 'Total flats must be at least 1').optional(),
   hasMultipleWings: z.boolean().optional().default(false),
+  includeGroundFloor: z.boolean().optional().default(false),
   wings: z
     .array(
       z.object({
         name: z.string().trim().min(1, 'Wing name is required'),
         floorCount: z.number().int('Floor count must be a whole number').min(1, 'Each wing needs at least 1 floor'),
+        includeGroundFloor: z.boolean().optional().default(false),
       }),
     )
     .optional(),
