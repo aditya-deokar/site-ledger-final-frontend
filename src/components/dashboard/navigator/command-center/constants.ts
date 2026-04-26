@@ -26,9 +26,9 @@ export const CATEGORIES: CategoryDef[] = [
       { id: 'create-site', label: 'Create New Site', shortcut: '1', icon: Building2 },
       { id: 'book-flat', label: 'Book Flat', shortcut: '2', icon: UserPlus },
       { id: 'add-site-expense', label: 'Add Site Expense', shortcut: '3', icon: IndianRupee },
-      { id: 'archive-site', label: 'Archive/Restore Site', shortcut: '4', icon: Pencil },
-      { id: 'delete-site', label: 'Delete Site', shortcut: '5', icon: Hammer },
-      { id: 'manage-funds', label: 'Manage Funds (Pull/Add)', shortcut: '6', icon: IndianRupee },
+      { id: 'manage-funds', label: 'Manage Funds (Pull/Add)', shortcut: '4', icon: IndianRupee },
+      { id: 'archive-site', label: 'Archive/Restore Site', shortcut: '5', icon: Pencil },
+      { id: 'delete-site', label: 'Delete Site', shortcut: '6', icon: Hammer },
     ],
   },
   {

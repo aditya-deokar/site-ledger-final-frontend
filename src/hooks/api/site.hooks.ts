@@ -232,12 +232,12 @@ export const useBookFlat = (siteId: string, options?: { onSuccess?: () => void }
   });
 };
 
-export const useExpenses = (siteId: string) => {
+export const useExpenses = (siteId: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['expenses', siteId],
     queryFn: () => siteService.getExpenses(siteId),
     retry: false,
-    enabled: !!siteId,
+    enabled: (options?.enabled ?? true) && !!siteId,
   });
 };
 

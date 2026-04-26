@@ -16,6 +16,7 @@ import {
   Loader2, Plus, Phone, Mail, Pencil, Trash2, Users, ArrowRight, X, Search, BookOpen
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
 
 function VendorsListSkeleton() {
   return (
@@ -55,19 +56,36 @@ const normalizeVendorType = (type: string) => {
 
 const getVendorDisplayId = (vendorId: string) => vendorId.slice(-8).toUpperCase();
 
+const COMMON_VENDOR_TYPES = ['MATERIALS', 'LABOR', 'CONTRACTOR', 'TRANSPORT', 'ELECTRICAL', 'PLUMBING', 'MASONRY', 'CARPENTRY'];
+
+function buildVendorTypeOptions(vendors: Vendor[]) {
+  const types = new Map<string, string>();
+  COMMON_VENDOR_TYPES.forEach((type) => types.set(type.toLowerCase(), type));
+  vendors.forEach((vendor) => {
+    const type = normalizeVendorType(vendor.type);
+    if (type) types.set(type.toLowerCase(), type);
+  });
+
+  return Array.from(types.values())
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    .map((type) => ({ value: type, label: type }));
+}
+
 // ── Vendor Form (shared by add & edit) ──────────────
 function VendorForm({
   defaultValues,
   onSubmit,
   isPending,
   submitLabel,
+  vendorTypeOptions,
 }: {
   defaultValues?: Partial<CreateVendorInput>;
   onSubmit: (data: CreateVendorInput) => void;
   isPending: boolean;
   submitLabel: string;
+  vendorTypeOptions: Array<{ value: string; label: string }>;
 }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateVendorInput>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<CreateVendorInput>({
     resolver: zodResolver(createVendorSchema),
     defaultValues: {
       name: '',
@@ -77,6 +95,7 @@ function VendorForm({
       ...defaultValues,
     },
   });
+  const vendorType = watch('type') || '';
 
   return (
     <>
@@ -90,12 +109,17 @@ function VendorForm({
 
           <div className="flex flex-col gap-2">
             <Label className="text-[10px] tracking-widest uppercase opacity-40 font-bold text-foreground">Vendor Type</Label>
-            <Input
-              placeholder="e.g. Electrician, Carpenter, Mason"
-              className="h-12 bg-muted border-none rounded-none text-[10px] font-bold tracking-widest placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20 text-foreground"
-              {...register('type')}
+            <input type="hidden" {...register('type')} />
+            <SearchableSelect
+              options={vendorTypeOptions}
+              value={vendorType}
+              onValueChange={(value) => setValue('type', value, { shouldValidate: true })}
+              placeholder="Select or type vendor type..."
+              searchPlaceholder="Search or create vendor type..."
+              emptyText="Type a new vendor type."
+              allowCustom
             />
-            <p className="text-[10px] text-muted-foreground/60">Enter any vendor type for your business</p>
+            <p className="text-[10px] text-muted-foreground/60">Reuse an existing type or type a new one.</p>
             {errors.type && <p className="text-[10px] text-destructive">{errors.type.message}</p>}
           </div>
 
@@ -186,6 +210,7 @@ export default function VendorsPage() {
   const { mutate: update, isPending: updating } = useUpdateVendor({ onSuccess: handleCloseEdit });
 
   const allVendors = useMemo(() => data?.data?.vendors ?? [], [data]);
+  const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(allVendors), [allVendors]);
 
   const tabs = useMemo(() => {
     const uniqueTypes = Array.from(
@@ -202,6 +227,15 @@ export default function VendorsPage() {
     ];
   }, [allVendors]);
 
+  const typeRows = useMemo(() => (
+    tabs
+      .filter((tab): tab is { key: string; label: string } => Boolean(tab.key))
+      .map((tab) => ({
+        ...tab,
+        count: allVendors.filter((vendor) => normalizeVendorType(vendor.type) === tab.key).length,
+      }))
+  ), [allVendors, tabs]);
+
   const vendors = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
@@ -217,12 +251,19 @@ export default function VendorsPage() {
       }
 
       const displayId = getVendorDisplayId(vendor.id).toLowerCase();
+      const searchableText = [
+        vendor.name,
+        vendor.id,
+        displayId,
+        vendor.type,
+        vendor.phone,
+        vendor.email,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-      return (
-        vendor.name.toLowerCase().includes(normalizedSearchQuery) ||
-        vendor.id.toLowerCase().includes(normalizedSearchQuery) ||
-        displayId.includes(normalizedSearchQuery)
-      );
+      return searchableText.includes(normalizedSearchQuery);
     });
   }, [allVendors, searchQuery, typeFilter]);
 
@@ -290,6 +331,32 @@ export default function VendorsPage() {
             </button>
           ))}
         </div>
+
+        {typeRows.length > 0 && (
+          <div className="overflow-hidden border border-border bg-background">
+            <div className="grid grid-cols-[minmax(0,1fr)_6rem_7rem] border-b border-border bg-slate-50/80 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              <span>Vendor Type</span>
+              <span className="text-right">Vendors</span>
+              <span className="text-right">Filter</span>
+            </div>
+            {typeRows.map((row) => (
+              <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_6rem_7rem] items-center border-b border-border/60 px-4 py-3 last:border-b-0">
+                <span className="truncate text-sm font-semibold text-foreground">{row.label}</span>
+                <span className="text-right text-sm font-bold text-slate-600">{row.count}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetType(row.key)}
+                  className={cn(
+                    'justify-self-end text-[10px] font-bold uppercase tracking-widest transition-colors',
+                    typeFilter === row.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {typeFilter === row.key ? 'Selected' : 'View'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {isLoading ? (
           <div className="space-y-8">
@@ -420,6 +487,7 @@ export default function VendorsPage() {
               onSubmit={(data) => create({ ...data, email: data.email || undefined })}
               isPending={creating}
               submitLabel="Add Vendor"
+              vendorTypeOptions={vendorTypeOptions}
             />
           </SheetContent>
         </Sheet>
@@ -442,6 +510,7 @@ export default function VendorsPage() {
               onSubmit={(data) => update({ id: editVendor.id, data: { ...data, email: data.email || undefined } })}
               isPending={updating}
               submitLabel="Update Vendor"
+              vendorTypeOptions={vendorTypeOptions}
             />
           </SheetContent>
         </Sheet>

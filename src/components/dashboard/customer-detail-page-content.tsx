@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import {
   Customer,
+  CustomerWithSite,
   CustomerPaymentHistoryItem,
   RecordPaymentInput,
   UpdateCustomerInput,
@@ -305,21 +306,19 @@ function CancelConfirm({
 
 function SummaryRow({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
-    <div className="flex min-w-0 items-baseline justify-between gap-2 border-b border-border py-2.5 first:pt-0 last:border-0 last:pb-0">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</span>
-      <span className={cn("shrink-0 text-right text-sm font-sans font-bold tabular-nums tracking-tight", valueClass)}>{value}</span>
+    <div className="grid min-w-0 grid-cols-[112px_minmax(0,1fr)] items-start gap-3 border-b border-border px-4 py-3.5 last:border-0">
+      <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">{label}</span>
+      <span className={cn("min-w-0 break-words text-right text-sm font-sans font-bold tabular-nums leading-snug tracking-tight", valueClass)}>{value}</span>
     </div>
   )
 }
 
 export function CustomerDetailPageContent({
-  customer,
-  siteId,
-  siteName,
+  customer: initialCustomer,
+  customerDeals,
 }: {
-  customer: Customer
-  siteId: string
-  siteName?: string
+  customer: CustomerWithSite
+  customerDeals: CustomerWithSite[]
 }) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
@@ -327,6 +326,14 @@ export function CustomerDetailPageContent({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
   const [isDownloadingStatement, setIsDownloadingStatement] = useState(false)
+  const [selectedCustomerId, setSelectedCustomerId] = useState(initialCustomer.id)
+
+  const customer = useMemo(
+    () => customerDeals.find((deal) => deal.id === selectedCustomerId) ?? customerDeals[0] ?? initialCustomer,
+    [customerDeals, initialCustomer, selectedCustomerId],
+  )
+  const siteId = customer.siteId ?? ""
+  const siteName = customer.siteName ?? undefined
 
   const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({
     onSuccess: () => {
@@ -363,9 +370,13 @@ export function CustomerDetailPageContent({
   const statusDisplay = isCancelled ? "CANCELLED" : (customer.flatStatus ?? "ACTIVE")
   const flatDisplayName = getFlatDisplayName(customer)
   const floorDisplayName = getFloorDisplayName(customer)
-  const canEdit = !isCancelled && Boolean(customer.flatId)
-  const canCancel = !isCancelled && Boolean(customer.flatId)
-  const canAddPayment = !isCancelled && remainingAmount > 0
+  const canEdit = !isCancelled && Boolean(customer.flatId) && Boolean(siteId)
+  const canCancel = !isCancelled && Boolean(customer.flatId) && Boolean(siteId)
+  const canAddPayment = !isCancelled && remainingAmount > 0 && Boolean(siteId)
+
+  const allDealsTotal = customerDeals.reduce((sum, deal) => sum + deal.sellingPrice, 0)
+  const allDealsPaid = customerDeals.reduce((sum, deal) => sum + deal.amountPaid, 0)
+  const allDealsRemaining = customerDeals.reduce((sum, deal) => sum + deal.remaining, 0)
 
   const pct = agreementTotal > 0
     ? Math.min(100, (collectedAmount / agreementTotal) * 100)
@@ -430,20 +441,20 @@ export function CustomerDetailPageContent({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-6xl space-y-8">
-      <div>
+    <div className="w-full min-w-0 max-w-7xl space-y-6">
+      <div className="border border-border bg-background px-5 py-5 sm:px-6">
         <Link
           href="/customers"
           className={cn(
             buttonVariants({ variant: "ghost" }),
-            "mb-4 -ml-2 inline-flex h-9 min-h-0 items-center gap-1.5 px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground",
+            "mb-5 -ml-2 inline-flex h-8 min-h-0 items-center gap-1.5 px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground",
           )}
         >
           <ChevronLeft className="h-4 w-4" />
           Back to Customers
         </Link>
 
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1 space-y-2">
             <h1 className="font-serif text-3xl tracking-tight text-foreground sm:text-4xl break-words">{customer.name}</h1>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
@@ -459,23 +470,22 @@ export function CustomerDetailPageContent({
               >
                 {statusBadgeLabel}
               </span>
-              <span className="text-muted-foreground/40" aria-hidden>
-                ·
-              </span>
               <span className="max-w-full truncate text-[11px] font-medium tracking-tight text-muted-foreground/80">
-                {flatDisplayName} · {floorDisplayName}
-                {siteName ? ` · ${siteName}` : ""}
+                {[flatDisplayName, floorDisplayName, siteName].filter(Boolean).join(" / ")}
+              </span>
+              <span className="px-2.5 py-1 text-[10px] font-bold tracking-widest uppercase bg-muted text-foreground/70">
+                {customerDeals.length} Flats
               </span>
             </div>
           </div>
-          <div className="flex w-full min-w-0 flex-wrap items-stretch justify-end gap-2 sm:justify-end lg:max-w-xl lg:shrink-0">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:max-w-[650px] xl:grid-cols-3 xl:shrink-0">
             {!isCancelled && (
               <>
                 <Button
                   variant="outline"
                   onClick={handleDownloadReceipt}
                   disabled={isDownloadingReceipt || receiptPayments.length === 0}
-                  className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                  className="h-10 w-full gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest"
                 >
                   {isDownloadingReceipt ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -488,7 +498,7 @@ export function CustomerDetailPageContent({
                   variant="outline"
                   onClick={handleDownloadStatement}
                   disabled={isDownloadingStatement}
-                  className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                  className="h-10 w-full gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest"
                 >
                   {isDownloadingStatement ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -500,7 +510,7 @@ export function CustomerDetailPageContent({
                 {canAddPayment && (
                   <Button
                     onClick={() => setIsPaymentModalOpen(true)}
-                    className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                    className="h-10 w-full gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest"
                   >
                     <IndianRupee className="h-3.5 w-3.5" /> Add Due Payment
                   </Button>
@@ -509,7 +519,7 @@ export function CustomerDetailPageContent({
                   <Button
                     variant="outline"
                     onClick={() => setEditOpen(true)}
-                    className="h-10 flex-1 min-w-[100px] gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest sm:flex-none"
+                    className="h-10 w-full gap-1.5 rounded-none text-[9px] font-bold uppercase tracking-widest"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </Button>
@@ -518,7 +528,7 @@ export function CustomerDetailPageContent({
                   <Button
                     variant="outline"
                     onClick={() => setCancelOpen(true)}
-                    className="h-10 flex-1 min-w-[120px] gap-1.5 rounded-none border-red-500/30 text-[9px] font-bold uppercase tracking-widest text-red-500 hover:bg-red-500/5 sm:flex-none"
+                    className="h-10 w-full gap-1.5 rounded-none border-red-500/30 text-[9px] font-bold uppercase tracking-widest text-red-500 hover:bg-red-500/5"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Cancel Deal
                   </Button>
@@ -537,25 +547,27 @@ export function CustomerDetailPageContent({
         </div>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12 lg:gap-10">
-        <div className="min-w-0 space-y-10 lg:col-span-7 xl:col-span-8">
-          <section>
-            <h2 className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Financial Summary</h2>
-            <div className="grid min-w-0 grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
+        <div className="min-w-0 space-y-6 xl:col-span-8">
+          <section className="border border-border bg-background">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Financial Summary</h2>
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-px bg-border sm:grid-cols-2">
               {[
                 { label: "Agreement Total", value: formatINR(agreementTotal) },
                 { label: "Booking Amount", value: formatINR(customer.bookingAmount) },
                 { label: "Total Paid", value: formatINR(collectedAmount), valClass: "text-emerald-600" },
                 { label: "Remaining Balance", value: formatINR(isCancelled ? 0 : remainingAmount), valClass: isCancelled ? undefined : remainingAmount > 0 ? "text-red-500" : "text-emerald-600" },
               ].map((row) => (
-                <div key={row.label} className="bg-background px-4 py-4">
+                <div key={row.label} className="bg-background px-5 py-5">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">{row.label}</p>
-                  <p className={cn("mt-1.5 font-sans text-xl font-bold tabular-nums tracking-tight", row.valClass)}>{row.value}</p>
+                  <p className={cn("mt-2 font-sans text-2xl font-bold tabular-nums tracking-tight", row.valClass)}>{row.value}</p>
                 </div>
               ))}
             </div>
             {!isCancelled && (
-              <div className="mt-4 min-w-0">
+              <div className="border-t border-border px-5 py-4">
                 <div className="mb-1.5 flex justify-between gap-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
                   <span>Collection progress</span>
                   <span className="text-primary">{pct.toFixed(1)}%</span>
@@ -566,14 +578,71 @@ export function CustomerDetailPageContent({
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <p className="mt-2 text-[10px] text-muted-foreground/60">
+                <p className="mt-2 max-w-3xl text-[10px] leading-relaxed text-muted-foreground/60">
                   Collections and agreement changes are now tracked separately. Edit price, GST, discounts, or charges below without creating fake payments.
                 </p>
               </div>
             )}
           </section>
 
-          <section className="min-w-0 border-t border-border pt-10">
+          <section className="border border-border bg-background">
+            <div className="border-b border-border px-5 py-4 flex items-center justify-between">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Customer Flats</h2>
+              <p className="text-[10px] text-muted-foreground/70">
+                Total {formatINR(allDealsTotal)} / Paid {formatINR(allDealsPaid)} / Remaining {formatINR(allDealsRemaining)}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left">
+                <thead className="border-b border-border bg-muted/20">
+                  <tr className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">
+                    <th className="px-4 py-3">Site</th>
+                    <th className="px-4 py-3">Wing</th>
+                    <th className="px-4 py-3">Floor</th>
+                    <th className="px-4 py-3">Flat</th>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Cost</th>
+                    <th className="px-4 py-3">Paid</th>
+                    <th className="px-4 py-3">Remaining</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerDeals.map((deal) => {
+                    const dealFloor = deal.floorName || (deal.floorNumber !== null ? `Floor ${deal.floorNumber}` : "\u2014")
+                    const dealFlat = deal.customFlatId || (deal.flatNumber !== null ? `Flat ${deal.flatNumber}` : "\u2014")
+                    const dealStatus = deal.dealStatus === "CANCELLED" ? "CANCELLED" : (deal.flatStatus ?? "ACTIVE")
+                    return (
+                      <tr
+                        key={deal.id}
+                        onClick={() => setSelectedCustomerId(deal.id)}
+                        className={cn(
+                          "cursor-pointer border-b border-border/70 text-sm hover:bg-muted/20",
+                          selectedCustomerId === deal.id && "bg-primary/5"
+                        )}
+                      >
+                        <td className="px-4 py-3">{deal.siteName || "\u2014"}</td>
+                        <td className="px-4 py-3">{deal.wingName || "\u2014"}</td>
+                        <td className="px-4 py-3">{dealFloor}</td>
+                        <td className="px-4 py-3 font-semibold">{dealFlat}</td>
+                        <td className="px-4 py-3">{deal.unitType || deal.flatType || "\u2014"}</td>
+                        <td className="px-4 py-3 font-semibold">{formatINR(deal.sellingPrice)}</td>
+                        <td className="px-4 py-3 text-emerald-600 font-semibold">{formatINR(deal.amountPaid)}</td>
+                        <td className={cn("px-4 py-3 font-semibold", deal.remaining > 0 ? "text-red-500" : "text-emerald-600")}>
+                          {formatINR(deal.remaining)}
+                        </td>
+                        <td className="px-4 py-3">{dealStatus}</td>
+                        <td className="px-4 py-3">{formatDate(deal.createdAt)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="min-w-0 border border-border bg-background p-5">
             <CustomerAgreementPanel
               customerId={customer.id}
               siteId={siteId}
@@ -584,10 +653,12 @@ export function CustomerDetailPageContent({
           </section>
         </div>
 
-        <aside className="min-w-0 space-y-6 border-t border-border pt-8 lg:col-span-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0 xl:col-span-4">
-          <div>
-            <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Profile</h2>
-            <div className="divide-y divide-border border border-border">
+        <aside className="min-w-0 space-y-6 xl:sticky xl:top-6 xl:col-span-4">
+          <div className="border border-border bg-background">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Profile</h2>
+            </div>
+            <div>
               <SummaryRow label="Name" value={customer.name} />
               <SummaryRow label="Phone" value={customer.phone || "—"} />
               <SummaryRow label="Email" value={customer.email || "—"} />
@@ -595,19 +666,23 @@ export function CustomerDetailPageContent({
             </div>
           </div>
 
-          <div>
-            <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Property</h2>
-            <div className="divide-y divide-border border border-border">
+          <div className="border border-border bg-background">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Property</h2>
+            </div>
+            <div>
               {siteName && <SummaryRow label="Site" value={siteName} />}
+              {customer.wingName && <SummaryRow label="Wing" value={customer.wingName} />}
               <SummaryRow label="Floor" value={floorDisplayName} />
               <SummaryRow label="Flat" value={flatDisplayName} />
+              <SummaryRow label="Unit Type" value={customer.unitType || customer.flatType || "\u2014"} />
               <SummaryRow label="Booking / sale" value={formatDate(displayCreatedAt)} />
             </div>
           </div>
 
           <div
             className={cn(
-              "border px-5 py-6",
+              "border px-5 py-6 shadow-sm",
               isCancelled
                 ? "border-amber-500/20 bg-amber-500/5"
                 : remainingAmount > 0

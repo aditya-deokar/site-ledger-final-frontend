@@ -1,11 +1,11 @@
 import { useFloors, useWings, useExpenses } from '@/hooks/api/site.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
-import { useVendor } from '@/hooks/api/vendor.hooks';
+import { useVendor, useVendorTransactions } from '@/hooks/api/vendor.hooks';
 import type { Flat, Floor } from '@/schemas/site.schema';
 
 import { ACTIONS_USING_SITE_SELECTOR, LABEL_CLS } from './constants';
 import { BookedFlatsTable } from './booked-flats-table';
-import { formatINR } from './utils';
+import { formatINR, formatShortDate } from './utils';
 
 interface ContextInsightPanelProps {
   action: string | null;
@@ -15,6 +15,17 @@ interface ContextInsightPanelProps {
   focusedWingId?: string | null;
   focusedVendorId?: string | null;
 }
+
+type HistoryExpense = {
+  id: string;
+  vendorId?: string | null;
+  type?: string | null;
+  reason?: string | null;
+  description?: string | null;
+  paymentDate?: string | null;
+  createdAt?: string | null;
+  amount: number;
+};
 
 export function ContextInsightPanel({
   action,
@@ -27,6 +38,7 @@ export function ContextInsightPanel({
   const { data: floorsData, isLoading: floorsLoading } = useFloors(site?.id || '');
   const { data: wingsData } = useWings(site?.id || '');
   const { data: vendorData, isLoading: vendorLoading } = useVendor(focusedVendorId || '');
+  const { data: vendorTransactionsData, isLoading: vendorTransactionsLoading } = useVendorTransactions(focusedVendorId || '');
   const { data: companyData } = useCompany({ enabled: action === 'manage-funds' });
   const { data: expensesData } = useExpenses(site?.id || '', { enabled: !!site?.id });
 
@@ -42,10 +54,15 @@ export function ContextInsightPanel({
   const bookedFlats = selectedFloor?.flats.filter((flat: Flat) => flat.status === 'BOOKED' || flat.status === 'SOLD') ?? [];
 
   const vendor = vendorData?.data?.vendor;
+  const vendorBills = vendorTransactionsData?.data?.transactions ?? [];
   const companyFunds = companyData?.data;
-  const expenses = expensesData?.data?.expenses ?? [];
+  const expenses = (expensesData?.data?.expenses ?? []) as HistoryExpense[];
+  const historyExpenses = expenses
+    .filter((exp) => focusedVendorId ? exp.vendorId === focusedVendorId : exp.type === 'GENERAL')
+    .slice(0, 10);
 
-  if (!site) return null;
+  const isVendorAction = action === 'edit-vendor' || action === 'delete-vendor';
+  if (!site && !isVendorAction) return null;
 
   const isSiteDrivenAction = !!action && ACTIONS_USING_SITE_SELECTOR.includes(action);
 
@@ -125,7 +142,7 @@ export function ContextInsightPanel({
                   <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{vendor.type}</p>
                   <div className="mt-4 pt-3 border-t border-border/50 flex justify-between items-baseline">
                     <span className={LABEL_CLS}>Global Balance Due</span>
-                    <span className="text-sm font-bold text-primary">{formatINR(Number(vendor.remaining ?? 0))}</span>
+                    <span className="text-sm font-bold text-primary">{formatINR(Number(vendor.remainingBalance ?? vendor.totalOutstanding ?? 0))}</span>
                   </div>
                 </div>
               </div>
@@ -137,20 +154,20 @@ export function ContextInsightPanel({
                 {focusedVendorId ? 'Vendor Payment History' : 'Recent General Expenses'}
               </p>
               <div className="flex flex-col gap-2">
-                {expenses
-                  .filter((exp: any) => focusedVendorId ? exp.vendorId === focusedVendorId : exp.type === 'GENERAL')
-                  .slice(0, 10)
-                  .map((exp: any) => (
-                    <div key={exp.id} className="border border-border/50 p-2 text-[10px] flex justify-between items-center">
+                {historyExpenses
+                  .map((exp) => (
+                    <div key={exp.id} className="border border-border/50 p-2 text-[10px] flex justify-between gap-3">
                       <div className="flex flex-col gap-0.5 max-w-[60%]">
                         <span className="font-bold text-foreground truncate">{exp.reason || exp.description || 'Expense Entry'}</span>
-                        <span className="text-muted-foreground/60">{exp.paymentDate ? new Date(exp.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'No date'}</span>
+                        <span className="text-muted-foreground/60">
+                          {formatShortDate(exp.paymentDate || exp.createdAt)}
+                        </span>
                       </div>
-                      <span className="font-bold text-red-500">{formatINR(exp.amount)}</span>
+                      <span className="shrink-0 font-bold text-red-500">{formatINR(exp.amount)}</span>
                     </div>
                   ))
                 }
-                {expenses.length === 0 && (
+                {historyExpenses.length === 0 && (
                   <p className="text-[10px] text-muted-foreground italic">No recent history found.</p>
                 )}
               </div>
@@ -191,6 +208,56 @@ export function ContextInsightPanel({
             <p className="mt-1 text-[11px] text-muted-foreground font-medium">
               Remaining Balance: <span className="text-primary">{formatINR(Number(customer.remaining ?? 0))}</span>
             </p>
+          </div>
+        )}
+
+        {isVendorAction && focusedVendorId && (
+          <div className="flex flex-col gap-4">
+            <div className="border border-border bg-muted/20 p-4">
+              <p className={LABEL_CLS}>Selected Vendor</p>
+              {vendorLoading ? (
+                <p className="mt-2 text-[10px] text-muted-foreground italic">Loading vendor...</p>
+              ) : vendor ? (
+                <>
+                  <p className="mt-2 text-sm font-bold uppercase tracking-widest">{vendor.name}</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{vendor.type}</p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border/60 pt-3">
+                    <div>
+                      <p className={LABEL_CLS}>Billed</p>
+                      <p className="mt-1 text-sm font-bold text-foreground">{formatINR(Number(vendor.totalBilled ?? 0))}</p>
+                    </div>
+                    <div>
+                      <p className={LABEL_CLS}>Outstanding</p>
+                      <p className="mt-1 text-sm font-bold text-primary">{formatINR(Number(vendor.totalOutstanding ?? 0))}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-2 text-[10px] text-muted-foreground italic">Vendor details unavailable.</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className={LABEL_CLS}>Recent Vendor Bills</p>
+              {vendorTransactionsLoading ? (
+                <p className="text-[10px] text-muted-foreground italic">Loading history...</p>
+              ) : vendorBills.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground italic">No bill history found for this vendor.</p>
+              ) : (
+                vendorBills.slice(0, 6).map((bill) => (
+                  <div key={bill.id} className="flex justify-between gap-3 border border-border/50 p-2 text-[10px]">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-foreground">{bill.description || bill.reason || bill.siteName || 'Vendor bill'}</p>
+                      <p className="text-muted-foreground/60">{formatShortDate(bill.billDate || bill.createdAt)}{bill.siteName ? ` / ${bill.siteName}` : ''}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-bold text-red-500">{formatINR(Number(bill.amount ?? 0))}</p>
+                      <p className="text-muted-foreground/50">{bill.paymentStatus}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -20,6 +20,7 @@ function formatDate(iso: string) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
   })
 }
 
@@ -62,6 +63,7 @@ interface PaymentRecord {
 
 interface RecordPaymentModalProps {
   title: string
+  contextNote?: string
   totalAmount: number
   currentlyPaid: number
   entityType: "expense" | "investor-transaction" | "company-withdrawal" | "customer-booking"
@@ -89,6 +91,7 @@ const PAYMENT_MODE_OPTIONS: Array<{ value: PaymentMode; label: string }> = [
 
 export function RecordPaymentModal({
   title,
+  contextNote,
   totalAmount,
   currentlyPaid,
   entityType,

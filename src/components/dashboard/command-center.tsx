@@ -16,8 +16,8 @@ import {
 import { toast } from 'sonner';
 
 import { DashboardShell } from '@/components/dashboard/dashboard-shell';
-import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useExpenses } from '@/hooks/api/site.hooks';
-import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund, useCompany } from '@/hooks/api/company.hooks';
+import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useWithdrawFund as useWithdrawSiteFund, useExpenses } from '@/hooks/api/site.hooks';
+import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund as useWithdrawCompanyFund, useCompany } from '@/hooks/api/company.hooks';
 import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors, useAddTransaction } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
@@ -63,6 +63,21 @@ import {
 } from '@/components/dashboard/navigator/command-center/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
+import { groupCustomerDeals } from '@/lib/customer-grouping';
+import type { CustomerWithSite } from '@/schemas/customer.schema';
+
+function buildVendorTypeOptions(vendors: Array<{ type?: string | null }>) {
+  const types = new Map<string, string>();
+  COMMON_VENDOR_CATEGORIES.forEach((type) => types.set(type.toLowerCase(), type));
+  vendors.forEach((vendor) => {
+    const type = vendor.type?.trim();
+    if (type) types.set(type.toLowerCase(), type);
+  });
+
+  return Array.from(types.values())
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    .map((type) => ({ value: type, label: type }));
+}
 
 function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useCreateSite({ onSuccess: () => { reset(); toast.success('Site created'); onSuccess(); } });
@@ -271,11 +286,11 @@ function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
 function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site: any; onSuccess: () => void; onBack: () => void; onVendorChange: (id: string | null) => void }) {
   const { data: vendorsData } = useVendors();
   const vendors = vendorsData?.data?.vendors ?? [];
+  const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(vendors), [vendors]);
   const { mutateAsync: createVendorQuick, isPending: isCreatingVendorQuick } = useCreateVendor();
   const [showQuickVendorCreate, setShowQuickVendorCreate] = useState(false);
   const [quickVendorName, setQuickVendorName] = useState('');
-  const [quickVendorCategory, setQuickVendorCategory] = useState<(typeof COMMON_VENDOR_CATEGORIES)[number] | 'CUSTOM'>('MATERIALS');
-  const [quickVendorCustomCategory, setQuickVendorCustomCategory] = useState('');
+  const [quickVendorCategory, setQuickVendorCategory] = useState<string>(COMMON_VENDOR_CATEGORIES[0]);
   const { mutate, isPending, error } = useAddExpense(site.id, {
     onSuccess: () => {
       reset();
@@ -307,15 +322,16 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
   // No manual focus override to let FormShell handle it naturally from the first field
 
   const onSubmit = (d: CreateExpenseInput) => {
+    const paidAmount = d.amountPaid ?? 0;
     const payload: CreateExpenseInput = {
       ...d,
       reason: d.reason || undefined,
       description: d.description || undefined,
       paymentDate: d.paymentDate ? toIsoDate(d.paymentDate) : undefined,
       vendorId: d.type === 'VENDOR' ? d.vendorId || undefined : undefined,
-      amountPaid: d.amountPaid === 0 ? undefined : d.amountPaid,
-      paymentMode: d.amountPaid > 0 ? d.paymentMode : undefined,
-      referenceNumber: d.amountPaid > 0 && d.paymentMode !== 'CASH' ? d.referenceNumber?.trim() || undefined : undefined,
+      amountPaid: paidAmount === 0 ? undefined : paidAmount,
+      paymentMode: paidAmount > 0 ? d.paymentMode : undefined,
+      referenceNumber: paidAmount > 0 && d.paymentMode !== 'CASH' ? d.referenceNumber?.trim() || undefined : undefined,
     };
 
     if (payload.type === 'VENDOR' && !payload.vendorId) {
@@ -328,7 +344,7 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
 
   const handleQuickVendorCreate = async () => {
     const name = quickVendorName.trim();
-    const category = quickVendorCategory === 'CUSTOM' ? quickVendorCustomCategory.trim() : quickVendorCategory;
+    const category = quickVendorCategory.trim();
 
     if (!name) {
       toast.error('Vendor name is required');
@@ -347,7 +363,6 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
         setValue('vendorId', createdVendorId, { shouldValidate: true });
       }
       setShowQuickVendorCreate(false);
-      setQuickVendorCustomCategory('');
       toast.success('Vendor created');
     } catch (createError) {
       toast.error(getApiErrorMessage(createError, 'Failed to create vendor'));
@@ -431,20 +446,14 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
                     className={cn(INPUT_CLS, 'h-10')}
                   />
                   <SearchableSelect
-                    options={[...COMMON_VENDOR_CATEGORIES.map(c => ({ value: c, label: c })), { value: 'CUSTOM', label: 'Other (Custom Category)' }]}
+                    options={vendorTypeOptions}
                     value={quickVendorCategory}
-                    onValueChange={(v) => setQuickVendorCategory(v as any)}
-                    placeholder="Select category..."
-                    searchPlaceholder="Search category..."
+                    onValueChange={setQuickVendorCategory}
+                    placeholder="Select or type category..."
+                    searchPlaceholder="Search or create category..."
+                    emptyText="Type a new category name."
+                    allowCustom
                   />
-                  {quickVendorCategory === 'CUSTOM' && (
-                    <input
-                      value={quickVendorCustomCategory}
-                      onChange={(e) => setQuickVendorCustomCategory(e.target.value)}
-                      placeholder="Enter custom category"
-                      className={cn(INPUT_CLS, 'h-10')}
-                    />
-                  )}
                   <button
                     type="button"
                     onClick={handleQuickVendorCreate}
@@ -524,7 +533,7 @@ function ManageFundsForm({ site, onSuccess, onBack }: { site: any; onSuccess: ()
     }
   });
 
-  const { mutate: pullFund, isPending: pulling, error: pullError } = useWithdrawFund(site.id, {
+  const { mutate: pullFund, isPending: pulling, error: pullError } = useWithdrawSiteFund(site.id, {
     onSuccess: () => {
       toast.success(`Pulled ${formatINR(Number(amount))} from ${site.name}`);
       onSuccess();
@@ -717,7 +726,7 @@ const withdrawSchema = z.object({
 function WithdrawFundForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { data: companyData, isLoading: loading } = useCompany();
   const availableFund = companyData?.data?.available_fund ?? 0;
-  const { mutate, isPending, error } = useWithdrawFund({ onSuccess: () => { reset(); toast.success('Withdrawal recorded'); onSuccess(); } });
+  const { mutate, isPending, error } = useWithdrawCompanyFund({ onSuccess: () => { reset(); toast.success('Withdrawal recorded'); onSuccess(); } });
   const { register, handleSubmit, reset, setValue, setFocus, formState: { errors } } = useForm({
     resolver: zodResolver(withdrawSchema),
   });
@@ -756,7 +765,7 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
   const { mutate: createInvestor, isPending: isCreatingInvestor, error: createError } = useCreateInvestor();
   const { mutate: addTransaction, isPending: isAddingTransaction } = useAddTransaction();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const { register, handleSubmit, watch, reset, resetField, setValue, setFocus, formState: { errors } } = useForm<CreateInvestorInput>({
+  const { register, handleSubmit, watch, reset, resetField, setValue, formState: { errors } } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
     defaultValues: {
       type: 'EQUITY',
@@ -775,8 +784,6 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
   const paymentMode = watch('paymentMode') || 'CASH';
 
   const isSubmitting = isCreatingInvestor || isAddingTransaction;
-
-  useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
 
   const onSubmit = async (d: CreateInvestorInput) => {
     setSubmitError(null);
@@ -996,12 +1003,15 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
 // Form: Add Vendor
 
 function AddVendorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
+  const { data: vendorsData } = useVendors();
+  const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(vendorsData?.data?.vendors ?? []), [vendorsData?.data?.vendors]);
   const { mutate, isPending, error } = useCreateVendor({ onSuccess: () => { reset(); toast.success('Vendor added'); onSuccess(); } });
-  const { register, handleSubmit, reset, setFocus, formState: { errors } } = useForm<CreateVendorInput>({
+  const { register, handleSubmit, reset, setFocus, setValue, watch, formState: { errors } } = useForm<CreateVendorInput>({
     resolver: zodResolver(createVendorSchema),
     defaultValues: { name: '', type: '', phone: '', email: '' },
   });
   useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
+  const vendorType = watch('type') || '';
 
   return (
     <FormShell title="Add Vendor" onBack={onBack} isPending={isPending} submitLabel="Add Vendor" formId="add-vendor-form">
@@ -1011,7 +1021,16 @@ function AddVendorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: (
           <input placeholder="Enter vendor name" className={INPUT_CLS} {...register('name')} />
         </Field>
         <Field label="Vendor Type" error={errors.type?.message}>
-          <input placeholder="e.g. Electrician, Carpenter, Mason" className={INPUT_CLS} {...register('type')} />
+          <input type="hidden" {...register('type')} />
+          <SearchableSelect
+            options={vendorTypeOptions}
+            value={vendorType}
+            onValueChange={(value) => setValue('type', value, { shouldValidate: true })}
+            placeholder="Select or type vendor type..."
+            searchPlaceholder="Search or create vendor type..."
+            emptyText="Type a new vendor type."
+            allowCustom
+          />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Phone">
@@ -1108,8 +1127,10 @@ function EditInvestorForm({ entity, onSuccess, onBack }: { entity: any; onSucces
 }
 
 function EditVendorForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: vendorsData } = useVendors();
+  const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(vendorsData?.data?.vendors ?? []), [vendorsData?.data?.vendors]);
   const { mutate, isPending, error } = useUpdateVendor({ onSuccess: () => { toast.success('Vendor updated'); onSuccess(); } });
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<UpdateVendorInput>({
+  const { register, handleSubmit, setFocus, setValue, watch, formState: { errors } } = useForm<UpdateVendorInput>({
     resolver: zodResolver(updateVendorSchema),
     defaultValues: {
       name: entity?.name || '',
@@ -1119,6 +1140,7 @@ function EditVendorForm({ entity, onSuccess, onBack }: { entity: any; onSuccess:
     },
   });
   useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
+  const vendorType = watch('type') || '';
 
   return (
     <FormShell title={`Edit Vendor: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Save Vendor" formId="edit-vendor-form">
@@ -1128,7 +1150,16 @@ function EditVendorForm({ entity, onSuccess, onBack }: { entity: any; onSuccess:
           <input className={INPUT_CLS} {...register('name')} />
         </Field>
         <Field label="Vendor Type" error={errors.type?.message}>
-          <input className={INPUT_CLS} {...register('type')} />
+          <input type="hidden" {...register('type')} />
+          <SearchableSelect
+            options={vendorTypeOptions}
+            value={vendorType}
+            onValueChange={(value) => setValue('type', value, { shouldValidate: true })}
+            placeholder="Select or type vendor type..."
+            searchPlaceholder="Search or create vendor type..."
+            emptyText="Type a new vendor type."
+            allowCustom
+          />
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Phone">
@@ -1426,6 +1457,10 @@ function BookFlatForm({
   const floors: Floor[] = floorsData?.data?.floors ?? [];
   const wings: any[] = wingsData?.data?.wings ?? [];
   const availableCustomers = (allCustomersData?.data?.customers ?? []).filter((customer: any) => customer.dealStatus === 'ACTIVE');
+  const groupedExistingCustomers = useMemo(
+    () => groupCustomerDeals(availableCustomers as CustomerWithSite[]),
+    [availableCustomers],
+  );
 
   const { mutateAsync: createFloor, isPending: isCreatingFloor, error: createFloorError } = useCreateFloor(site.id);
   const { mutateAsync: createFlat, isPending: isCreatingFlat, error: createFlatError } = useCreateFlat(site.id);
@@ -1464,7 +1499,7 @@ function BookFlatForm({
   const wingId = watch('wingId');
   const hasWings = wings.length > 0;
 
-  const floorNumbers: number[] = (() => {
+  const floorNumbers: number[] = useMemo(() => {
     // Filter floors by selected wing if applicable
     const filteredFloors = hasWings 
       ? floors.filter(f => f.wingId === wingId)
@@ -1475,22 +1510,32 @@ function BookFlatForm({
       ? Number(selectedWing?.floorsCount ?? 0)
       : Number(site?.totalFloors ?? 0);
     
-    // For wings, we don't know includeGroundFloor easily from the Wing object,
-    // so we rely on existing floors or assume false if not found.
-    const includeGF = hasWings 
-      ? filteredFloors.some(f => f.floorNumber === 0)
-      : !!site?.includeGroundFloor;
+    const actualFloorNumbers = Array.from(
+      new Set(
+        filteredFloors
+          .map((floor) => floor.floorNumber)
+          .filter((n): n is number => Number.isFinite(n) && n >= 0)
+      )
+    );
+    const hasActualGroundFloor = actualFloorNumbers.includes(0);
+
+    // Sites/Floors & Flats treats floorNumber 0 as Ground Floor. Prefer the
+    // real floor records over site metadata so older sites still show it here.
+    const includeGF = hasActualGroundFloor || (!hasWings && !!site?.includeGroundFloor);
     
     let base: number[] = [];
     if (declaredTotal > 0) {
       base = Array.from({ length: declaredTotal }, (_, idx) => idx + 1);
       if (includeGF) base.unshift(0);
+      actualFloorNumbers.forEach((number) => {
+        if (!base.includes(number)) base.push(number);
+      });
+      base.sort((a, b) => a - b);
     } else {
-      const fromFloors = Array.from(new Set(filteredFloors.map((floor) => floor.floorNumber).filter((n): n is number => Number.isFinite(n) && n >= 0)));
-      base = fromFloors.length ? fromFloors.sort((a, b) => a - b) : (includeGF ? [0, 1] : [1]);
+      base = actualFloorNumbers.length ? actualFloorNumbers.sort((a, b) => a - b) : (includeGF ? [0, 1] : [1]);
     }
     return base;
-  })();
+  }, [floors, hasWings, site?.includeGroundFloor, site?.totalFloors, wingId, wings]);
 
   const fallbackFloorNumber = floorNumbers[0] ?? 1;
 
@@ -1504,11 +1549,18 @@ function BookFlatForm({
   const bookingPaymentMode = watch('paymentMode') || 'CASH';
   const remaining = Math.max(0, sellingPrice - bookingAmount);
 
-  const selectedExistingCustomer = availableCustomers.find((customer: any) => customer.id === selectedExistingCustomerId);
+  const selectedExistingCustomer = groupedExistingCustomers.find((customer) => customer.groupKey === selectedExistingCustomerId);
   const selectedFloor = floors.find((floor: Floor) => 
     floor.floorNumber === floorNumber && 
     (!hasWings || floor.wingId === wingId)
   );
+  const getFloorLabel = (number: number) => {
+    const floor = floors.find((candidate: Floor) =>
+      candidate.floorNumber === number &&
+      (!hasWings || candidate.wingId === wingId)
+    );
+    return floor?.floorName || (number === 0 ? 'Ground Floor' : `Floor ${number}`);
+  };
 
   // Conditional focus based on wings
   useEffect(() => {
@@ -1528,7 +1580,7 @@ function BookFlatForm({
 
   useEffect(() => {
     if (customerMode === 'EXISTING' && selectedExistingCustomer) {
-      setValue('name', selectedExistingCustomer.name || '', { shouldValidate: true });
+      setValue('name', selectedExistingCustomer.displayName || '', { shouldValidate: true });
       setValue('phone', selectedExistingCustomer.phone || '', { shouldValidate: true });
       setValue('email', selectedExistingCustomer.email || '', { shouldValidate: true });
       return;
@@ -1538,6 +1590,14 @@ function BookFlatForm({
       setValue('existingCustomerId', '', { shouldValidate: true });
     }
   }, [customerMode, selectedExistingCustomer, setValue]);
+
+  useEffect(() => {
+    if (hasWings && !wingId) return;
+    if (!floorNumbers.length) return;
+    if (floorNumber >= 0 && floorNumbers.includes(floorNumber)) return;
+
+    setValue('floorNumber', fallbackFloorNumber, { shouldValidate: true });
+  }, [fallbackFloorNumber, floorNumber, floorNumbers, hasWings, setValue, wingId]);
 
   useEffect(() => {
     onFloorChange?.(Number.isFinite(floorNumber) && floorNumber >= 0 ? floorNumber : null);
@@ -1683,7 +1743,8 @@ function BookFlatForm({
           <SearchableSelect
             options={floorNumbers.map((number) => ({ 
               value: String(number), 
-              label: number === 0 ? 'Ground Floor' : `Floor ${number}` 
+              label: getFloorLabel(number),
+              keywords: number === 0 ? ['0', 'ground', 'ground floor', 'gf'] : [String(number), `floor ${number}`],
             }))}
             value={floorNumber !== -1 ? String(floorNumber) : ''}
             onValueChange={(nextValue) => setValue('floorNumber', nextValue ? Number(nextValue) : -1, { shouldValidate: true })}
@@ -1754,18 +1815,23 @@ function BookFlatForm({
           <Field label="Select Existing Customer" error={errors.existingCustomerId?.message}>
             <input type="hidden" {...register('existingCustomerId')} />
             <SearchableSelect
-              options={availableCustomers.map((customer: any) => ({
-                value: customer.id,
-                label: `${customer.name}${customer.siteName ? ` (${customer.siteName})` : ''}`,
-                keywords: [customer.phone, customer.email, customer.siteName].filter(Boolean),
+              options={groupedExistingCustomers.map((customer) => ({
+                value: customer.groupKey,
+                label: customer.displayName,
+                description: `${customer.dealCount} flat${customer.dealCount > 1 ? 's' : ''} / ${new Set(customer.deals.map((deal) => deal.siteId).filter(Boolean)).size} site${new Set(customer.deals.map((deal) => deal.siteId).filter(Boolean)).size === 1 ? '' : 's'}`,
+                keywords: [
+                  customer.phone,
+                  customer.email,
+                  ...customer.deals.flatMap((deal) => [deal.siteName, deal.wingName, deal.floorName, deal.customFlatId, deal.unitType]),
+                ].filter((keyword): keyword is string => Boolean(keyword)),
               }))}
               value={selectedExistingCustomerId || ''}
               onValueChange={(nextValue) => setValue('existingCustomerId', nextValue, { shouldValidate: true })}
               placeholder="Select customer..."
-              searchPlaceholder="Type customer name..."
+              searchPlaceholder="Type name, phone, site, flat..."
               emptyText="No customers match your search."
             />
-            {availableCustomers.length === 0 && (
+            {groupedExistingCustomers.length === 0 && (
               <p className="text-[10px] text-muted-foreground/60">No active customers found. Switch to New Customer to continue.</p>
             )}
           </Field>
@@ -2006,8 +2072,8 @@ function BookFlatForm({
             <span className={LABEL_CLS}>Selected Floor</span>
             <span className="text-sm font-bold uppercase tracking-widest">
               {selectedFloor 
-                ? (selectedFloor.floorNumber === 0 ? 'Ground Floor' : `Floor ${selectedFloor.floorNumber}`)
-                : (floorNumber === 0 ? 'Ground Floor' : `Floor ${floorNumber}`)}
+                ? (selectedFloor.floorName || (selectedFloor.floorNumber === 0 ? 'Ground Floor' : `Floor ${selectedFloor.floorNumber}`))
+                : getFloorLabel(floorNumber)}
             </span>
           </div>
           <div className="flex justify-between items-center px-4 py-3">
@@ -2488,6 +2554,7 @@ export default function CommandCenter() {
 
   // Data fetching
   const { data: ssData, isLoading: ssLoading } = useSites({
+    showArchived: selectedAction === 'archive-site' ? 'true' : undefined,
     enabled: phase === 'selector' && (selectedCategory?.id === 'sites' || selectedAction === 'record-payment')
   });
   const { data: coData, isLoading: coLoading } = useCompany();
@@ -2506,7 +2573,7 @@ export default function CommandCenter() {
   const { mutate: deleteVendorMutate, isPending: isDeleteVendorPending } = useDeleteVendor();
   const { mutate: deleteEmployeeMutate, isPending: isDeleteEmployeePending } = useDeleteEmployee();
 
-  const selectorItems = ((): any[] => {
+  const selectorItems = useMemo((): any[] => {
     if (!selectedCategory) return [];
     if (selectedAction === 'record-payment') return ssData?.data?.sites ?? [];
     if (selectedCategory.id === 'sites') return ssData?.data?.sites ?? [];
@@ -2516,12 +2583,21 @@ export default function CommandCenter() {
     if (selectedCategory.id === 'customers') return cuData?.data?.customers ?? [];
     if (selectedCategory.id === 'employees') return emData?.data?.employees ?? [];
     return [];
-  })();
+  }, [
+    coData?.data?.partners,
+    cuData?.data?.customers,
+    emData?.data?.employees,
+    inData?.data?.investors,
+    selectedAction,
+    selectedCategory,
+    ssData?.data?.sites,
+    veData?.data?.vendors,
+  ]);
 
-  const subSelectorItems = ((): any[] => {
+  const subSelectorItems = useMemo((): any[] => {
     if (selectedAction === 'record-payment') return siteCustomersData?.data?.customers ?? [];
     return [];
-  })();
+  }, [selectedAction, siteCustomersData?.data?.customers]);
 
   const selectorLoading = useMemo(() => {
     if (phase !== 'selector' && phase !== 'sub-selector') return false;
@@ -2540,7 +2616,7 @@ export default function CommandCenter() {
     if (selectedCategory?.id === 'company') return coLoading;
 
     return ssLoading || cuLoading || emLoading || inLoading || veLoading || coLoading;
-  }, [phase, selectedCategory, selectedAction, ssLoading, cuLoading, emLoading, inLoading, veLoading, coLoading]);
+  }, [phase, selectedCategory?.id, selectedAction, ssLoading, cuLoading, emLoading, inLoading, veLoading, coLoading]);
 
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
@@ -2731,10 +2807,11 @@ export default function CommandCenter() {
   // Focus container on phase change so keyboard works
   useEffect(() => {
     const isSiteSelector = phase === 'selector' && selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
-    if (phase !== 'form' && !isSiteSelector) {
+    const isDropdownEntitySelector = phase === 'selector' && (selectedCategory?.id === 'investors' || selectedCategory?.id === 'vendors' || selectedCategory?.id === 'customers');
+    if (phase !== 'form' && !isSiteSelector && !isDropdownEntitySelector) {
       containerRef.current?.focus();
     }
-  }, [phase, selectedAction]);
+  }, [phase, selectedAction, selectedCategory?.id]);
 
   const handleFormSuccess = () => {
     setPhase('categories');
@@ -2793,14 +2870,20 @@ export default function CommandCenter() {
 
     // Site Actions Confirmations
     if (selectedAction === 'archive-site') {
+      const isRestoringSite = selectedEntity?.isActive === false;
+      const actionLabel = isRestoringSite ? 'Restore Site' : 'Archive Site';
       return (
         <ActionConfirmForm
           {...props}
-          title="Archive/Restore Site"
-          message={`Are you sure you want to toggle the status of "${selectedEntity?.name}"?`}
-          submitLabel="Toggle Status"
+          title={actionLabel}
+          message={
+            isRestoringSite
+              ? `Restore "${selectedEntity?.name}"? It will appear again in the active site list and normal site selectors.`
+              : `Archive "${selectedEntity?.name}"? It will be hidden from normal site lists, but its records and history will remain available.`
+          }
+          submitLabel={actionLabel}
           isPending={isToggleSitePending}
-          onConfirm={() => toggleSiteMutate(selectedEntity.id, { onSuccess: () => { toast.success('Site status toggled'); handleFormSuccess(); } })}
+          onConfirm={() => toggleSiteMutate(selectedEntity.id, { onSuccess: () => { toast.success(isRestoringSite ? 'Site restored' : 'Site archived'); handleFormSuccess(); } })}
         />
       );
     }
@@ -3077,10 +3160,23 @@ export default function CommandCenter() {
                   focusIndex={selIdx}
                   items={selectorItems}
                   loading={selectorLoading}
-                  title={selectedAction === 'record-payment' ? 'Select Site for Customer Payment' : undefined}
+                  title={
+                    selectedAction === 'record-payment'
+                      ? 'Select Site for Customer Payment'
+                      : selectedCategory.id === 'investors'
+                        ? 'Select Investor'
+                        : selectedCategory.id === 'vendors'
+                          ? 'Select Vendor'
+                          : selectedCategory.id === 'customers'
+                            ? 'Select Customer'
+                          : undefined
+                  }
                   onBack={() => setPhase('actions')}
                   onSelect={(entity) => {
                     setSelectedEntity(entity);
+                    if (selectedCategory.id === 'vendors') {
+                      setFocusedVendorId(entity.id ?? null);
+                    }
                     if (selectedAction && ACTIONS_NEEDING_SUB_SELECTOR.includes(selectedAction)) {
                       setPhase('sub-selector');
                       setSubSelIdx(0);

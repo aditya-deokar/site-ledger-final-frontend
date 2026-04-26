@@ -9,6 +9,7 @@ import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { useVendors } from "@/hooks/api/vendor.hooks"
 import { Vendor } from "@/schemas/vendor.schema"
 import { VendorProfile } from "@/components/dashboard/vendor-profile"
+import { SearchableSelect } from "@/components/dashboard/navigator/form-primitives"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -48,12 +49,13 @@ function AddExpensePanel({
   const { data: vendorData } = useVendors()
   const vendors: Vendor[] = vendorData?.data?.vendors ?? []
 
-  const { register, handleSubmit, watch, control, formState: { errors } } = useForm<CreateExpenseInput>({
+  const { register, handleSubmit, watch, control, setValue, formState: { errors } } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
     defaultValues: { type: "GENERAL", amount: 0, amountPaid: 0, paymentDate: getCurrentDateTimeLocalInput(), reason: '', vendorId: '', description: '' },
   })
 
   const expenseType = watch("type")
+  const selectedVendorId = watch("vendorId") || ""
 
   const onSubmit = (data: CreateExpenseInput) => {
     const payload: CreateExpenseInput = {
@@ -141,17 +143,20 @@ function AddExpensePanel({
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
                   Select Vendor
                 </Label>
-                <select
-                  {...register("vendorId")}
-                  className="h-11 bg-muted border-none text-sm px-3 outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Choose a vendor...</option>
-                  {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                      {v.name} ({v.type})
-                  </option>
-                  ))}
-                </select>
+                <input type="hidden" {...register("vendorId")} />
+                <SearchableSelect
+                  options={vendors.map((vendor) => ({
+                    value: vendor.id,
+                    label: vendor.name,
+                    description: [vendor.type, vendor.phone, vendor.email].filter(Boolean).join(" / "),
+                    keywords: [vendor.type, vendor.phone, vendor.email].filter(Boolean) as string[],
+                  }))}
+                  value={selectedVendorId}
+                  onValueChange={(value) => setValue("vendorId", value, { shouldValidate: true })}
+                  placeholder="Choose a vendor..."
+                  searchPlaceholder="Search vendor by name, type, phone, or email..."
+                  emptyText="No vendors match your search."
+                />
                 {errors.vendorId && <p className="text-[10px] text-destructive">{errors.vendorId.message}</p>}
               </div>
             )}

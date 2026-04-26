@@ -80,6 +80,10 @@ export interface Customer {
   customFlatId?: string | null;
   floorNumber: number | null;
   floorName?: string | null;
+  wingId?: string | null;
+  wingName?: string | null;
+  unitType?: string | null;
+  flatType?: string | null;
   customerType?: 'CUSTOMER' | 'EXISTING_OWNER' | null;
   flatStatus: CustomerFlatStatus | null;
   cancelledAt: string | null;
@@ -93,6 +97,24 @@ export interface Customer {
   createdAt: string;
 }
 
+export interface CustomerWithSite extends Customer {
+  siteId: string | null;
+  siteName: string | null;
+}
+
+export interface CustomerGroup {
+  groupKey: string;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  deals: CustomerWithSite[];
+  dealCount: number;
+  totalSellingPrice: number;
+  totalBookingAmount: number;
+  totalPaid: number;
+  totalRemaining: number;
+}
+
 export interface SiteCustomersResponse {
   ok: boolean;
   data: { customers: Customer[] };
@@ -101,7 +123,7 @@ export interface SiteCustomersResponse {
 export interface AllCustomersResponse {
   ok: boolean;
   data: {
-    customers: Array<Customer & { siteId: string | null; siteName: string | null }>;
+    customers: CustomerWithSite[];
   };
 }
 

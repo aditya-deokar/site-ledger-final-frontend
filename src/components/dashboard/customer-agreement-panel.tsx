@@ -132,12 +132,14 @@ export function CustomerAgreementPanel({
   canEdit,
   agreement,
   isLoading,
+  contextLabel,
 }: {
   customerId: string
   siteId: string
   canEdit: boolean
   agreement?: CustomerAgreement
   isLoading?: boolean
+  contextLabel?: string
 }) {
   const [draft, setDraft] = useState<AgreementDraft>(() => createDraft())
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null)
@@ -271,7 +273,7 @@ export function CustomerAgreementPanel({
         <div>
           <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">Agreement Ledger</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Base price, taxes, charges, discounts, and credits live here. Payments stay separate in the customer ledger.
+            Base price, taxes, charges, and discounts for {contextLabel || "this flat"} live here. Payments stay separate in the customer ledger.
           </p>
         </div>
         {canEdit && (

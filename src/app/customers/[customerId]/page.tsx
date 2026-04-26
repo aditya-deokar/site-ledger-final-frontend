@@ -6,7 +6,8 @@ import { useParams } from "next/navigation"
 import { DashboardShell } from "@/components/dashboard/dashboard-shell"
 import { CustomerDetailPageContent } from "@/components/dashboard/customer-detail-page-content"
 import { useAllCustomers } from "@/hooks/api/customer.hooks"
-import { Customer } from "@/schemas/customer.schema"
+import { CustomerWithSite } from "@/schemas/customer.schema"
+import { getCustomerGroupKey } from "@/lib/customer-grouping"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChevronLeft, Loader2 } from "lucide-react"
@@ -37,9 +38,17 @@ export default function CustomerDetailPage() {
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useAllCustomers()
 
-  const customer = useMemo(() => {
-    const raw = (data as { data?: { customers?: (Customer & { siteId: string | null; siteName: string | null })[] } })?.data?.customers ?? []
-    return raw.find((c) => c.id === customerId) ?? null
+  const { customer, customerDeals } = useMemo(() => {
+    const raw = (data as { data?: { customers?: CustomerWithSite[] } })?.data?.customers ?? []
+    const selected = raw.find((c) => c.id === customerId) ?? null
+    if (!selected) return { customer: null, customerDeals: [] as CustomerWithSite[] }
+
+    const groupKey = getCustomerGroupKey(selected)
+    const groupedDeals = raw
+      .filter((deal) => getCustomerGroupKey(deal) === groupKey)
+      .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
+
+    return { customer: selected, customerDeals: groupedDeals }
   }, [data, customerId])
 
   return (
@@ -95,26 +104,23 @@ export default function CustomerDetailPage() {
               Back to Customers
             </Link>
           </div>
-        ) : !customer.siteId ? (
-          <div className="border border-amber-500/20 bg-amber-500/5 px-6 py-8 text-sm text-foreground">
-            <p className="font-serif">This customer record is not linked to a site in your account.</p>
-            <p className="mt-2 text-xs text-muted-foreground">You cannot post payments or edit the agreement until the record is associated with a site.</p>
+        ) : customerDeals.length === 0 ? (
+          <div className="border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+            <p>No deals found for this customer.</p>
             <Link
               href="/customers"
               className={cn(
                 buttonVariants({ variant: "ghost" }),
-                "mt-6 inline-flex h-9 min-h-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
+                "mt-4 inline-flex h-9 min-h-0 items-center text-[10px] font-bold uppercase tracking-widest",
               )}
             >
-              <ChevronLeft className="h-4 w-4" />
               Back to Customers
             </Link>
           </div>
         ) : (
           <CustomerDetailPageContent
             customer={customer}
-            siteId={customer.siteId}
-            siteName={customer.siteName ?? undefined}
+            customerDeals={customerDeals}
           />
         )}
       </div>
