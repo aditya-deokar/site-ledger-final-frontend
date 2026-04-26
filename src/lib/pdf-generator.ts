@@ -345,6 +345,191 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   doc.save(filename)
 }
 
+export async function downloadReceiptPDF(
+  customerId: string,
+  paymentId: string,
+  customer: any,
+  payment: any,
+  agreement: any,
+  siteData: any,
+  companyData: any
+): Promise<void> {
+  try {
+    // Helper functions for data transformation
+    const formatShortDate = (iso?: string | null): string => {
+      if (!iso) return "-"
+      const date = new Date(iso)
+      if (Number.isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    }
+
+    const formatDateTime = (iso?: string | null): string => {
+      if (!iso) return "-"
+      const date = new Date(iso)
+      if (Number.isNaN(date.getTime())) return "-"
+      return date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+
+    const getPaymentModeLabel = (mode?: string | null): string => {
+      switch (mode) {
+        case "CASH":
+          return "Cash"
+        case "CHEQUE":
+          return "Cheque"
+        case "BANK_TRANSFER":
+          return "Bank Transfer"
+        case "UPI":
+          return "UPI"
+        default:
+          return "Not recorded"
+      }
+    }
+
+    const getAgreementTypeLabel = (type: string): string => {
+      switch (type) {
+        case "BASE_PRICE":
+          return "Base Price"
+        case "CHARGE":
+          return "Charge"
+        case "TAX":
+          return "Tax / GST"
+        case "DISCOUNT":
+          return "Discount"
+        case "CREDIT":
+          return "Credit"
+        default:
+          return type
+      }
+    }
+
+    const buildReceiptNumber = (paymentId: string, postedAt: string): string => {
+      const dateToken = postedAt.slice(2, 10).replace(/-/g, "")
+      const paymentToken = paymentId.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase()
+      return `RCP-${dateToken}-${paymentToken}`
+    }
+
+    const sanitizeFilename = (value: string): string => {
+      return value.trim().replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"
+    }
+
+    const convertToIndianWords = (num: number): string => {
+      if (num === 0) return "Zero Rupees Only"
+
+      const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+      const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+      const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+
+      const convertLessThanOneThousand = (value: number): string => {
+        if (value === 0) return ""
+        if (value < 10) return ones[value]
+        if (value < 20) return teens[value - 10]
+        if (value < 100) return tens[Math.floor(value / 10)] + (value % 10 ? ` ${ones[value % 10]}` : "")
+        return ones[Math.floor(value / 100)] + " Hundred" + (value % 100 ? ` ${convertLessThanOneThousand(value % 100)}` : "")
+      }
+
+      const convert = (value: number): string => {
+        if (value === 0) return ""
+        if (value < 1000) return convertLessThanOneThousand(value)
+        if (value < 100000) return convertLessThanOneThousand(Math.floor(value / 1000)) + " Thousand" + (value % 1000 ? ` ${convertLessThanOneThousand(value % 1000)}` : "")
+        if (value < 10000000) return convertLessThanOneThousand(Math.floor(value / 100000)) + " Lakh" + (value % 100000 ? ` ${convert(value % 100000)}` : "")
+        return convertLessThanOneThousand(Math.floor(value / 10000000)) + " Crore" + (value % 10000000 ? ` ${convert(value % 10000000)}` : "")
+      }
+
+      const wholePart = Math.floor(num)
+      const decimalPart = Math.round((num - wholePart) * 100)
+
+      let result = `${convert(wholePart)} Rupees`
+      if (decimalPart > 0) {
+        result += ` and ${convertLessThanOneThousand(decimalPart)} Paise`
+      }
+
+      return `${result} Only`
+    }
+
+    // Calculate cumulative paid and balance
+    const agreementValue = agreement?.totalValue || 0
+    const payments = agreement?.payments || []
+    
+    // Sort payments by date
+    const sortedPayments = [...payments].sort((a, b) => {
+      const aTime = new Date(a.createdAt).getTime()
+      const bTime = new Date(b.createdAt).getTime()
+      if (aTime !== bTime) return aTime - bTime
+      return a.id.localeCompare(b.id)
+    })
+
+    // Calculate cumulative paid up to this payment
+    let cumulativePaid = 0
+    for (const p of sortedPayments) {
+      cumulativePaid += p.amount
+      if (p.id === paymentId) break
+    }
+
+    const balanceDue = Math.max(agreementValue - cumulativePaid, 0)
+
+    // Build receipt number and amount in words
+    const receiptNumber = buildReceiptNumber(paymentId, payment.createdAt)
+    const paymentAmountWords = convertToIndianWords(payment.amount)
+
+    // Build ReceiptData object
+    const receiptData: ReceiptData = {
+      receiptNumber,
+      receiptDate: formatShortDate(payment.createdAt),
+      postedAt: formatDateTime(payment.createdAt),
+      paymentMode: getPaymentModeLabel(payment.paymentMode),
+      paymentAmount: payment.amount,
+      paymentAmountWords,
+      referenceNumber: payment.referenceNumber || undefined,
+      note: payment.note || undefined,
+
+      companyName: companyData?.name || "Company Name",
+
+      customerName: customer.name || "Customer Name",
+      customerPhone: customer.phone || undefined,
+      customerAddress: customer.address || undefined,
+      customerPan: customer.pan || undefined,
+
+      projectName: siteData?.name || "Project Name",
+      siteAddress: siteData?.address || undefined,
+      flatNumber: agreement?.flatNumber || undefined,
+      floorNumber: agreement?.floorNumber || undefined,
+      carpetArea: agreement?.carpetArea || undefined,
+      ratePerSqft: agreement?.ratePerSqft || undefined,
+
+      agreementValue,
+      totalCollected: cumulativePaid,
+      balanceDue,
+
+      agreementLines: (agreement?.lines || []).map((row: any) => ({
+        type: getAgreementTypeLabel(row.type),
+        label: row.label,
+        affectsProfit: row.affectsProfit,
+        signedAmount: row.signedAmount,
+        createdAt: formatShortDate(row.createdAt),
+      })),
+    }
+
+    // Generate filename with sanitization
+    const filename = `Receipt-${sanitizeFilename(customer.name || "Customer")}-${sanitizeFilename(receiptNumber)}.pdf`
+
+    // Call existing generateReceiptPDF function
+    await generateReceiptPDF(receiptData, filename)
+  } catch (error) {
+    console.error("Error generating receipt PDF:", error)
+    throw new Error("Failed to generate receipt PDF")
+  }
+}
+
 export async function generateStatementPDF(data: StatementData, filename: string) {
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF("p", "mm", "a4")
@@ -561,4 +746,150 @@ export async function generateStatementPDF(data: StatementData, filename: string
   )
 
   doc.save(filename)
+}
+
+export async function downloadStatementPDF(
+  customerId: string,
+  customer: any,
+  payments: any[],
+  agreement: any,
+  siteData: any,
+  companyData: any
+): Promise<void> {
+  try {
+    // Helper functions for data transformation
+    const formatShortDate = (iso?: string | null): string => {
+      if (!iso) return "-"
+      const date = new Date(iso)
+      if (Number.isNaN(date.getTime())) return "-"
+      return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    }
+
+    const formatDateTime = (iso?: string | null): string => {
+      if (!iso) return "-"
+      const date = new Date(iso)
+      if (Number.isNaN(date.getTime())) return "-"
+      return date.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+
+    const getPaymentModeLabel = (mode?: string | null): string => {
+      switch (mode) {
+        case "CASH":
+          return "Cash"
+        case "CHEQUE":
+          return "Cheque"
+        case "BANK_TRANSFER":
+          return "Bank Transfer"
+        case "UPI":
+          return "UPI"
+        default:
+          return "Not recorded"
+      }
+    }
+
+    const getAgreementTypeLabel = (type: string): string => {
+      switch (type) {
+        case "BASE_PRICE":
+          return "Base Price"
+        case "CHARGE":
+          return "Charge"
+        case "TAX":
+          return "Tax / GST"
+        case "DISCOUNT":
+          return "Discount"
+        case "CREDIT":
+          return "Credit"
+        default:
+          return type
+      }
+    }
+
+    const sanitizeFilename = (value: string): string => {
+      return value.trim().replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "document"
+    }
+
+    // Calculate agreement value and totals
+    const agreementValue = agreement?.totalValue || 0
+    
+    // Sort payments by date
+    const sortedPayments = [...payments].sort((a, b) => {
+      const aTime = new Date(a.createdAt).getTime()
+      const bTime = new Date(b.createdAt).getTime()
+      if (aTime !== bTime) return aTime - bTime
+      return a.id.localeCompare(b.id)
+    })
+
+    // Calculate cumulative paid and balance for each payment
+    let cumulativePaid = 0
+    const paymentHistory = sortedPayments.map((p) => {
+      cumulativePaid += p.amount
+      const balance = Math.max(agreementValue - cumulativePaid, 0)
+      
+      return {
+        date: formatShortDate(p.createdAt),
+        mode: getPaymentModeLabel(p.paymentMode),
+        reference: p.referenceNumber || undefined,
+        note: p.note || undefined,
+        amount: p.amount,
+        cumulativePaid,
+        balance,
+      }
+    })
+
+    const totalReceived = cumulativePaid
+    const outstanding = Math.max(agreementValue - totalReceived, 0)
+
+    // Build StatementData object
+    const statementData: StatementData = {
+      generatedAt: formatShortDate(new Date().toISOString()),
+
+      companyName: companyData?.name || "Company Name",
+
+      customerName: customer.name || "Customer Name",
+      customerPhone: customer.phone || undefined,
+      customerAddress: customer.address || undefined,
+      customerPan: customer.pan || undefined,
+
+      projectName: siteData?.name || "Project Name",
+      siteAddress: siteData?.address || undefined,
+      flatNumber: agreement?.flatNumber || undefined,
+      floorNumber: agreement?.floorNumber || undefined,
+      carpetArea: agreement?.carpetArea || undefined,
+      ratePerSqft: agreement?.ratePerSqft || undefined,
+
+      agreementValue,
+      totalReceived,
+      outstanding,
+
+      payments: paymentHistory,
+
+      agreementLines: (agreement?.lines || []).map((row: any) => ({
+        type: getAgreementTypeLabel(row.type),
+        label: row.label,
+        affectsProfit: row.affectsProfit,
+        signedAmount: row.signedAmount,
+        createdAt: formatShortDate(row.createdAt),
+      })),
+    }
+
+    // Generate filename with sanitization
+    const currentDate = formatShortDate(new Date().toISOString()).replace(/\s+/g, "-")
+    const filename = `Statement-${sanitizeFilename(customer.name || "Customer")}-${sanitizeFilename(currentDate)}.pdf`
+
+    // Call existing generateStatementPDF function
+    await generateStatementPDF(statementData, filename)
+  } catch (error) {
+    console.error("Error generating statement PDF:", error)
+    throw new Error("Failed to generate statement PDF")
+  }
 }
