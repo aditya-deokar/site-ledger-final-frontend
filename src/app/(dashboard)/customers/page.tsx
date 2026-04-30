@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { useAllCustomers } from '@/hooks/api/customer.hooks';
 import type { CustomerGroup, CustomerWithSite } from '@/schemas/customer.schema';
 import { groupCustomerDeals } from '@/lib/customer-grouping';
@@ -95,8 +94,7 @@ export default function CustomersPage() {
   ], []);
 
   return (
-    <DashboardShell>
-      <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700">
         <div>
           <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Customers</h1>
           <p className="mt-2 text-base text-muted-foreground italic">
@@ -255,7 +253,6 @@ export default function CustomersPage() {
           </>
         )}
       </div>
-    </DashboardShell>
   );
 }
 

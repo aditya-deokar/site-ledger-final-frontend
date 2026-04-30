@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCompany, useUpdateCompany, useWithdrawFund, useWithdrawals, useRecordWithdrawalPayment } from '@/hooks/api/company.hooks';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { AddPartnerDrawer } from '@/components/dashboard/add-partner-drawer';
 import { EditPartnerDrawer } from '@/components/dashboard/edit-partner-drawer';
 import { EquityChart } from '@/components/dashboard/equity-chart';
@@ -417,39 +416,31 @@ export default function CompanyPage() {
   }, []);
 
   if (isLoading) {
-    return (
-      <DashboardShell>
-        <CompanySkeleton />
-      </DashboardShell>
-    );
+    return <CompanySkeleton />;
   }
 
   if (companyMissing) {
     return (
-      <DashboardShell>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="text-center space-y-3">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Redirecting to company setup...</p>
-          </div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center space-y-3">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Redirecting to company setup...</p>
         </div>
-      </DashboardShell>
+      </div>
     );
   }
 
   if (companyError) {
     return (
-      <DashboardShell>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <div className="max-w-md space-y-3 border border-border bg-background p-6 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">Company Unavailable</p>
-            <h1 className="text-2xl font-serif">We couldn&apos;t load your company profile.</h1>
-            <p className="text-sm text-muted-foreground">
-              {getApiErrorMessage(companyError, 'Something went wrong while loading your company details.')}
-            </p>
-          </div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="max-w-md space-y-3 border border-border bg-background p-6 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/60">Company Unavailable</p>
+          <h1 className="text-2xl font-serif">We couldn&apos;t load your company profile.</h1>
+          <p className="text-sm text-muted-foreground">
+            {getApiErrorMessage(companyError, 'Something went wrong while loading your company details.')}
+          </p>
         </div>
-      </DashboardShell>
+      </div>
     );
   }
 
@@ -459,7 +450,7 @@ export default function CompanyPage() {
   const withdrawals = withdrawalsData?.data?.withdrawals ?? [];
 
   return (
-    <DashboardShell>
+    <>
       <div className="space-y-10 animate-in fade-in duration-700">
 
         {/* Company Header */}
@@ -622,6 +613,6 @@ export default function CompanyPage() {
 
       <EditCompanyDialog company={company} open={editCompanyOpen} onClose={() => setEditCompanyOpen(false)} />
       <WithdrawDialog availableFund={available_fund} open={withdrawOpen} onClose={() => setWithdrawOpen(false)} />
-    </DashboardShell>
+    </>
   );
 }

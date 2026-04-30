@@ -3,7 +3,6 @@
 import { useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { DashboardShell } from "@/components/dashboard/dashboard-shell"
 import { CustomerDetailPageContent } from "@/components/dashboard/customer-detail-page-content"
 import { useAllCustomers } from "@/hooks/api/customer.hooks"
 import { CustomerWithSite } from "@/schemas/customer.schema"
@@ -52,8 +51,7 @@ export default function CustomerDetailPage() {
   }, [data, customerId])
 
   return (
-    <DashboardShell>
-      <div className="min-w-0 w-full max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="min-w-0 w-full max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
         {isLoading ? (
           <DetailSkeleton />
         ) : isError ? (
@@ -124,6 +122,5 @@ export default function CustomerDetailPage() {
           />
         )}
       </div>
-    </DashboardShell>
   )
 }

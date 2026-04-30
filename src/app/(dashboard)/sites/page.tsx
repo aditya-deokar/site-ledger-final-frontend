@@ -22,7 +22,6 @@ import {
   X,
 } from 'lucide-react';
 
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { CreateSiteDrawer } from '@/components/dashboard/create-site-drawer';
 import { useDeleteSite, useSites, useToggleSite } from '@/hooks/api/site.hooks';
 import { Site, Wing } from '@/schemas/site.schema';
@@ -474,15 +473,11 @@ export default function SitesPage() {
   }, []);
 
   if (isLoading) {
-    return (
-      <DashboardShell>
-        <SitesSkeleton />
-      </DashboardShell>
-    );
+    return <SitesSkeleton />;
   }
 
   return (
-    <DashboardShell>
+    <>
       <div className="space-y-8 animate-in fade-in duration-700">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <div className="max-w-xl">
@@ -654,6 +649,6 @@ export default function SitesPage() {
       </div>
 
       <CreateSiteDrawer open={createOpen} onOpenChange={setCreateOpen} />
-    </DashboardShell>
+    </>
   );
 }

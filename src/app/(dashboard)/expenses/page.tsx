@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useCompanyExpenses } from '@/hooks/api/company.hooks';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -71,16 +70,11 @@ export default function ExpensesPage() {
   const totalAmount = expenses.reduce((s: number, e: any) => s + e.amount, 0);
 
   if (isLoading) {
-    return (
-      <DashboardShell>
-        <ExpensesSkeleton />
-      </DashboardShell>
-    );
+    return <ExpensesSkeleton />;
   }
 
   return (
-    <DashboardShell>
-      <div className="space-y-8 animate-in fade-in duration-700">
+    <div className="space-y-8 animate-in fade-in duration-700">
 
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -192,6 +186,5 @@ export default function ExpensesPage() {
           </div>
         )}
       </div>
-    </DashboardShell>
   );
 }

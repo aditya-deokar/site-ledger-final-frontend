@@ -25,11 +25,12 @@ function invalidateCustomerRelatedQueries(queryClient: ReturnType<typeof useQuer
   }
 }
 
-export const useAllCustomers = (status?: string) => {
+export const useAllCustomers = (status?: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['allCustomers', status],
     queryFn: () => customerService.getAllCustomers(status),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 

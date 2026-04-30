@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useWithdrawFund as useWithdrawSiteFund, useExpenses } from '@/hooks/api/site.hooks';
 import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund as useWithdrawCompanyFund, useCompany } from '@/hooks/api/company.hooks';
 import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors, useAddTransaction } from '@/hooks/api/investor.hooks';
@@ -2553,15 +2552,26 @@ export default function CommandCenter() {
   const actions = selectedCategory?.actions ?? [];
 
   // Data fetching
+  const isSelectorPhase = phase === 'selector';
+  const shouldFetchSites = isSelectorPhase && (
+    selectedCategory?.id === 'sites' ||
+    (!!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction))
+  );
+  const shouldFetchCompany = isSelectorPhase && selectedCategory?.id === 'company';
+  const shouldFetchInvestors = isSelectorPhase && selectedCategory?.id === 'investors';
+  const shouldFetchVendors = isSelectorPhase && selectedCategory?.id === 'vendors';
+  const shouldFetchCustomers = isSelectorPhase && selectedCategory?.id === 'customers';
+  const shouldFetchEmployees = isSelectorPhase && selectedCategory?.id === 'employees';
+
   const { data: ssData, isLoading: ssLoading } = useSites({
     showArchived: selectedAction === 'archive-site' ? 'true' : undefined,
-    enabled: phase === 'selector' && (selectedCategory?.id === 'sites' || selectedAction === 'record-payment')
+    enabled: shouldFetchSites
   });
-  const { data: coData, isLoading: coLoading } = useCompany();
-  const { data: inData, isLoading: inLoading } = useInvestors(undefined, undefined);
-  const { data: veData, isLoading: veLoading } = useVendors();
-  const { data: cuData, isLoading: cuLoading } = useAllCustomers();
-  const { data: emData, isLoading: emLoading } = useEmployees();
+  const { data: coData, isLoading: coLoading } = useCompany({ enabled: shouldFetchCompany });
+  const { data: inData, isLoading: inLoading } = useInvestors(undefined, undefined, { enabled: shouldFetchInvestors });
+  const { data: veData, isLoading: veLoading } = useVendors(undefined, { enabled: shouldFetchVendors });
+  const { data: cuData, isLoading: cuLoading } = useAllCustomers(undefined, { enabled: shouldFetchCustomers });
+  const { data: emData, isLoading: emLoading } = useEmployees(undefined, { enabled: shouldFetchEmployees });
   const { data: siteCustomersData, isLoading: siteCustomersLoading } = useSiteCustomers(
     phase === 'sub-selector' && selectedAction === 'record-payment' && selectedEntity?.id ? selectedEntity.id : ''
   );
@@ -2985,12 +2995,11 @@ export default function CommandCenter() {
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
-    <DashboardShell>
-      <div
-        ref={containerRef}
-        tabIndex={-1}
-        className="flex w-full flex-col items-start outline-none animate-in fade-in duration-500"
-      >
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      className="flex w-full flex-col items-start outline-none animate-in fade-in duration-500"
+    >
         {/* Title bar */}
         <div className="mb-6 flex flex-col items-start gap-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">
@@ -3226,7 +3235,6 @@ export default function CommandCenter() {
           />
         </div>
       </div>
-    </DashboardShell>
   );
 }
 

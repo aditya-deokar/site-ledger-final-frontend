@@ -38,11 +38,12 @@ export const useVendorStatement = (id: string) => {
   });
 };
 
-export const useVendors = (type?: string) => {
+export const useVendors = (type?: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['vendors', type],
     queryFn: () => vendorService.getVendors(type),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 

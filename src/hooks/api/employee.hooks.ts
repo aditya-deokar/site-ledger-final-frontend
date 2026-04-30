@@ -12,11 +12,12 @@ import {
   UpdateEmployeeTransactionStatusInput,
 } from '@/schemas/employee.schema';
 
-export const useEmployees = (filters?: EmployeeListFilters) => {
+export const useEmployees = (filters?: EmployeeListFilters, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['employees', filters?.search ?? '', filters?.department ?? '', filters?.status ?? ''],
     queryFn: () => employeeService.getEmployees(filters),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 

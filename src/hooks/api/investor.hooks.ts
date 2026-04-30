@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { investorService } from '@/services/investor.service';
 import { CreateInvestorInput, UpdateInvestorInput, TransactionInput } from '@/schemas/investor.schema';
 
-export const useInvestors = (type?: string, search?: string) => {
+export const useInvestors = (type?: string, search?: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['investors', type, search],
     queryFn: () => investorService.getInvestors(type, search),
     placeholderData: (previousData) => previousData,
     retry: false,
+    enabled: options?.enabled,
   });
 };
 

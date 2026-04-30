@@ -4,7 +4,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import {
   useInvestors, useCreateInvestor, useUpdateInvestor, useDeleteInvestor,
   useTransactions, useAddTransaction, useReturnInvestment, usePayInterest, useUpdateInvestorPayment,
@@ -837,11 +836,9 @@ export default function InvestorsPage() {
 
   if (isLoading) {
     return (
-      <DashboardShell>
-        <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </DashboardShell>
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
@@ -859,7 +856,7 @@ export default function InvestorsPage() {
   ];
 
   return (
-    <DashboardShell>
+    <>
       <div className="space-y-8 animate-in fade-in duration-700">
 
         {/* Header */}
@@ -1036,6 +1033,6 @@ export default function InvestorsPage() {
       )}
       {txInvestor && <TransactionModal investor={txInvestor} onClose={() => setTxInvestor(null)} />}
       {deleteInvestor && <DeleteConfirm investor={deleteInvestor} onClose={() => setDeleteInvestor(null)} />}
-    </DashboardShell>
+    </>
   );
 }

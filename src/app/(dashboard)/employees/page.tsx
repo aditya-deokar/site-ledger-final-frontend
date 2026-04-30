@@ -26,7 +26,6 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1497,15 +1496,11 @@ export default function EmployeesPage() {
   const updateErrorMessage = (updateError as { error?: string } | null)?.error;
 
   if (isLoading) {
-    return (
-      <DashboardShell>
-        <EmployeesSkeleton />
-      </DashboardShell>
-    );
+    return <EmployeesSkeleton />;
   }
 
   return (
-    <DashboardShell>
+    <>
       <div className="space-y-8 animate-in fade-in duration-700">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1711,7 +1706,7 @@ export default function EmployeesPage() {
       {deleteEmployee && (
         <DeleteConfirm employee={deleteEmployee} onClose={() => setDeleteEmployee(null)} />
       )}
-    </DashboardShell>
+    </>
   );
 }
 

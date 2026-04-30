@@ -3,7 +3,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { DashboardShell } from '@/components/dashboard/dashboard-shell';
 import { VendorProfile } from '@/components/dashboard/vendor-profile';
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor } from '@/hooks/api/vendor.hooks';
 import { createVendorSchema, CreateVendorInput, Vendor } from '@/schemas/vendor.schema';
@@ -274,7 +273,7 @@ export default function VendorsPage() {
   );
 
   return (
-    <DashboardShell>
+    <>
       <div className="space-y-8 animate-in fade-in duration-700">
 
         {/* Header */}
@@ -529,6 +528,6 @@ export default function VendorsPage() {
           onClose={() => setProfileVendorId(null)}
         />
       )}
-    </DashboardShell>
+    </>
   );
 }
