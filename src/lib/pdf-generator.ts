@@ -487,7 +487,13 @@ export async function downloadReceiptPDF(
     const receiptData: ReceiptData = {
       receiptNumber,
       receiptDate: formatShortDate(payment.createdAt),
-      postedAt: formatDateTime(payment.createdAt),
+      postedAt: new Date().toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       paymentMode: getPaymentModeLabel(payment.paymentMode),
       paymentAmount: payment.amount,
       paymentAmountWords,
