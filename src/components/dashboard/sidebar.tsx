@@ -188,6 +188,7 @@ export function Sidebar() {
               <Link
                 key={item.label}
                 href={item.href}
+                prefetch={false}
                 onClick={handleNavigation}
                 title={isDesktopCompact ? item.label : undefined}
                 className={cn(
@@ -246,6 +247,7 @@ export function Sidebar() {
                 <Link
                   key={item.label}
                   href={item.href}
+                  prefetch={false}
                   onClick={handleNavigation}
                   title={item.label}
                   className={cn(
@@ -274,6 +276,7 @@ export function Sidebar() {
                 <Link
                   key={item.label}
                   href={item.href}
+                  prefetch={false}
                   onClick={handleNavigation}
                   className="flex h-10 items-center gap-2 rounded-md px-3 text-[10px] font-bold uppercase tracking-widest text-red-500 transition-[background-color,color] duration-300 ease-out hover:bg-red-50 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:text-red-300"
                 >

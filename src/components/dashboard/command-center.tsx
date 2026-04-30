@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { useQueries } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -17,10 +18,10 @@ import { toast } from 'sonner';
 
 import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useWithdrawFund as useWithdrawSiteFund, useExpenses } from '@/hooks/api/site.hooks';
 import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund as useWithdrawCompanyFund, useCompany } from '@/hooks/api/company.hooks';
-import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useInvestors, useAddTransaction } from '@/hooks/api/investor.hooks';
+import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useAddTransaction } from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
-import { useAllCustomers, useSiteCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
-import { useCreateEmployee, useDeleteEmployee, useEmployees, usePaySalary, useUpdateEmployee } from '@/hooks/api/employee.hooks';
+import { useAllCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
+import { useCreateEmployee, useDeleteEmployee, usePaySalary, useUpdateEmployee } from '@/hooks/api/employee.hooks';
 import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
 import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, BookFlatAgreementLineInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
@@ -64,6 +65,12 @@ import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
 import { groupCustomerDeals } from '@/lib/customer-grouping';
 import type { CustomerWithSite } from '@/schemas/customer.schema';
+import { siteService } from '@/services/site.service';
+import { companyService } from '@/services/company.service';
+import { investorService } from '@/services/investor.service';
+import { vendorService } from '@/services/vendor.service';
+import { customerService } from '@/services/customer.service';
+import { employeeService } from '@/services/employee.service';
 
 function buildVendorTypeOptions(vendors: Array<{ type?: string | null }>) {
   const types = new Map<string, string>();
@@ -77,6 +84,21 @@ function buildVendorTypeOptions(vendors: Array<{ type?: string | null }>) {
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
     .map((type) => ({ value: type, label: type }));
 }
+
+type NavigatorDataQueryKind =
+  | 'sites'
+  | 'company'
+  | 'investors'
+  | 'vendors'
+  | 'customers'
+  | 'employees'
+  | 'siteCustomers';
+
+type NavigatorDataQueryConfig = {
+  kind: NavigatorDataQueryKind;
+  queryKey: readonly unknown[];
+  queryFn: () => Promise<unknown>;
+};
 
 function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useCreateSite({ onSuccess: () => { reset(); toast.success('Site created'); onSuccess(); } });
@@ -2551,30 +2573,93 @@ export default function CommandCenter() {
   const selectedCategory = CATEGORIES[catIdx];
   const actions = selectedCategory?.actions ?? [];
 
-  // Data fetching
-  const isSelectorPhase = phase === 'selector';
-  const shouldFetchSites = isSelectorPhase && (
-    selectedCategory?.id === 'sites' ||
-    (!!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction))
-  );
-  const shouldFetchCompany = isSelectorPhase && selectedCategory?.id === 'company';
-  const shouldFetchInvestors = isSelectorPhase && selectedCategory?.id === 'investors';
-  const shouldFetchVendors = isSelectorPhase && selectedCategory?.id === 'vendors';
-  const shouldFetchCustomers = isSelectorPhase && selectedCategory?.id === 'customers';
-  const shouldFetchEmployees = isSelectorPhase && selectedCategory?.id === 'employees';
+  // Data fetching: keep this at zero-or-one active list query so Navigator does not warm every entity API.
+  const navigatorDataQueryConfig = useMemo<NavigatorDataQueryConfig | null>(() => {
+    if (phase === 'selector') {
+      if (!selectedCategory) return null;
 
-  const { data: ssData, isLoading: ssLoading } = useSites({
-    showArchived: selectedAction === 'archive-site' ? 'true' : undefined,
-    enabled: shouldFetchSites
+      const shouldUseSiteSelector =
+        selectedCategory.id === 'sites' ||
+        (!!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction));
+
+      if (shouldUseSiteSelector) {
+        const showArchived = selectedAction === 'archive-site' ? 'true' as const : undefined;
+        return {
+          kind: 'sites',
+          queryKey: ['sites', showArchived ?? 'active'],
+          queryFn: () => siteService.getSites(showArchived),
+        };
+      }
+
+      if (selectedCategory.id === 'company') {
+        return {
+          kind: 'company',
+          queryKey: ['company'],
+          queryFn: () => companyService.getCompany(),
+        };
+      }
+
+      if (selectedCategory.id === 'investors') {
+        return {
+          kind: 'investors',
+          queryKey: ['investors', undefined, undefined],
+          queryFn: () => investorService.getInvestors(undefined, undefined),
+        };
+      }
+
+      if (selectedCategory.id === 'vendors') {
+        return {
+          kind: 'vendors',
+          queryKey: ['vendors', undefined],
+          queryFn: () => vendorService.getVendors(undefined),
+        };
+      }
+
+      if (selectedCategory.id === 'customers') {
+        return {
+          kind: 'customers',
+          queryKey: ['allCustomers', undefined],
+          queryFn: () => customerService.getAllCustomers(undefined),
+        };
+      }
+
+      if (selectedCategory.id === 'employees') {
+        return {
+          kind: 'employees',
+          queryKey: ['employees', '', '', ''],
+          queryFn: () => employeeService.getEmployees(undefined),
+        };
+      }
+
+      return null;
+    }
+
+    if (phase === 'sub-selector' && selectedAction === 'record-payment' && selectedEntity?.id) {
+      return {
+        kind: 'siteCustomers',
+        queryKey: ['siteCustomers', selectedEntity.id],
+        queryFn: () => customerService.getSiteCustomers(selectedEntity.id),
+      };
+    }
+
+    return null;
+  }, [phase, selectedAction, selectedCategory, selectedEntity]);
+
+  const navigatorDataQueries = useQueries({
+    queries: (navigatorDataQueryConfig
+      ? [{
+          queryKey: navigatorDataQueryConfig.queryKey,
+          queryFn: navigatorDataQueryConfig.queryFn,
+          retry: false,
+        }]
+      : []) as Array<{
+        queryKey: readonly unknown[];
+        queryFn: () => Promise<unknown>;
+        retry: false;
+      }>,
   });
-  const { data: coData, isLoading: coLoading } = useCompany({ enabled: shouldFetchCompany });
-  const { data: inData, isLoading: inLoading } = useInvestors(undefined, undefined, { enabled: shouldFetchInvestors });
-  const { data: veData, isLoading: veLoading } = useVendors(undefined, { enabled: shouldFetchVendors });
-  const { data: cuData, isLoading: cuLoading } = useAllCustomers(undefined, { enabled: shouldFetchCustomers });
-  const { data: emData, isLoading: emLoading } = useEmployees(undefined, { enabled: shouldFetchEmployees });
-  const { data: siteCustomersData, isLoading: siteCustomersLoading } = useSiteCustomers(
-    phase === 'sub-selector' && selectedAction === 'record-payment' && selectedEntity?.id ? selectedEntity.id : ''
-  );
+  const navigatorDataQuery = navigatorDataQueries[0];
+  const navigatorData = navigatorDataQuery?.data as any;
 
   const { mutate: toggleSiteMutate, isPending: isToggleSitePending } = useToggleSite();
   const { mutate: deleteSiteMutate, isPending: isDeleteSitePending, error: deleteSiteError } = useDeleteSite();
@@ -2584,49 +2669,25 @@ export default function CommandCenter() {
   const { mutate: deleteEmployeeMutate, isPending: isDeleteEmployeePending } = useDeleteEmployee();
 
   const selectorItems = useMemo((): any[] => {
-    if (!selectedCategory) return [];
-    if (selectedAction === 'record-payment') return ssData?.data?.sites ?? [];
-    if (selectedCategory.id === 'sites') return ssData?.data?.sites ?? [];
-    if (selectedCategory.id === 'company') return coData?.data?.partners ?? [];
-    if (selectedCategory.id === 'investors') return inData?.data?.investors ?? [];
-    if (selectedCategory.id === 'vendors') return veData?.data?.vendors ?? [];
-    if (selectedCategory.id === 'customers') return cuData?.data?.customers ?? [];
-    if (selectedCategory.id === 'employees') return emData?.data?.employees ?? [];
+    if (phase !== 'selector' || !navigatorDataQueryConfig) return [];
+    if (navigatorDataQueryConfig.kind === 'sites') return navigatorData?.data?.sites ?? [];
+    if (navigatorDataQueryConfig.kind === 'company') return navigatorData?.data?.partners ?? [];
+    if (navigatorDataQueryConfig.kind === 'investors') return navigatorData?.data?.investors ?? [];
+    if (navigatorDataQueryConfig.kind === 'vendors') return navigatorData?.data?.vendors ?? [];
+    if (navigatorDataQueryConfig.kind === 'customers') return navigatorData?.data?.customers ?? [];
+    if (navigatorDataQueryConfig.kind === 'employees') return navigatorData?.data?.employees ?? [];
     return [];
-  }, [
-    coData?.data?.partners,
-    cuData?.data?.customers,
-    emData?.data?.employees,
-    inData?.data?.investors,
-    selectedAction,
-    selectedCategory,
-    ssData?.data?.sites,
-    veData?.data?.vendors,
-  ]);
+  }, [navigatorData, navigatorDataQueryConfig, phase]);
 
   const subSelectorItems = useMemo((): any[] => {
-    if (selectedAction === 'record-payment') return siteCustomersData?.data?.customers ?? [];
+    if (navigatorDataQueryConfig?.kind === 'siteCustomers') return navigatorData?.data?.customers ?? [];
     return [];
-  }, [selectedAction, siteCustomersData?.data?.customers]);
+  }, [navigatorData, navigatorDataQueryConfig?.kind]);
 
   const selectorLoading = useMemo(() => {
     if (phase !== 'selector' && phase !== 'sub-selector') return false;
-    
-    // Site selectors for specific actions
-    if (selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction)) {
-      return ssLoading;
-    }
-    
-    // Category-based selectors
-    if (selectedCategory?.id === 'sites') return ssLoading;
-    if (selectedCategory?.id === 'customers') return cuLoading;
-    if (selectedCategory?.id === 'employees') return emLoading;
-    if (selectedCategory?.id === 'investors') return inLoading;
-    if (selectedCategory?.id === 'vendors') return veLoading;
-    if (selectedCategory?.id === 'company') return coLoading;
-
-    return ssLoading || cuLoading || emLoading || inLoading || veLoading || coLoading;
-  }, [phase, selectedCategory?.id, selectedAction, ssLoading, cuLoading, emLoading, inLoading, veLoading, coLoading]);
+    return navigatorDataQuery?.isLoading ?? false;
+  }, [navigatorDataQuery?.isLoading, phase]);
 
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
@@ -3206,7 +3267,7 @@ export default function CommandCenter() {
                 action={selectedAction!}
                 focusIndex={subSelIdx}
                 items={subSelectorItems}
-                loading={siteCustomersLoading}
+                loading={selectorLoading}
                 title={`Select Customer in ${selectedEntity?.name}`}
                 onBack={() => setPhase('selector')}
                 onSelect={(entity) => {

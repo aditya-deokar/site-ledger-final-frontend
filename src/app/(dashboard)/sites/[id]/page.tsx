@@ -3,6 +3,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
@@ -18,25 +19,10 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Lazy load heavy chart components
-const LazyPieChart = lazy(() => import('recharts').then(mod => ({ default: mod.PieChart })));
-const LazyPie = lazy(() => import('recharts').then(mod => ({ default: mod.Pie })));
-const LazyCell = lazy(() => import('recharts').then(mod => ({ default: mod.Cell })));
-const LazyResponsiveContainer = lazy(() => import('recharts').then(mod => ({ default: mod.ResponsiveContainer })));
-
 // Lazy load tab components
 const FloorsFlatsTab = lazy(() => import('@/components/dashboard/floors-flats-tab').then(mod => ({ default: mod.FloorsFlatsTab })));
 const ExpensesTab = lazy(() => import('@/components/dashboard/expenses-tab').then(mod => ({ default: mod.ExpensesTab })));
 const InvestorsTab = lazy(() => import('@/components/dashboard/investors-tab').then(mod => ({ default: mod.InvestorsTab })));
-
-// Loading fallback component
-function ChartLoadingFallback() {
-  return (
-    <div className="w-48 h-48 flex items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/20" />
-    </div>
-  );
-}
 
 function TabContentLoadingFallback() {
   return (
@@ -317,17 +303,15 @@ function FundDeploymentChart({ allocated, expenses }: { allocated: number; expen
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="relative w-48 h-48">
-        <Suspense fallback={<ChartLoadingFallback />}>
-          <LazyResponsiveContainer width="100%" height="100%">
-            <LazyPieChart>
-              <LazyPie data={data} innerRadius={60} outerRadius={80} startAngle={90} endAngle={-270} dataKey="value" paddingAngle={2}>
-                {data.map((entry, i) => (
-                  <LazyCell key={i} fill={entry.color} strokeWidth={0} />
-                ))}
-              </LazyPie>
-            </LazyPieChart>
-          </LazyResponsiveContainer>
-        </Suspense>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} innerRadius={60} outerRadius={80} startAngle={90} endAngle={-270} dataKey="value" paddingAngle={2}>
+              {data.map((entry, i) => (
+                <Cell key={i} fill={entry.color} strokeWidth={0} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-4xl font-sans font-bold text-foreground">{pct.toFixed(0)}%</span>
           <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50 mt-1">Deployed</span>
