@@ -1,6 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { attendanceService } from '@/services/attendance.service';
 import { MarkAttendanceInput } from '@/schemas/attendance.schema';
+import { employeeKeys } from './employee.hooks';
+
+export const attendanceKeys = {
+  all: ['employeeAttendance'] as const,
+  employee: (employeeId?: string, month?: number, year?: number) => [
+    'employeeAttendance',
+    employeeId ?? '',
+    month ?? '',
+    year ?? '',
+  ] as const,
+  byEmployee: (employeeId?: string) => ['employeeAttendance', employeeId ?? ''] as const,
+  today: ['todayAttendance'] as const,
+} as const;
 
 export const useEmployeeAttendance = (
   employeeId?: string,
@@ -8,7 +21,7 @@ export const useEmployeeAttendance = (
   year?: number,
 ) => {
   return useQuery({
-    queryKey: ['employeeAttendance', employeeId ?? '', month ?? '', year ?? ''],
+    queryKey: attendanceKeys.employee(employeeId, month, year),
     queryFn: () => attendanceService.getEmployeeAttendance(employeeId!, month, year),
     retry: false,
     enabled: Boolean(employeeId),
@@ -17,7 +30,7 @@ export const useEmployeeAttendance = (
 
 export const useTodayAttendance = () => {
   return useQuery({
-    queryKey: ['todayAttendance'],
+    queryKey: attendanceKeys.today,
     queryFn: () => attendanceService.getTodayAttendance(),
     retry: false,
   });
@@ -29,9 +42,10 @@ export const useMarkAttendance = (options?: { onSuccess?: () => void }) => {
   return useMutation({
     mutationFn: (data: MarkAttendanceInput) => attendanceService.markAttendance(data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['employeeAttendance', variables.employeeId] });
-      queryClient.invalidateQueries({ queryKey: ['todayAttendance'] });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.byEmployee(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.today });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.all });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.detail(variables.employeeId) });
       options?.onSuccess?.();
     },
   });

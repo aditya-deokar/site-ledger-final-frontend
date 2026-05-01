@@ -355,7 +355,7 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
         });
       });
 
-      if (!investorResult?.investor?.id) {
+      if (!investorResult?.data?.investor?.id) {
         throw new Error('Failed to create investor');
       }
 
@@ -363,7 +363,7 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
       if (data.amountPaidNow && data.amountPaidNow > 0 && data.investmentAmount) {
         await new Promise<any>((resolve, reject) => {
           addTransaction({
-            investorId: investorResult.investor.id,
+            investorId: investorResult.data.investor.id,
             data: {
               amount: data.investmentAmount || 0,
               amountPaid: data.amountPaidNow,

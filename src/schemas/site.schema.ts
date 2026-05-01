@@ -63,6 +63,18 @@ export interface FloorsResponse {
   data: { floors: Floor[] };
 }
 
+export interface FloorMutationResponse {
+  ok: boolean;
+  data: {
+    floor: {
+      id: string;
+      floorNumber: number;
+      floorName: string | null;
+      wingId: string | null;
+    };
+  };
+}
+
 export const createFloorSchema = z.object({
   floorName: z.string().min(1, 'Floor name is required'),
   wingId: z.string().optional(),
@@ -83,6 +95,19 @@ export const updateFlatDetailsSchema = z.object({
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
 });
 export type UpdateFlatDetailsInput = z.input<typeof updateFlatDetailsSchema>;
+
+export interface FlatMutationResponse {
+  ok: boolean;
+  data: {
+    flat: {
+      id: string;
+      customFlatId: string | null;
+      unitType: string | null;
+      flatType?: Flat['flatType'];
+      status: Flat['status'];
+    };
+  };
+}
 
 // ── Expenses ──────────────────────────────────────────
 

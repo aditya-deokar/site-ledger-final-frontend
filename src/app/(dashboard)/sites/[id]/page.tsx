@@ -36,7 +36,6 @@ function formatINR(n: number) {
   return n.toLocaleString('en-IN');
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Add Fund Dialog Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onClose: () => void; defaultAmount?: number }) {
   const [amount, setAmount] = useState(defaultAmount && defaultAmount > 0 ? String(defaultAmount) : '');
   const [note, setNote] = useState('');
@@ -92,23 +91,20 @@ function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onC
           )}
           <div className="flex flex-col gap-2">
             <Label className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/60">
-              Amount (?) <span className="text-muted-foreground/50">Max: {formatINR(maxAvailableAmount)}</span>
+              Amount <span className="text-muted-foreground/50">Max: {formatINR(maxAvailableAmount)}</span>
             </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">?</span>
-              <Input
-                type="number"
-                min={1}
-                max={maxAvailableAmount}
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={cn(
-                  "h-12 pl-8 bg-muted border-none rounded-none text-sm focus-visible:bg-card",
-                  !canAddFullAmount && amount && "border border-destructive/50 text-destructive"
-                )}
-              />
-            </div>
+            <Input
+              type="number"
+              min={1}
+              max={maxAvailableAmount}
+              placeholder="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className={cn(
+                "h-12 bg-muted border-none rounded-none text-sm focus-visible:bg-card",
+                !canAddFullAmount && amount && "border border-destructive/50 text-destructive"
+              )}
+            />
             {amount && !canAddFullAmount && (
               <p className="text-[10px] text-destructive font-medium">
                 Amount exceeds available funds by {formatINR(Number(amount) - maxAvailableAmount)}
@@ -169,18 +165,15 @@ function PullFundDialog({ siteId, remainingFund, onClose }: { siteId: string; re
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount to Pull</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">?</span>
-              <Input
-                type="number"
-                min={0}
-                max={remainingFund}
-                placeholder="Enter amount"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="h-11 pl-8 bg-muted border-none rounded-none text-sm"
-              />
-            </div>
+            <Input
+              type="number"
+              min={0}
+              max={remainingFund}
+              placeholder="Enter amount"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-11 bg-muted border-none rounded-none text-sm"
+            />
             <button
               type="button"
               onClick={() => setAmount(String(remainingFund))}

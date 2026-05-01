@@ -101,6 +101,11 @@ export interface InvestorDetailResponse {
   data: { investor: Investor; transactions: Transaction[] };
 }
 
+export interface InvestorMutationResponse {
+  ok: boolean;
+  data: { investor: Investor };
+}
+
 export interface SiteInvestorsResponse {
   ok: boolean;
   data: { investors: { id: string; name: string; phone: string | null; equityPercentage: number | null; totalInvested: number; totalReturned: number; isClosed: boolean; createdAt: string }[]; totalInvested: number };

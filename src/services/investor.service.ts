@@ -1,12 +1,13 @@
 import api from '@/lib/axios';
 import {
   CreateInvestorInput,
-  UpdateInvestorInput,
-  TransactionInput,
-  InvestorsResponse,
+  type InvestorMutationResponse,
   InvestorDetailResponse,
   SiteInvestorsResponse,
+  InvestorsResponse,
+  TransactionInput,
   TransactionsResponse,
+  UpdateInvestorInput,
 } from '@/schemas/investor.schema';
 
 export const investorService = {
@@ -21,10 +22,10 @@ export const investorService = {
   getInvestor: (id: string): Promise<InvestorDetailResponse> =>
     api.get(`/investors/${id}`),
 
-  createInvestor: (data: CreateInvestorInput) =>
+  createInvestor: (data: CreateInvestorInput): Promise<InvestorMutationResponse> =>
     api.post('/investors', data),
 
-  updateInvestor: (id: string, data: UpdateInvestorInput) =>
+  updateInvestor: (id: string, data: UpdateInvestorInput): Promise<InvestorMutationResponse> =>
     api.put(`/investors/${id}`, data),
 
   deleteInvestor: (id: string) =>

@@ -1,5 +1,19 @@
 import api from '@/lib/axios';
-import { CreateSiteInput, SiteDetailResponse, SiteTransferDirection, SiteTransferResponse, SitesResponse, SiteFundHistoryResponse, WingsResponse } from '@/schemas/site.schema';
+import {
+  CreateSiteInput,
+  type CreateFlatInput,
+  type CreateFloorInput,
+  type FlatMutationResponse,
+  type FloorMutationResponse,
+  type FloorsResponse,
+  SiteDetailResponse,
+  SiteFundHistoryResponse,
+  type SiteTransferDirection,
+  SiteTransferResponse,
+  SitesResponse,
+  type UpdateFlatDetailsInput,
+  WingsResponse,
+} from '@/schemas/site.schema';
 import { SiteReportResponse } from '@/schemas/site-report.schema';
 
 export const siteService = {
@@ -30,7 +44,7 @@ export const siteService = {
   withdrawFund: (id: string, data: { amount: number; note?: string }) =>
     siteService.transfer(id, { ...data, direction: 'SITE_TO_COMPANY' }),
 
-  getFloors: (siteId: string) =>
+  getFloors: (siteId: string): Promise<FloorsResponse> =>
     api.get(`/sites/${siteId}/floors`),
 
   getWings: (siteId: string): Promise<WingsResponse> =>
@@ -45,19 +59,19 @@ export const siteService = {
   deleteWing: (siteId: string, wingId: string) =>
     api.delete(`/sites/${siteId}/wings/${wingId}`),
 
-  createFloor: (siteId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
+  createFloor: (siteId: string, data: CreateFloorInput): Promise<FloorMutationResponse> =>
     api.post(`/sites/${siteId}/floors`, data),
 
-  updateFloor: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
+  updateFloor: (siteId: string, floorId: string, data: CreateFloorInput): Promise<FloorMutationResponse> =>
     api.patch(`/sites/${siteId}/floors/${floorId}`, data),
 
   deleteFloor: (siteId: string, floorId: string) =>
     api.delete(`/sites/${siteId}/floors/${floorId}`),
 
-  createFlat: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFlatInput) =>
+  createFlat: (siteId: string, floorId: string, data: CreateFlatInput): Promise<FlatMutationResponse> =>
     api.post(`/sites/${siteId}/floors/${floorId}/flats`, data),
 
-  updateFlatDetails: (siteId: string, flatId: string, data: import('@/schemas/site.schema').UpdateFlatDetailsInput) =>
+  updateFlatDetails: (siteId: string, flatId: string, data: UpdateFlatDetailsInput): Promise<FlatMutationResponse> =>
     api.patch(`/sites/${siteId}/flats/${flatId}`, data),
 
   deleteFlat: (siteId: string, flatId: string) =>

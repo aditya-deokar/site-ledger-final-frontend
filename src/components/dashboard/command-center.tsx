@@ -16,12 +16,24 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useWithdrawFund as useWithdrawSiteFund, useExpenses } from '@/hooks/api/site.hooks';
+import { siteKeys, useCreateSite, useToggleSite, useDeleteSite, useBookFlat, useFloors, useWings, useCreateFloor, useCreateFlat, useUpdateFlatDetails, useAddExpense, useSites, useAddFund, useWithdrawFund as useWithdrawSiteFund, useExpenses } from '@/hooks/api/site.hooks';
 import { useAddPartner, useUpdatePartner, useDeletePartner, useUpdateCompany, useWithdrawFund as useWithdrawCompanyFund, useCompany } from '@/hooks/api/company.hooks';
-import { useCreateInvestor, useUpdateInvestor, useDeleteInvestor, useAddTransaction } from '@/hooks/api/investor.hooks';
+import {
+  investorKeys,
+  useCreateInvestor,
+  useUpdateInvestor,
+  useDeleteInvestor,
+  useAddTransaction,
+} from '@/hooks/api/investor.hooks';
 import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
-import { useCreateEmployee, useDeleteEmployee, usePaySalary, useUpdateEmployee } from '@/hooks/api/employee.hooks';
+import {
+  employeeKeys,
+  useCreateEmployee,
+  useDeleteEmployee,
+  usePaySalary,
+  useUpdateEmployee,
+} from '@/hooks/api/employee.hooks';
 import { useMarkAttendance } from '@/hooks/api/attendance.hooks';
 import { createSiteSchema, CreateSiteInput, bookFlatSchema, BookFlatInput, BookFlatAgreementLineInput, Floor, Flat, createExpenseSchema, CreateExpenseInput } from '@/schemas/site.schema';
 import { partnerInputSchema, PartnerInput } from '@/schemas/company.schema';
@@ -834,7 +846,7 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
         });
       });
 
-      const createdInvestorId = investorResult?.data?.investor?.id ?? investorResult?.investor?.id;
+      const createdInvestorId = investorResult?.data?.investor?.id;
       if (!createdInvestorId) {
         throw new Error('Investor created response was invalid.');
       }
@@ -2586,7 +2598,7 @@ export default function CommandCenter() {
         const showArchived = selectedAction === 'archive-site' ? 'true' as const : undefined;
         return {
           kind: 'sites',
-          queryKey: ['sites', showArchived ?? 'active'],
+          queryKey: siteKeys.list(showArchived),
           queryFn: () => siteService.getSites(showArchived),
         };
       }
@@ -2602,7 +2614,7 @@ export default function CommandCenter() {
       if (selectedCategory.id === 'investors') {
         return {
           kind: 'investors',
-          queryKey: ['investors', undefined, undefined],
+          queryKey: investorKeys.list(),
           queryFn: () => investorService.getInvestors(undefined, undefined),
         };
       }
@@ -2626,7 +2638,7 @@ export default function CommandCenter() {
       if (selectedCategory.id === 'employees') {
         return {
           kind: 'employees',
-          queryKey: ['employees', '', '', ''],
+          queryKey: employeeKeys.list(),
           queryFn: () => employeeService.getEmployees(undefined),
         };
       }
