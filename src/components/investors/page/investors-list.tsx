@@ -14,6 +14,7 @@ import {
   formatINR,
   initials,
 } from './utils';
+import { formatFixedRateTerms } from '@/lib/investors';
 
 export function InvestorsList({
   investors,
@@ -88,11 +89,11 @@ export function InvestorsList({
                   ? 'border-primary/20 bg-primary/10 text-primary'
                   : 'border-amber-500/20 bg-amber-500/10 text-amber-600',
               )}
-            >
-              {investor.type === 'EQUITY'
-                ? `${investor.equityPercentage ?? 0}%`
-                : `${investor.fixedRate ?? 0}% p.a.`}
-            </span>
+              >
+                {investor.type === 'EQUITY'
+                  ? `${investor.equityPercentage ?? 0}%`
+                  : formatFixedRateTerms(investor.fixedRate, investor.fixedRateCadence)}
+              </span>
             {investor.isClosed && (
               <span className="bg-muted px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 Closed

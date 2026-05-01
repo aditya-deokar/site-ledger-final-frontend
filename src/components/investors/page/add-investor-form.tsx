@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SheetClose } from '@/components/ui/sheet';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { getFixedRateInputLabel } from '@/lib/investors';
 import { cn } from '@/lib/utils';
 import { useCreateInvestor, useAddTransaction } from '@/hooks/api/investor.hooks';
 import { useSites } from '@/hooks/api/site.hooks';
@@ -38,6 +39,7 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
     handleSubmit,
     watch,
     control,
+    setValue,
     formState: { errors },
   } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
@@ -45,6 +47,7 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
   });
 
   const investorType = watch('type');
+  const fixedRateCadence = watch('fixedRateCadence') ?? 'YEARLY';
   const amountPaidNow = watch('amountPaidNow') || 0;
   const paymentMode = watch('paymentMode') || 'CASH';
   const isSubmitting = isCreatingInvestor || isAddingTransaction;
@@ -56,6 +59,7 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
       const investorResult = await createInvestorAsync({
         ...data,
         siteId: data.type === 'EQUITY' ? data.siteId : undefined,
+        fixedRateCadence: data.type === 'FIXED_RATE' ? data.fixedRateCadence : undefined,
         investmentAmount: undefined,
         amountPaidNow: undefined,
         paymentMode: undefined,
@@ -121,7 +125,10 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
                   <button
                     key={type}
                     type="button"
-                    onClick={() => field.onChange(type)}
+                    onClick={() => {
+                      field.onChange(type);
+                      setValue('fixedRateCadence', type === 'FIXED_RATE' ? 'YEARLY' : undefined);
+                    }}
                     className={cn(
                       'border-2 p-3 text-[10px] font-bold uppercase tracking-widest transition-all',
                       field.value === type
@@ -223,7 +230,7 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40 text-foreground">
-                  Fixed Rate (% per annum)
+                  {getFixedRateInputLabel(fixedRateCadence)}
                 </Label>
                 <div className="relative">
                   <Input
@@ -244,27 +251,41 @@ export function AddInvestorForm({ onClose }: { onClose: () => void }) {
                 <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40 text-foreground">
                   Interest Cadence
                 </Label>
+                <input type="hidden" {...register('fixedRateCadence')} />
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    className="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-amber-700"
-                  >
-                    Yearly
-                    <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">
-                      Backend default
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="border border-dashed border-border px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50"
-                  >
-                    Monthly
-                    <span className="mt-1 block text-[9px] normal-case tracking-normal">
-                      UI placeholder until backend support is available
-                    </span>
-                  </button>
+                  {[
+                    {
+                      value: 'YEARLY' as const,
+                      label: 'Yearly',
+                      description: 'Rate is treated as annual interest.',
+                    },
+                    {
+                      value: 'MONTHLY' as const,
+                      label: 'Monthly',
+                      description: 'Rate is treated as monthly interest.',
+                    },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setValue('fixedRateCadence', option.value, { shouldValidate: true })}
+                      className={cn(
+                        'border px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors',
+                        fixedRateCadence === option.value
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
+                          : 'border-border text-muted-foreground hover:border-amber-500/20 hover:bg-amber-500/5',
+                      )}
+                    >
+                      {option.label}
+                      <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
                 </div>
+                {errors.fixedRateCadence && (
+                  <p className="text-[10px] text-destructive">{errors.fixedRateCadence.message}</p>
+                )}
               </div>
             </div>
           )}

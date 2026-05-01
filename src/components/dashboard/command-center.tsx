@@ -74,6 +74,7 @@ import {
   toIsoDateTime,
 } from '@/components/dashboard/navigator/command-center/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { getFixedRateInputLabel } from '@/lib/investors';
 import { cn } from '@/lib/utils';
 import { groupCustomerDeals } from '@/lib/customer-grouping';
 import type { CustomerWithSite } from '@/schemas/customer.schema';
@@ -804,6 +805,7 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
       type: 'EQUITY',
       equityPercentage: 0,
       fixedRate: 0,
+      fixedRateCadence: 'YEARLY',
       investmentAmount: 0,
       amountPaidNow: 0,
       paymentMode: 'CASH',
@@ -815,6 +817,7 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
   const investmentAmount = watch('investmentAmount') || 0;
   const amountPaidNow = watch('amountPaidNow') || 0;
   const paymentMode = watch('paymentMode') || 'CASH';
+  const fixedRateCadence = watch('fixedRateCadence') || 'YEARLY';
 
   const isSubmitting = isCreatingInvestor || isAddingTransaction;
 
@@ -834,6 +837,7 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
           siteId: d.type === 'EQUITY' ? d.siteId : undefined,
           equityPercentage: d.equityPercentage,
           fixedRate: d.fixedRate,
+          fixedRateCadence: d.type === 'FIXED_RATE' ? d.fixedRateCadence : undefined,
           // Remove payment-related fields - backend doesn't expect them
           investmentAmount: undefined,
           amountPaidNow: undefined,
@@ -907,7 +911,13 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
           <KeyToggle
             options={['EQUITY', 'FIXED_RATE']}
             value={investorType}
-            onChange={(v) => { resetField('siteId'); resetField('equityPercentage'); resetField('fixedRate'); setValue('type', v as 'EQUITY' | 'FIXED_RATE'); }}
+            onChange={(v) => {
+              resetField('siteId');
+              resetField('equityPercentage');
+              resetField('fixedRate');
+              setValue('fixedRateCadence', v === 'FIXED_RATE' ? 'YEARLY' : undefined);
+              setValue('type', v as 'EQUITY' | 'FIXED_RATE');
+            }}
             renderOption={(t, selected) => (
               <div className={cn('border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
                 selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/30')}>
@@ -949,9 +959,27 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
           </>
         )}
         {investorType === 'FIXED_RATE' && (
-          <Field label="Fixed Rate (% p.a.)" error={errors.fixedRate?.message}>
-            <input type="number" step={0.01} min={0} className={INPUT_CLS} {...register('fixedRate', { valueAsNumber: true })} />
-          </Field>
+          <div className="flex flex-col gap-4">
+            <Field label={getFixedRateInputLabel(fixedRateCadence)} error={errors.fixedRate?.message}>
+              <input type="number" step={0.01} min={0} className={INPUT_CLS} {...register('fixedRate', { valueAsNumber: true })} />
+            </Field>
+            <Field label="Interest Cadence" error={errors.fixedRateCadence?.message}>
+              <input type="hidden" {...register('fixedRateCadence')} />
+              <KeyToggle
+                options={['YEARLY', 'MONTHLY']}
+                value={fixedRateCadence}
+                onChange={(v) => setValue('fixedRateCadence', v as 'YEARLY' | 'MONTHLY', { shouldValidate: true })}
+                renderOption={(t, selected) => (
+                  <div className={cn(
+                    'border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
+                    selected ? 'border-amber-500/30 bg-amber-500/10 text-amber-700' : 'border-border text-muted-foreground hover:border-amber-500/20 hover:bg-amber-500/5',
+                  )}>
+                    {t === 'YEARLY' ? 'Yearly' : 'Monthly'}
+                  </div>
+                )}
+              />
+            </Field>
+          </div>
         )}
 
         <Field label="Total Investment Amount (INR)" error={errors.investmentAmount?.message}>
@@ -1124,16 +1152,18 @@ function EditPartnerForm({ entity, onSuccess, onBack }: { entity: any; onSuccess
 
 function EditInvestorForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
   const { mutate, isPending, error } = useUpdateInvestor({ onSuccess: () => { toast.success('Investor updated'); onSuccess(); } });
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<UpdateInvestorInput>({
+  const { register, handleSubmit, setFocus, watch, setValue, formState: { errors } } = useForm<UpdateInvestorInput>({
     resolver: zodResolver(updateInvestorSchema),
     defaultValues: {
       name: entity?.name || '',
       phone: entity?.phone || '',
       equityPercentage: entity?.equityPercentage || 0,
       fixedRate: entity?.fixedRate || 0,
+      fixedRateCadence: entity?.fixedRateCadence || 'YEARLY',
     },
   });
   useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
+  const fixedRateCadence = watch('fixedRateCadence') || 'YEARLY';
 
   return (
     <FormShell title={`Edit Investor: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Save Changes" formId="edit-investor-form">
@@ -1150,9 +1180,27 @@ function EditInvestorForm({ entity, onSuccess, onBack }: { entity: any; onSucces
             <input type="number" step={0.01} className={INPUT_CLS} {...register('equityPercentage', { valueAsNumber: true })} />
           </Field>
         ) : (
-          <Field label="Fixed Rate (% p.a.)" error={errors.fixedRate?.message}>
-            <input type="number" step={0.01} className={INPUT_CLS} {...register('fixedRate', { valueAsNumber: true })} />
-          </Field>
+          <div className="flex flex-col gap-4">
+            <Field label={getFixedRateInputLabel(fixedRateCadence)} error={errors.fixedRate?.message}>
+              <input type="number" step={0.01} className={INPUT_CLS} {...register('fixedRate', { valueAsNumber: true })} />
+            </Field>
+            <Field label="Interest Cadence" error={errors.fixedRateCadence?.message}>
+              <input type="hidden" {...register('fixedRateCadence')} />
+              <KeyToggle
+                options={['YEARLY', 'MONTHLY']}
+                value={fixedRateCadence}
+                onChange={(v) => setValue('fixedRateCadence', v as 'YEARLY' | 'MONTHLY', { shouldValidate: true })}
+                renderOption={(t, selected) => (
+                  <div className={cn(
+                    'border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
+                    selected ? 'border-amber-500/30 bg-amber-500/10 text-amber-700' : 'border-border text-muted-foreground hover:border-amber-500/20 hover:bg-amber-500/5',
+                  )}>
+                    {t === 'YEARLY' ? 'Yearly' : 'Monthly'}
+                  </div>
+                )}
+              />
+            </Field>
+          </div>
         )}
       </form>
     </FormShell>
@@ -1924,7 +1972,7 @@ function BookFlatForm({
 
         <div className="border border-border bg-muted/20 p-4">
           <div>
-            <p className={LABEL_CLS}>Agreement Lines (Optional)</p>
+            <p className={LABEL_CLS}>Pricing Items (Optional)</p>
             <p className="text-[10px] text-muted-foreground/60">
               Add charges, tax, discounts, or credits while booking so the customer agreement is ready upfront.
             </p>
@@ -1932,7 +1980,7 @@ function BookFlatForm({
 
           {agreementLineFields.length === 0 ? (
             <p className="mt-4 text-[10px] text-muted-foreground/60">
-              No additional agreement rows yet. Base price line is created automatically from selling price.
+              No additional pricing items yet. Base price is created automatically from the selling price.
             </p>
           ) : (
             <div className="mt-4 flex flex-col gap-4">
@@ -1958,7 +2006,7 @@ function BookFlatForm({
                 return (
                   <div key={line.id} className="border border-border bg-background p-4">
                     <div className="mb-4 flex items-center justify-between">
-                      <p className={LABEL_CLS}>Line {index + 1}</p>
+                      <p className={LABEL_CLS}>Pricing Item {index + 1}</p>
                       <button
                         type="button"
                         data-navbtn="true"
@@ -1972,7 +2020,7 @@ function BookFlatForm({
                     <input type="hidden" {...register(typePath)} />
 
                     <div className="grid grid-cols-2 gap-4">
-                      <Field label="Line Type" error={errors.agreementLines?.[index]?.type?.message}>
+                      <Field label="Pricing Item Type" error={errors.agreementLines?.[index]?.type?.message}>
                         <SearchableSelect
                           options={BOOKING_AGREEMENT_LINE_TYPES.map((type) => ({ value: type, label: type }))}
                           value={lineType}
@@ -2068,8 +2116,8 @@ function BookFlatForm({
                       </div>
                     ) : null}
 
-                    <div className="mt-4 grid grid-cols-1 gap-4">
-                      <Field label="Line Label" error={errors.agreementLines?.[index]?.label?.message}>
+                      <div className="mt-4 grid grid-cols-1 gap-4">
+                      <Field label="Pricing Item Name" error={errors.agreementLines?.[index]?.label?.message}>
                         <input
                           className={INPUT_CLS}
                           placeholder="e.g. GST, Parking Charge, Festival Discount"
@@ -2079,7 +2127,7 @@ function BookFlatForm({
                       <Field label="Note (optional)" error={errors.agreementLines?.[index]?.note?.message}>
                         <input
                           className={INPUT_CLS}
-                          placeholder="Optional note for this line"
+                          placeholder="Optional note for this pricing item"
                           {...register(notePath)}
                         />
                       </Field>
@@ -2096,7 +2144,7 @@ function BookFlatForm({
             onClick={() => appendAgreementLine(createDefaultBookingAgreementLine())}
             className="mt-4 h-12 w-full border border-border px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
           >
-            Add Agreement Line
+            Add Pricing Item
           </button>
         </div>
 

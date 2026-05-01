@@ -28,6 +28,19 @@ function invalidateInvestorDirectory(queryClient: ReturnType<typeof useQueryClie
   queryClient.invalidateQueries({ queryKey: ['activity'] });
 }
 
+function invalidateInvestorProfile(
+  queryClient: ReturnType<typeof useQueryClient>,
+  investorId?: string,
+) {
+  if (investorId) {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detail(investorId) });
+  } else {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detailRoot });
+  }
+
+  invalidateInvestorDirectory(queryClient);
+}
+
 function invalidateInvestorFinancials(
   queryClient: ReturnType<typeof useQueryClient>,
   investorId?: string,
@@ -85,8 +98,8 @@ export const useCreateInvestor = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateInvestorInput) => investorService.createInvestor(data),
-    onSuccess: () => {
-      invalidateInvestorDirectory(queryClient);
+    onSuccess: (response) => {
+      invalidateInvestorProfile(queryClient, response?.data?.investor?.id);
       options?.onSuccess?.();
     },
   });
@@ -98,8 +111,7 @@ export const useUpdateInvestor = (options?: { onSuccess?: () => void }) => {
     mutationFn: ({ id, data }: { id: string; data: UpdateInvestorInput }) =>
       investorService.updateInvestor(id, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: investorKeys.detail(variables.id) });
-      invalidateInvestorDirectory(queryClient);
+      invalidateInvestorProfile(queryClient, variables.id);
       options?.onSuccess?.();
     },
   });

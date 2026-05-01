@@ -32,6 +32,13 @@ function TabContentLoadingFallback() {
   );
 }
 
+const SITE_TAB_KEYS = ['overview', 'ledger', 'expenses', 'floors', 'investors', 'existingOwners'] as const;
+type TabKey = (typeof SITE_TAB_KEYS)[number];
+
+function isSiteTabKey(value: string | null): value is TabKey {
+  return Boolean(value && SITE_TAB_KEYS.includes(value as TabKey));
+}
+
 function formatINR(n: number) {
   return n.toLocaleString('en-IN');
 }
@@ -435,8 +442,6 @@ export default function SiteDetailPage() {
   const { data, isLoading, error } = useSite(siteId ?? '');
   const [addFundOpen, setAddFundOpen] = useState(false);
   const [pullFundOpen, setPullFundOpen] = useState(false);
-  type TabKey = 'overview' | 'ledger' | 'expenses' | 'floors' | 'investors' | 'existingOwners';
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const addFundIntent = searchParams.get('fund') === 'add';
   const requestedFundAmount = Number(searchParams.get('amount') ?? '');
   const addFundDefaultAmount = Number.isFinite(requestedFundAmount) && requestedFundAmount > 0 ? requestedFundAmount : undefined;
@@ -516,6 +521,24 @@ export default function SiteDetailPage() {
     { key: 'investors', label: 'Investors' },
     ...(isRedevelopment ? [{ key: 'existingOwners' as const, label: 'Existing Owners' }] : []),
   ] as Array<{ key: TabKey; label: string }>;
+  const requestedTab = searchParams.get('tab');
+  const activeTab =
+    isSiteTabKey(requestedTab) && tabs.some((tab) => tab.key === requestedTab)
+      ? requestedTab
+      : 'overview';
+
+  const handleTabChange = (tab: TabKey) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    if (tab === 'overview') {
+      nextParams.delete('tab');
+    } else {
+      nextParams.set('tab', tab);
+    }
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   return (
     <>
@@ -577,7 +600,7 @@ export default function SiteDetailPage() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabChange(tab.key)}
               className={cn(
                 'px-6 py-4 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap',
                 activeTab === tab.key

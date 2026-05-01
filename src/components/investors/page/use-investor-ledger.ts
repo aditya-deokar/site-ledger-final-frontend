@@ -3,6 +3,7 @@ import { useForm, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { getApiErrorMessage } from '@/lib/api-error';
+import { calculateFixedRateInterest } from '@/lib/investors';
 import {
   useAddTransaction,
   usePayInterest,
@@ -107,12 +108,13 @@ export function useInvestorLedger(investor: Investor) {
   const principalReturned = Math.max(totalReturned - interestPaid, 0);
 
   const calculateInterest = () => {
-    const rate = investor.fixedRate ?? 0;
-    const principal = Math.max(outstandingPrincipal, 0);
-    const annual = Math.round((rate / 100) * principal);
-    const monthly = Math.round(annual / 12);
-    const daily = Math.round(annual / 365);
-    setCalcResult({ annual, monthly, daily });
+    setCalcResult(
+      calculateFixedRateInterest(
+        outstandingPrincipal,
+        investor.fixedRate,
+        investor.fixedRateCadence,
+      ),
+    );
   };
 
   const openAddMode = (nextMode: InvestorLedgerMode) => {

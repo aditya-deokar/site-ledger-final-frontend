@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { type ReactNode, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { CustomerDetailPageContent } from "@/components/dashboard/customer-detail-page-content"
@@ -15,18 +15,35 @@ import { cn } from "@/lib/utils"
 
 function DetailSkeleton() {
   return (
-    <div className="w-full max-w-6xl min-w-0 space-y-8">
-      <Skeleton className="h-9 w-40" />
-      <div className="space-y-3">
-        <Skeleton className="h-9 w-3/4 max-w-md" />
-        <Skeleton className="h-5 w-64" />
+    <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3">
+      <Skeleton className="h-16 w-full" />
+      <div className="grid min-h-0 grid-cols-3 gap-3">
+        <div className="col-span-2 flex min-h-0 flex-col gap-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+          <Skeleton className="h-36 w-full" />
+          <Skeleton className="h-56 w-full" />
+        </div>
+        <div className="col-span-1">
+          <Skeleton className="h-full min-h-[220px] w-full" />
+        </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-24" />
-        ))}
-      </div>
-      <Skeleton className="h-64" />
+      <Skeleton className="h-44 w-full" />
+    </div>
+  )
+}
+
+function EmptyState({
+  children,
+}: {
+  children: ReactNode
+}) {
+  return (
+    <div className="border border-dashed border-border px-6 py-12 text-center">
+      {children}
     </div>
   )
 }
@@ -51,76 +68,76 @@ export default function CustomerDetailPage() {
   }, [data, customerId])
 
   return (
-    <div className="min-w-0 w-full max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-        {isLoading ? (
-          <DetailSkeleton />
-        ) : isError ? (
-          <div className="border border-dashed border-border px-6 py-12 text-center">
-            <p className="text-sm text-destructive font-medium">
-              {getApiErrorMessage(error, "We could not load customers.")}
-            </p>
-            <Button variant="outline" className="mt-6 h-9 rounded-none text-[10px] font-bold uppercase tracking-widest" onClick={() => refetch()}>
-              {isRefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Try again"}
-            </Button>
-            <div className="mt-4">
-              <Link
-                href="/customers"
-                className={cn(
-                  buttonVariants({ variant: "ghost" }),
-                  "inline-flex h-9 min-h-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
-                )}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back to Customers
-              </Link>
-            </div>
-          </div>
-        ) : !customerId ? (
-          <div className="border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
-            <p>Missing customer in the URL.</p>
+    <div className="mx-auto h-[calc(100dvh-8rem)] w-full max-w-[1680px] min-w-0 overflow-hidden animate-in fade-in duration-500">
+      {isLoading ? (
+        <DetailSkeleton />
+      ) : isError ? (
+        <EmptyState>
+          <p className="text-sm font-medium text-destructive">
+            {getApiErrorMessage(error, "We could not load customers.")}
+          </p>
+          <Button variant="outline" className="mt-6 h-9 rounded-none text-[10px] font-bold uppercase tracking-widest" onClick={() => refetch()}>
+            {isRefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Try again"}
+          </Button>
+          <div className="mt-4">
             <Link
               href="/customers"
               className={cn(
                 buttonVariants({ variant: "ghost" }),
-                "mt-4 inline-flex h-9 min-h-0 items-center text-[10px] font-bold uppercase tracking-widest",
-              )}
-            >
-              Back to Customers
-            </Link>
-          </div>
-        ) : !customer ? (
-          <div className="border border-dashed border-border px-6 py-12 text-center">
-            <p className="text-sm text-muted-foreground">No customer found for this link. It may have been removed or you may not have access.</p>
-            <Link
-              href="/customers"
-              className={cn(
-                buttonVariants({ variant: "ghost" }),
-                "mt-6 inline-flex h-9 min-h-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
+                "inline-flex h-9 min-h-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
               )}
             >
               <ChevronLeft className="h-4 w-4" />
               Back to Customers
             </Link>
           </div>
-        ) : customerDeals.length === 0 ? (
-          <div className="border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
-            <p>No deals found for this customer.</p>
-            <Link
-              href="/customers"
-              className={cn(
-                buttonVariants({ variant: "ghost" }),
-                "mt-4 inline-flex h-9 min-h-0 items-center text-[10px] font-bold uppercase tracking-widest",
-              )}
-            >
-              Back to Customers
-            </Link>
-          </div>
-        ) : (
-          <CustomerDetailPageContent
-            customer={customer}
-            customerDeals={customerDeals}
-          />
-        )}
-      </div>
+        </EmptyState>
+      ) : !customerId ? (
+        <EmptyState>
+          <p className="text-sm text-muted-foreground">Missing customer in the URL.</p>
+          <Link
+            href="/customers"
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "mt-4 inline-flex h-9 min-h-0 items-center text-[10px] font-bold uppercase tracking-widest",
+            )}
+          >
+            Back to Customers
+          </Link>
+        </EmptyState>
+      ) : !customer ? (
+        <EmptyState>
+          <p className="text-sm text-muted-foreground">No customer found for this link. It may have been removed or you may not have access.</p>
+          <Link
+            href="/customers"
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "mt-6 inline-flex h-9 min-h-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest",
+            )}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to Customers
+          </Link>
+        </EmptyState>
+      ) : customerDeals.length === 0 ? (
+        <EmptyState>
+          <p className="text-sm text-muted-foreground">No deals found for this customer.</p>
+          <Link
+            href="/customers"
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "mt-4 inline-flex h-9 min-h-0 items-center text-[10px] font-bold uppercase tracking-widest",
+            )}
+          >
+            Back to Customers
+          </Link>
+        </EmptyState>
+      ) : (
+        <CustomerDetailPageContent
+          customer={customer}
+          customerDeals={customerDeals}
+        />
+      )}
+    </div>
   )
 }

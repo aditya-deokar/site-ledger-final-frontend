@@ -54,6 +54,7 @@ export function getAddInvestorDefaultValues(): CreateInvestorInput {
     type: 'EQUITY',
     equityPercentage: 0,
     fixedRate: 0,
+    fixedRateCadence: 'YEARLY',
     investmentAmount: 0,
     amountPaidNow: 0,
     paymentMode: 'CASH',

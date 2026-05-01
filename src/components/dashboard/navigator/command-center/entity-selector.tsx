@@ -1,5 +1,6 @@
 import { ChevronLeft, Loader2 } from 'lucide-react';
 
+import { formatFixedRateTerms } from '@/lib/investors';
 import { cn } from '@/lib/utils';
 
 import { SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
@@ -26,6 +27,7 @@ type EntityRecord = {
   status?: string | null;
   isActive?: boolean | null;
   fixedRate?: number | null;
+  fixedRateCadence?: 'YEARLY' | 'MONTHLY' | null;
   equityPercentage?: number | null;
 };
 
@@ -50,7 +52,9 @@ function getInvestorMeta(item: EntityRecord) {
   const contact = [item.phone, item.email].filter(Boolean).join(' / ');
   const typeLabel = item.type === 'FIXED_RATE' ? 'Fixed Rate' : item.type === 'EQUITY' ? 'Equity' : item.type;
   const terms = item.type === 'FIXED_RATE'
-    ? (item.fixedRate !== null && item.fixedRate !== undefined ? `${item.fixedRate}% p.a.` : null)
+    ? (item.fixedRate !== null && item.fixedRate !== undefined
+      ? formatFixedRateTerms(item.fixedRate, item.fixedRateCadence ?? 'YEARLY')
+      : null)
     : (item.equityPercentage !== null && item.equityPercentage !== undefined ? `${item.equityPercentage}% equity` : null);
 
   return [contact, item.siteName, typeLabel, terms].filter(Boolean);

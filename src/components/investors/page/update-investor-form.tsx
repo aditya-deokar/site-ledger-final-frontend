@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SheetClose } from '@/components/ui/sheet';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { getFixedRateInputLabel } from '@/lib/investors';
 import { cn } from '@/lib/utils';
 import { useUpdateInvestor } from '@/hooks/api/investor.hooks';
 import {
@@ -30,6 +31,8 @@ export function UpdateInvestorForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<UpdateInvestorInput>({
     resolver: zodResolver(updateInvestorSchema),
@@ -38,8 +41,10 @@ export function UpdateInvestorForm({
       phone: investor.phone ?? '',
       equityPercentage: investor.equityPercentage ?? 0,
       fixedRate: investor.fixedRate ?? 0,
+      fixedRateCadence: investor.fixedRateCadence ?? 'YEARLY',
     },
   });
+  const fixedRateCadence = watch('fixedRateCadence') ?? investor.fixedRateCadence ?? 'YEARLY';
 
   const onSubmit = async (data: UpdateInvestorInput) => {
     try {
@@ -69,7 +74,7 @@ export function UpdateInvestorForm({
           >
             {investor.type === 'EQUITY'
               ? 'This investor stays attached to their current site. Use Ledger & Actions to add more capital or record profit share.'
-              : 'Fixed-rate ledger actions remain available from Ledger & Actions. The cadence selector below is still informational only.'}
+              : 'Fixed-rate ledger actions remain available from Ledger & Actions. Updating the saved rate or cadence here will also update the interest calculator and investor labels.'}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -122,7 +127,7 @@ export function UpdateInvestorForm({
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40 text-foreground">
-                  Fixed Rate
+                  {getFixedRateInputLabel(fixedRateCadence)}
                 </Label>
                 <div className="relative">
                   <Input
@@ -144,27 +149,41 @@ export function UpdateInvestorForm({
                 <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40 text-foreground">
                   Interest Cadence
                 </Label>
+                <input type="hidden" {...register('fixedRateCadence')} />
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    className="border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-amber-700"
-                  >
-                    Yearly
-                    <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">
-                      Backend default
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled
-                    className="border border-dashed border-border px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50"
-                  >
-                    Monthly
-                    <span className="mt-1 block text-[9px] normal-case tracking-normal">
-                      Coming later with backend support
-                    </span>
-                  </button>
+                  {[
+                    {
+                      value: 'YEARLY' as const,
+                      label: 'Yearly',
+                      description: 'Use annual percentage for payouts.',
+                    },
+                    {
+                      value: 'MONTHLY' as const,
+                      label: 'Monthly',
+                      description: 'Use monthly percentage for payouts.',
+                    },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setValue('fixedRateCadence', option.value, { shouldValidate: true })}
+                      className={cn(
+                        'border px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest transition-colors',
+                        fixedRateCadence === option.value
+                          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
+                          : 'border-border text-muted-foreground hover:border-amber-500/20 hover:bg-amber-500/5',
+                      )}
+                    >
+                      {option.label}
+                      <span className="mt-1 block text-[9px] normal-case tracking-normal text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
                 </div>
+                {errors.fixedRateCadence && (
+                  <p className="text-[10px] text-destructive">{errors.fixedRateCadence.message}</p>
+                )}
               </div>
             </div>
           )}

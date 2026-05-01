@@ -4,11 +4,6 @@ export type ProjectType = 'NEW_CONSTRUCTION' | 'REDEVELOPMENT';
 
 export type WingOption = Pick<Wing, 'id' | 'name'>;
 
-export type BookingState = {
-  initialFlatId?: string;
-  preferredFloorId?: string;
-};
-
 export type FlatSelectionState = {
   flat: Flat;
   floorName: string;

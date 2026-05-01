@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RecordPaymentModal } from '@/components/dashboard/record-payment-modal';
+import { formatFixedRateTerms } from '@/lib/investors';
 import { cn } from '@/lib/utils';
 import type { Investor } from '@/schemas/investor.schema';
 
@@ -48,11 +49,11 @@ export function InvestorLedgerModal({
               <h3 className="text-2xl font-serif text-foreground">
                 Investor Ledger & Actions: {investor.name}
               </h3>
-              <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">
-                {investor.type === 'EQUITY'
-                  ? `Equity - ${investor.siteName ?? 'Site not linked'}`
-                  : `Fixed Rate - ${investor.fixedRate ?? 0}% p.a.`}
-              </p>
+                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">
+                  {investor.type === 'EQUITY'
+                    ? `Equity - ${investor.siteName ?? 'Site not linked'}`
+                    : `Fixed Rate - ${formatFixedRateTerms(investor.fixedRate, investor.fixedRateCadence)}`}
+                </p>
               <p className="mt-3 max-w-2xl text-sm text-muted-foreground">
                 {investor.type === 'EQUITY'
                   ? 'Add capital or record profit share from here. Equity payouts should come from profit, not principal return.'
@@ -199,7 +200,7 @@ export function InvestorLedgerModal({
                   <div className="flex flex-col gap-2 border border-amber-500/20 bg-amber-500/5 p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-[9px] font-bold uppercase tracking-widest text-amber-600">
-                        Interest Calculator - {investor.fixedRate ?? 0}% p.a. on {formatINR(ledger.outstandingPrincipal)}
+                        Interest Calculator - {formatFixedRateTerms(investor.fixedRate, investor.fixedRateCadence)} on {formatINR(ledger.outstandingPrincipal)}
                       </p>
                       <Button
                         type="button"

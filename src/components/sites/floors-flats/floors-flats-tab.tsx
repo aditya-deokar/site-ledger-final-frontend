@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import type { Flat, Floor } from '@/schemas/site.schema';
 
-import { BookFlatPanel } from './book-flat-panel';
 import { FloorInventoryList } from './inventory-list';
 import {
   AddFloorPanel,
@@ -17,7 +16,7 @@ import {
   EditFlatDialog,
   EditFloorDialog,
 } from './inventory-dialogs';
-import type { BookingState, FlatSelectionState, ProjectType } from './types';
+import type { FlatSelectionState, ProjectType } from './types';
 import { useSiteInventory } from './use-site-inventory';
 
 export function FloorsFlatsTab({
@@ -41,12 +40,34 @@ export function FloorsFlatsTab({
     visibleFloors,
     wingFilterOptions,
   } = useSiteInventory(siteId);
-  const [booking, setBooking] = useState<BookingState | null>(null);
   const [addingFloor, setAddingFloor] = useState(false);
   const [editingFloor, setEditingFloor] = useState<Floor | null>(null);
   const [deletingFloor, setDeletingFloor] = useState<Floor | null>(null);
   const [editingFlat, setEditingFlat] = useState<FlatSelectionState | null>(null);
   const [deletingFlat, setDeletingFlat] = useState<FlatSelectionState | null>(null);
+
+  const openBookingWorkspace = (options?: {
+    initialFlatId?: string;
+    preferredFloorId?: string;
+    preferredWingId?: string;
+  }) => {
+    const params = new URLSearchParams();
+
+    if (options?.initialFlatId) {
+      params.set('flatId', options.initialFlatId);
+    }
+
+    if (options?.preferredFloorId) {
+      params.set('floorId', options.preferredFloorId);
+    }
+
+    if (options?.preferredWingId) {
+      params.set('wingId', options.preferredWingId);
+    }
+
+    const query = params.toString();
+    router.push(query ? `/sites/${siteId}/book-flat?${query}` : `/sites/${siteId}/book-flat`);
+  };
 
   if (isLoading) {
     return (
@@ -97,7 +118,11 @@ export function FloorsFlatsTab({
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => setBooking({})}
+              onClick={() =>
+                openBookingWorkspace({
+                  preferredWingId: selectedWingFilterId || undefined,
+                })
+              }
               disabled={!canOpenBooking}
               className="h-10 gap-2 rounded-none border-border px-4 text-[10px] font-bold uppercase tracking-[0.2em]"
             >
@@ -137,13 +162,18 @@ export function FloorsFlatsTab({
         ) : (
           <FloorInventoryList
             floors={visibleFloors}
-            onBookFlat={(flat) => setBooking({ initialFlatId: flat.id })}
+            onBookFlat={(flat) => openBookingWorkspace({ initialFlatId: flat.id })}
             onOpenCustomer={(flat) => {
               if (flat.customer?.id) {
                 router.push(`/customers/${flat.customer.id}`);
               }
             }}
-            onBookFloor={(floor) => setBooking({ preferredFloorId: floor.id })}
+            onBookFloor={(floor) =>
+              openBookingWorkspace({
+                preferredFloorId: floor.id,
+                preferredWingId: floor.wingId ?? selectedWingFilterId ?? undefined,
+              })
+            }
             onEditFloor={setEditingFloor}
             onDeleteFloor={setDeletingFloor}
             onEditFlat={(flat, floorName) => setEditingFlat({ flat, floorName })}
@@ -193,19 +223,6 @@ export function FloorsFlatsTab({
           flat={deletingFlat.flat}
           floorName={deletingFlat.floorName}
           onClose={() => setDeletingFlat(null)}
-        />
-      )}
-
-      {booking && (
-        <BookFlatPanel
-          siteId={siteId}
-          floors={floors}
-          wings={effectiveWings}
-          projectType={projectType}
-          preferredWingId={selectedWingFilterId || undefined}
-          preferredFloorId={booking.preferredFloorId}
-          initialFlatId={booking.initialFlatId}
-          onClose={() => setBooking(null)}
         />
       )}
     </>
