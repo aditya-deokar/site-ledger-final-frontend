@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { History, Pencil, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,10 +13,14 @@ import {
 
 export function EmployeesDirectorySection({
   employees,
+  unpaidReminderByEmployeeId,
+  onViewHistory,
   onEditEmployee,
   onDeleteEmployee,
 }: {
   employees: Employee[];
+  unpaidReminderByEmployeeId?: Map<string, 'pending' | 'overdue'>;
+  onViewHistory: (employee: Employee) => void;
   onEditEmployee: (employee: Employee) => void;
   onDeleteEmployee: (employee: Employee) => void;
 }) {
@@ -41,7 +45,15 @@ export function EmployeesDirectorySection({
         <div className="col-span-2 text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Actions</div>
       </div>
 
-      {employees.map((employee) => (
+      {employees.map((employee) => {
+        const salaryReminderStatus = unpaidReminderByEmployeeId?.get(employee.id);
+        const salaryTagClass =
+          salaryReminderStatus === 'overdue'
+            ? 'bg-red-500/10 text-red-600'
+            : 'bg-amber-500/10 text-amber-600';
+        const salaryTagLabel = salaryReminderStatus === 'overdue' ? 'Salary Overdue' : 'Salary Pending';
+
+        return (
         <div
           key={employee.id}
           className="grid grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-muted/20 lg:grid-cols-12 lg:items-center lg:gap-4 lg:px-6"
@@ -50,6 +62,16 @@ export function EmployeesDirectorySection({
             <p className="truncate font-serif text-base text-foreground">{employee.name}</p>
             <p className="mt-1 text-xs text-muted-foreground">{employee.employeeId}</p>
             <p className="mt-1 text-xs text-muted-foreground">{employee.phone}</p>
+            {salaryReminderStatus && (
+              <span
+                className={cn(
+                  'mt-2 inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest',
+                  salaryTagClass,
+                )}
+              >
+                {salaryTagLabel}
+              </span>
+            )}
           </div>
           <div className="text-sm text-muted-foreground lg:col-span-2">{employee.department}</div>
           <div className="text-sm text-muted-foreground lg:col-span-2">{employee.designation}</div>
@@ -75,6 +97,16 @@ export function EmployeesDirectorySection({
               variant="ghost"
               size="icon-sm"
               className="h-9 w-9 rounded-md"
+              onClick={() => onViewHistory(employee)}
+              title="View Transaction History"
+              aria-label={`View transaction history for ${employee.name}`}
+            >
+              <History className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-9 w-9 rounded-md"
               onClick={() => onEditEmployee(employee)}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -89,7 +121,8 @@ export function EmployeesDirectorySection({
             </Button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

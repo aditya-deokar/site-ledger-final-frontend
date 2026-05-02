@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   BarChart3,
-  IndianRupee,
   LayoutGrid,
   Building2,
   TrendingUp,
@@ -19,6 +18,7 @@ import {
   Wrench,
   X,
 } from "lucide-react"
+import { useSalaryReminders } from "@/hooks/api/salary-reminder.hooks"
 
 import { ModeToggle } from "@/components/mode-toggle"
 import logoImage from "@/assets/logo.png"
@@ -76,7 +76,6 @@ const menuItems = [
   { icon: BriefcaseBusiness, label: "Employees", href: "/employees" },
   { icon: TrendingUp, label: "Investors", href: "/investors" },
   { icon: Wrench, label: "Vendors", href: "/vendors" },
-  { icon: IndianRupee, label: "Expenses", href: "/expenses" },
 ]
 
 const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]
@@ -85,6 +84,12 @@ export function Sidebar() {
   const pathname = usePathname()
   const { open, collapsed, close, toggleCollapsed } = useSidebar()
   const isDesktopCompact = collapsed
+  const now = new Date()
+  const { data: salaryReminderData } = useSalaryReminders({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  })
+  const pendingSalariesCount = salaryReminderData?.data?.summary?.totalPending ?? 0
 
   const desktopTransition =
     "lg:transition-[width,padding,gap,transform] lg:duration-500 lg:ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -184,6 +189,7 @@ export function Sidebar() {
         >
           {menuItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const isEmployeesTab = item.href === "/employees"
             return (
               <Link
                 key={item.label}
@@ -192,7 +198,7 @@ export function Sidebar() {
                 onClick={handleNavigation}
                 title={isDesktopCompact ? item.label : undefined}
                 className={cn(
-                  "group flex items-center text-[10px] font-bold uppercase tracking-widest transition-[padding,background-color,color] duration-300 ease-out",
+                  "group relative flex items-center text-[10px] font-bold uppercase tracking-widest transition-[padding,background-color,color] duration-300 ease-out",
                   isDesktopCompact
                     ? `${compactSlotClass} lg:justify-center lg:gap-0 lg:px-0 lg:py-0`
                     : "h-11 gap-2 px-2.5 pr-2.5",
@@ -214,13 +220,22 @@ export function Sidebar() {
                 <span
                   className={cn(
                     labelTransition,
+                    "flex items-center gap-2",
                     isDesktopCompact
                       ? "lg:max-w-0 lg:translate-x-1 lg:opacity-0"
                       : "lg:max-w-48 lg:translate-x-0 lg:opacity-100"
                   )}
                 >
                   {item.label}
+                  {isEmployeesTab && pendingSalariesCount > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-amber-700">
+                      {pendingSalariesCount}
+                    </span>
+                  )}
                 </span>
+                {isDesktopCompact && isEmployeesTab && pendingSalariesCount > 0 && (
+                  <span className="absolute right-3 top-3 inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                )}
               </Link>
             )
           })}

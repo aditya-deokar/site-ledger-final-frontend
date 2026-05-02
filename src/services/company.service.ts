@@ -1,5 +1,6 @@
 import api from '@/lib/axios';
 import {
+  CompanyActivityResponse,
   CompanyResponse,
   CompanyWithdrawalPaymentsResponse,
   CompanyWithdrawalResponse,
@@ -59,8 +60,11 @@ export const companyService = {
     return api.get(`/company/withdrawals/${id}/payments`);
   },
 
-  getActivity: async (cursor?: string) => {
-    const params = cursor ? `?cursor=${cursor}` : '';
+  getActivity: async (cursor?: string, limit?: number): Promise<CompanyActivityResponse> => {
+    const searchParams = new URLSearchParams();
+    if (cursor) searchParams.set('cursor', cursor);
+    if (limit) searchParams.set('limit', String(limit));
+    const params = searchParams.toString() ? `?${searchParams.toString()}` : '';
     return api.get(`/company/activity${params}`);
   },
 

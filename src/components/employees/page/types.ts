@@ -4,12 +4,10 @@ export type EmployeeStatus = 'active' | 'inactive' | 'terminated';
 export type EmployeesSection = 'directory' | 'attendance' | 'reminders';
 export type ReminderStatusFilter = SalaryReminder['status'] | undefined;
 
-export type ReminderActionState =
-  | { kind: 'generate'; month: number; year: number; periodLabel: string }
-  | {
-    kind: 'pay';
-    reminderId: string;
-    amount: number;
-    employeeName: string;
-    periodLabel: string;
-  };
+export type ReminderActionState = {
+  kind: 'pay';
+  reminderId: string;
+  amount: number;
+  employeeName: string;
+  periodLabel: string;
+};

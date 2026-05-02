@@ -211,7 +211,7 @@ export function SearchableSelect({
           }
         }}
         placeholder={searchPlaceholder || placeholder || 'Type to search...'}
-        className={cn(INPUT_CLS, 'h-11 text-[11px] tracking-[0.12em]')}
+        className={cn(INPUT_CLS, 'h-10 text-sm tracking-normal font-medium')}
         autoComplete="off"
       />
 
@@ -219,7 +219,7 @@ export function SearchableSelect({
         <div 
           ref={listRef} 
           onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking scrollbar/container
-          className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto overscroll-contain border border-border bg-background shadow-2xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20"
+          className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto overscroll-contain border border-border bg-background shadow-xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20"
         >
           {visibleOptions.map((option, idx) => (
             <button
@@ -240,13 +240,13 @@ export function SearchableSelect({
                 }
               }}
               className={cn(
-                'w-full px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest transition-colors flex flex-col gap-0.5',
+                'w-full border-b border-border/50 px-3 py-2.5 text-left text-sm transition-colors flex flex-col gap-0.5 last:border-b-0',
                 idx === activeIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted/40'
               )}
             >
-              <span>{option.label}</span>
+              <span className="font-medium">{option.label}</span>
               {option.description && (
-                <span className="text-[9px] font-medium normal-case tracking-normal text-muted-foreground/60 truncate w-full">
+                <span className="text-xs font-normal normal-case tracking-normal text-muted-foreground truncate w-full">
                   {option.description}
                 </span>
               )}
@@ -293,9 +293,13 @@ export function KeyToggle<T extends string>({
       e.preventDefault();
       const next = (idx + 1) % options.length;
       onChange(options[next]);
-    } else if (e.key >= '1' && e.key <= String(options.length)) {
-      e.preventDefault();
-      onChange(options[parseInt(e.key, 10) - 1]);
+    } else {
+      const codeMatch = e.nativeEvent.code?.match(/^(?:Digit|Numpad)([0-9])$/);
+      const num = codeMatch ? parseInt(codeMatch[1], 10) : parseInt(e.key, 10);
+      if (!isNaN(num) && num >= 1 && num <= options.length) {
+        e.preventDefault();
+        onChange(options[num - 1]);
+      }
     }
   };
 
@@ -429,6 +433,7 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
 
     if (e.key === 'Enter') {
       if (isBtn) return;
+      if (tag === 'TEXTAREA' && !e.ctrlKey && !e.metaKey && !e.shiftKey) return;
       e.preventDefault();
       e.stopPropagation();
       focusItem(items, idx + 1);

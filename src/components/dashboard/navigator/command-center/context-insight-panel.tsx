@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import { useFloors, useWings, useExpenses } from '@/hooks/api/site.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
 import { useVendor, useVendorTransactions } from '@/hooks/api/vendor.hooks';
@@ -181,7 +182,10 @@ export function ContextInsightPanel({
               Booked Flats On Selected Floor
             </p>
             {floorsLoading ? (
-              <p className="mt-2 text-[10px] text-muted-foreground italic">Loading floor details...</p>
+              <div className="flex flex-col items-center justify-center py-10 gap-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading floor details...</p>
+              </div>
             ) : selectedFloor ? (
               <>
                 <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-primary flex items-center gap-2">
@@ -216,7 +220,10 @@ export function ContextInsightPanel({
             <div className="border border-border bg-muted/20 p-4">
               <p className={LABEL_CLS}>Selected Vendor</p>
               {vendorLoading ? (
-                <p className="mt-2 text-[10px] text-muted-foreground italic">Loading vendor...</p>
+                <div className="flex flex-col items-center justify-center py-10 gap-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading vendor...</p>
+                </div>
               ) : vendor ? (
                 <>
                   <p className="mt-2 text-sm font-bold uppercase tracking-widest">{vendor.name}</p>
@@ -240,7 +247,10 @@ export function ContextInsightPanel({
             <div className="flex flex-col gap-2">
               <p className={LABEL_CLS}>Recent Vendor Bills</p>
               {vendorTransactionsLoading ? (
-                <p className="text-[10px] text-muted-foreground italic">Loading history...</p>
+                <div className="flex flex-col items-center justify-center py-10 gap-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading history...</p>
+                </div>
               ) : vendorBills.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground italic">No bill history found for this vendor.</p>
               ) : (

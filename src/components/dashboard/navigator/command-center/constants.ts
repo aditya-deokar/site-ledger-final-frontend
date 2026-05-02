@@ -7,6 +7,7 @@ import {
   Contact2,
   Eye,
   Hammer,
+  History,
   IndianRupee,
   Pencil,
   TrendingUp,
@@ -20,7 +21,19 @@ import type { CategoryDef } from './types';
 
 export const CATEGORIES: CategoryDef[] = [
   {
-    id: 'sites', label: 'Sites', shortcut: '1', icon: Building2,
+    id: 'transaction-history', label: 'Transaction History', shortcut: '1', icon: History,
+    color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/30',
+    actions: [
+      { id: 'all-transactions', label: 'All Transactions', shortcut: '1', icon: History },
+      { id: 'site-transactions', label: 'Site Transactions', shortcut: '2', icon: Building2 },
+      { id: 'employee-transactions', label: 'Employee Transactions', shortcut: '3', icon: BriefcaseBusiness },
+      { id: 'investor-transactions', label: 'Investor Transactions', shortcut: '4', icon: TrendingUp },
+      { id: 'customer-transactions', label: 'Customer Transactions', shortcut: '5', icon: Contact2 },
+      { id: 'vendor-transactions', label: 'Vendor Transactions', shortcut: '6', icon: Wrench },
+    ],
+  },
+  {
+    id: 'sites', label: 'Sites', shortcut: '2', icon: Building2,
     color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/30',
     actions: [
       { id: 'create-site', label: 'Create New Site', shortcut: '1', icon: Building2 },
@@ -32,7 +45,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'company', label: 'Company', shortcut: '2', icon: Users,
+    id: 'company', label: 'Company', shortcut: '3', icon: Users,
     color: 'text-violet-500', bg: 'bg-violet-500/10', border: 'border-violet-500/30',
     actions: [
       { id: 'add-partner', label: 'Add Partner', shortcut: '1', icon: UserPlus },
@@ -43,7 +56,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'investors', label: 'Investors', shortcut: '3', icon: TrendingUp,
+    id: 'investors', label: 'Investors', shortcut: '4', icon: TrendingUp,
     color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30',
     actions: [
       { id: 'add-investor', label: 'Add Investor', shortcut: '1', icon: TrendingUp },
@@ -52,7 +65,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'vendors', label: 'Vendors', shortcut: '4', icon: Wrench,
+    id: 'vendors', label: 'Vendors', shortcut: '5', icon: Wrench,
     color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/30',
     actions: [
       { id: 'add-vendor', label: 'Add Vendor', shortcut: '1', icon: Wrench },
@@ -61,7 +74,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'customers', label: 'Customers', shortcut: '5', icon: Contact2,
+    id: 'customers', label: 'Customers', shortcut: '6', icon: Contact2,
     color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/30',
     actions: [
       { id: 'edit-customer', label: 'Edit Customer', shortcut: '1', icon: Pencil },
@@ -70,7 +83,7 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'employees', label: 'Employees', shortcut: '6', icon: BriefcaseBusiness,
+    id: 'employees', label: 'Employees', shortcut: '7', icon: BriefcaseBusiness,
     color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30',
     actions: [
       { id: 'add-employee', label: 'Add Employee', shortcut: '1', icon: UserPlus },
@@ -84,6 +97,7 @@ export const CATEGORIES: CategoryDef[] = [
 ];
 
 export const ACTIONS_NEEDING_SELECTOR = [
+  'site-transactions', 'investor-transactions', 'vendor-transactions', 'customer-transactions', 'employee-transactions',
   'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site',
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
@@ -94,7 +108,7 @@ export const ACTIONS_NEEDING_SELECTOR = [
 ];
 
 export const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
-export const ACTIONS_USING_SITE_SELECTOR = ['book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site', 'record-payment'];
+export const ACTIONS_USING_SITE_SELECTOR = ['site-transactions', 'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site', 'record-payment'];
 export const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const;
 export const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const;
 export const COMMON_VENDOR_CATEGORIES = ['MATERIALS', 'LABOR', 'CONTRACTOR', 'TRANSPORT', 'ELECTRICAL', 'PLUMBING', 'MASONRY', 'CARPENTRY'] as const;

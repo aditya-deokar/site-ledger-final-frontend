@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  useGenerateReminders,
   useMarkReminderPaid,
   useSalaryReminders,
 } from '@/hooks/api/salary-reminder.hooks';
@@ -43,23 +42,6 @@ export function SalaryRemindersSection() {
   const summary = data?.data?.summary ?? { totalPending: 0, totalAmount: 0, overdueCount: 0 };
 
   const {
-    mutate: generateReminders,
-    isPending: isGenerating,
-    error: generateError,
-    reset: resetGenerateReminders,
-  } = useGenerateReminders({
-    onSuccess: () => {
-      if (pendingAction?.kind === 'generate') {
-        toast.success(`Salary reminders generated for ${pendingAction.periodLabel}`);
-      } else {
-        toast.success('Salary reminders generated successfully');
-      }
-      resetGenerateReminders();
-      setPendingAction(null);
-    },
-  });
-
-  const {
     mutate: markPaid,
     isPending: isMarkingPaid,
     error: payError,
@@ -75,16 +57,6 @@ export function SalaryRemindersSection() {
       setPendingAction(null);
     },
   });
-
-  const handleGenerate = () => {
-    resetGenerateReminders();
-    setPendingAction({
-      kind: 'generate',
-      month: selectedMonth,
-      year: selectedYear,
-      periodLabel: `${getMonthName(selectedMonth)} ${selectedYear}`,
-    });
-  };
 
   const handleMarkPaid = (
     reminderId: string,
@@ -104,8 +76,7 @@ export function SalaryRemindersSection() {
   };
 
   const closePendingAction = () => {
-    if (isGenerating || isMarkingPaid) return;
-    resetGenerateReminders();
+    if (isMarkingPaid) return;
     resetMarkPaid();
     setPendingAction(null);
   };
@@ -113,19 +84,14 @@ export function SalaryRemindersSection() {
   const confirmPendingAction = () => {
     if (!pendingAction) return;
 
-    if (pendingAction.kind === 'generate') {
-      generateReminders({ year: pendingAction.year, month: pendingAction.month });
-      return;
-    }
-
     markPaid({
       id: pendingAction.reminderId,
       data: { paidAt: new Date().toISOString() },
     });
   };
 
-  const dialogError = pendingAction?.kind === 'generate' ? generateError : payError;
-  const dialogPending = pendingAction?.kind === 'generate' ? isGenerating : isMarkingPaid;
+  const dialogError = payError;
+  const dialogPending = isMarkingPaid;
 
   return (
     <div className="space-y-6">
@@ -222,14 +188,6 @@ export function SalaryRemindersSection() {
           </select>
         </div>
 
-        <Button
-          onClick={handleGenerate}
-          disabled={isGenerating}
-          className="h-10 gap-2 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest"
-        >
-          {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-          Generate Reminders
-        </Button>
       </div>
 
       {isLoading ? (
@@ -240,7 +198,7 @@ export function SalaryRemindersSection() {
         <div className="flex flex-col items-center justify-center gap-3 border border-dashed border-border p-12">
           <Bell className="h-12 w-12 text-muted-foreground/30" />
           <p className="text-sm italic text-muted-foreground">
-            No salary reminders found. Click "Generate Reminders" to create them.
+            No salary reminders found for this period.
           </p>
         </div>
       ) : (

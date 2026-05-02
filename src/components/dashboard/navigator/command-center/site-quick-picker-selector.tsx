@@ -55,13 +55,21 @@ export function SiteQuickPickerSelector({
         <h2 className="text-2xl font-serif tracking-tight text-foreground">{title || 'Select Site'}</h2>
       </div>
 
-      <div className="border border-border bg-muted/20 p-4">
+      <div className="space-y-2">
         <SearchableSelect
           options={sites.map((site) => ({
             value: site.id,
             label: site.name,
-            description: site.address,
-            keywords: [site.address].filter(Boolean),
+            description: [site.address, site.city, site.state, site.pincode].filter(Boolean).join(' • '),
+            keywords: [
+              site.address,
+              site.city,
+              site.state,
+              site.pincode,
+              site.code,
+              site.id,
+              site.name,
+            ].filter(Boolean),
           }))}
           value={selectedSiteId}
           onValueChange={(id) => {
@@ -73,7 +81,7 @@ export function SiteQuickPickerSelector({
             }
           }}
           placeholder="Select site..."
-          searchPlaceholder="Type site name..."
+          searchPlaceholder="Search by site name, code, address, city, state, pincode..."
           emptyText="No sites match your search."
           autoFocus
         />
@@ -91,5 +99,4 @@ export function SiteQuickPickerSelector({
     </div>
   );
 }
-
 

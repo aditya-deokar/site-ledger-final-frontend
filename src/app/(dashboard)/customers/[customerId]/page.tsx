@@ -2,11 +2,11 @@
 
 import { type ReactNode, useMemo } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { CustomerDetailPageContent } from "@/components/dashboard/customer-detail-page-content"
 import { useAllCustomers } from "@/hooks/api/customer.hooks"
 import { CustomerWithSite } from "@/schemas/customer.schema"
-import { getCustomerGroupKey } from "@/lib/customer-grouping"
+import { getCustomerGroupKey, groupCustomerDeals } from "@/lib/customer-grouping"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChevronLeft, Loader2 } from "lucide-react"
@@ -50,21 +50,31 @@ function EmptyState({
 
 export default function CustomerDetailPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const customerId = typeof params?.customerId === "string" ? params.customerId : Array.isArray(params?.customerId) ? params?.customerId[0] : ""
+  const action = searchParams.get("action")
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useAllCustomers()
 
   const { customer, customerDeals } = useMemo(() => {
     const raw = (data as { data?: { customers?: CustomerWithSite[] } })?.data?.customers ?? []
-    const selected = raw.find((c) => c.id === customerId) ?? null
-    if (!selected) return { customer: null, customerDeals: [] as CustomerWithSite[] }
+    const direct = raw.find((c) => c.id === customerId) ?? null
+    if (direct) {
+      const groupKey = getCustomerGroupKey(direct)
+      const groupedDeals = raw
+        .filter((deal) => getCustomerGroupKey(deal) === groupKey)
+        .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
 
-    const groupKey = getCustomerGroupKey(selected)
-    const groupedDeals = raw
-      .filter((deal) => getCustomerGroupKey(deal) === groupKey)
-      .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
+      return { customer: direct, customerDeals: groupedDeals }
+    }
 
-    return { customer: selected, customerDeals: groupedDeals }
+    const decoded = decodeURIComponent(customerId)
+    const matchedGroup = groupCustomerDeals(raw).find((group) => group.groupKey === decoded) ?? null
+    if (!matchedGroup || matchedGroup.deals.length === 0) {
+      return { customer: null, customerDeals: [] as CustomerWithSite[] }
+    }
+
+    return { customer: matchedGroup.deals[0], customerDeals: matchedGroup.deals }
   }, [data, customerId])
 
   return (
@@ -136,6 +146,7 @@ export default function CustomerDetailPage() {
         <CustomerDetailPageContent
           customer={customer}
           customerDeals={customerDeals}
+          initialAction={action}
         />
       )}
     </div>

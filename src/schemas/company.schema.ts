@@ -99,3 +99,19 @@ export interface CompanyWithdrawalPaymentsResponse {
     payments: LedgerPaymentRecord[];
   };
 }
+
+export interface CompanyActivityItem {
+  id: string;
+  type: 'withdrawal' | 'site_fund' | 'investor_tx' | 'expense';
+  amount: number;
+  description: string;
+  date: string;
+}
+
+export interface CompanyActivityResponse {
+  ok: boolean;
+  data: {
+    activities: CompanyActivityItem[];
+    nextCursor: string | null;
+  };
+}

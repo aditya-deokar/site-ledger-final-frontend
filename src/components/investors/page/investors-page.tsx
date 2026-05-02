@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus,
   Search,
@@ -14,7 +15,6 @@ import type { Investor } from '@/schemas/investor.schema';
 
 import { AddInvestorForm } from './add-investor-form';
 import { DeleteInvestorConfirm } from './delete-investor-confirm';
-import { InvestorLedgerModal } from './investor-ledger-modal';
 import { InvestorSheetFrame } from './investor-sheet-frame';
 import { InvestorStatCard } from './investor-stat-card';
 import { InvestorsList } from './investors-list';
@@ -23,21 +23,37 @@ import { UpdateInvestorForm } from './update-investor-form';
 import type { InvestorTypeFilter } from './types';
 import {
   formatINR,
-  investorTypeTabs,
 } from './utils';
 
 export function InvestorsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<InvestorTypeFilter>(undefined);
   const [addOpen, setAddOpen] = useState(false);
   const [editInvestor, setEditInvestor] = useState<Investor | null>(null);
   const [deleteInvestor, setDeleteInvestor] = useState<Investor | null>(null);
-  const [ledgerInvestor, setLedgerInvestor] = useState<Investor | null>(null);
 
   const activeSearchQuery = searchQuery.trim() || undefined;
-  const { data, isLoading } = useInvestors(typeFilter, activeSearchQuery);
+  const { data, isLoading } = useInvestors(undefined, activeSearchQuery);
 
-  const investors = data?.data?.investors ?? [];
+  const allInvestors = data?.data?.investors ?? [];
+
+  const tabs = useMemo(() => {
+    const uniqueTypes = Array.from(new Set(allInvestors.map((investor) => investor.type)));
+
+    return [
+      { key: undefined, label: 'ALL' },
+      ...uniqueTypes.map((type) => ({
+        key: type as InvestorTypeFilter,
+        label: type.replaceAll('_', ' '),
+      })),
+    ];
+  }, [allInvestors]);
+
+  const investors = useMemo(
+    () => allInvestors.filter((investor) => !typeFilter || investor.type === typeFilter),
+    [allInvestors, typeFilter],
+  );
 
   const stats = useMemo(() => ({
     totalInvested: investors.reduce((sum, investor) => sum + investor.totalInvested, 0),
@@ -70,18 +86,18 @@ export function InvestorsPage() {
 
           <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
             <div className="relative flex-1 lg:w-80">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by investor, phone, or site"
-                className="h-11 rounded-none border-slate-200 bg-background pl-10 pr-10 text-sm text-slate-700 placeholder:text-slate-400"
+                className="h-11 rounded-none border-border bg-background pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground/50"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-slate-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 transition-colors hover:text-foreground"
                   aria-label="Clear investor search"
                 >
                   <X className="h-4 w-4" />
@@ -97,16 +113,16 @@ export function InvestorsPage() {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b border-border">
-          {investorTypeTabs.map((tab) => (
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((tab) => (
             <button
               key={tab.label}
               onClick={() => setTypeFilter(tab.key)}
               className={[
-                'whitespace-nowrap border-b-2 px-5 py-3 text-xs font-bold uppercase tracking-widest transition-colors -mb-px',
+                'border px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors whitespace-nowrap rounded-none',
                 typeFilter === tab.key
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground',
               ].join(' ')}
             >
               {tab.label}
@@ -138,7 +154,7 @@ export function InvestorsPage() {
 
         <InvestorsList
           investors={investors}
-          onOpenLedger={setLedgerInvestor}
+          onOpenLedger={(investor) => router.push(`/investors/${investor.id}`)}
           onEditInvestor={setEditInvestor}
           onDeleteInvestor={setDeleteInvestor}
         />
@@ -164,13 +180,6 @@ export function InvestorsPage() {
         >
           <UpdateInvestorForm investor={editInvestor} onClose={() => setEditInvestor(null)} />
         </InvestorSheetFrame>
-      )}
-
-      {ledgerInvestor && (
-        <InvestorLedgerModal
-          investor={ledgerInvestor}
-          onClose={() => setLedgerInvestor(null)}
-        />
       )}
 
       {deleteInvestor && (

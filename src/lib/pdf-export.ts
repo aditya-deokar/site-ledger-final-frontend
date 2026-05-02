@@ -2,8 +2,12 @@
  * Renders a DOM node to a multi-page A4 PDF using html2canvas + jsPDF.
  * Applies safe hex colors to avoid unsupported oklch/oklab color function errors.
  */
+import html2canvas from "html2canvas-pro"
+import { jsPDF } from "jspdf"
 
 const PDF_SAFE_COLORS_CSS = `
+:root,
+.dark,
 .pdf-export-safe-mode {
   --background: #ffffff !important;
   --foreground: #111827 !important;
@@ -36,6 +40,43 @@ const PDF_SAFE_COLORS_CSS = `
   --sidebar-accent-foreground: #f2f2f7 !important;
   --sidebar-border: #2d2a4a !important;
   --sidebar-ring: #14b8a6 !important;
+
+  --color-background: #ffffff !important;
+  --color-foreground: #111827 !important;
+  --color-card: #ffffff !important;
+  --color-card-foreground: #111827 !important;
+  --color-popover: #ffffff !important;
+  --color-popover-foreground: #111827 !important;
+  --color-primary: #14b8a6 !important;
+  --color-primary-foreground: #1a1a1a !important;
+  --color-secondary: #f7f7f7 !important;
+  --color-secondary-foreground: #353535 !important;
+  --color-muted: #f8f8f8 !important;
+  --color-muted-foreground: #6b7280 !important;
+  --color-accent: #f8f8f8 !important;
+  --color-accent-foreground: #373737 !important;
+  --color-destructive: #ef4444 !important;
+  --color-border: #e5e7eb !important;
+  --color-input: #e5e7eb !important;
+  --color-ring: #b5b5b5 !important;
+  --color-chart-1: #e0e0e0 !important;
+  --color-chart-2: #6b7280 !important;
+  --color-chart-3: #737373 !important;
+  --color-chart-4: #5f5f5f !important;
+  --color-chart-5: #444444 !important;
+  --color-sidebar: #1e1b3a !important;
+  --color-sidebar-foreground: #f2f2f7 !important;
+  --color-sidebar-primary: #14b8a6 !important;
+  --color-sidebar-primary-foreground: #ffffff !important;
+  --color-sidebar-accent: #2d2a4a !important;
+  --color-sidebar-accent-foreground: #f2f2f7 !important;
+  --color-sidebar-border: #2d2a4a !important;
+  --color-sidebar-ring: #14b8a6 !important;
+}
+
+.pdf-export-safe-mode,
+.pdf-export-safe-mode * {
+  color-scheme: light !important;
 }
 
 .pdf-export-safe-mode .bg-white {
@@ -122,18 +163,6 @@ export async function exportElementToPdf(element: HTMLElement, filename: string)
     throw new Error("Element is not visible or has no dimensions. Ensure the preview is fully loaded.")
   }
 
-  let html2canvas: any
-  let jsPDF: any
-
-  try {
-    const modules = await Promise.all([import("html2canvas"), import("jspdf")])
-    html2canvas = modules[0].default
-    jsPDF = modules[1].jsPDF
-  } catch (error) {
-    console.error("Failed to load PDF libraries:", error)
-    throw new Error("Failed to load PDF generation libraries. Please refresh and try again.")
-  }
-
   // Inject PDF-safe colors stylesheet
   const styleElement = document.createElement("style")
   styleElement.id = "pdf-export-safe-colors-temp"
@@ -161,6 +190,12 @@ export async function exportElementToPdf(element: HTMLElement, filename: string)
       imageTimeout: 0,
       windowWidth: element.scrollWidth,
       windowHeight: element.scrollHeight,
+      onclone: (clonedDocument) => {
+        const styleTag = clonedDocument.createElement("style")
+        styleTag.id = "pdf-export-safe-colors-clone"
+        styleTag.textContent = PDF_SAFE_COLORS_CSS
+        clonedDocument.head.appendChild(styleTag)
+      },
     })
 
     if (!canvas || canvas.width < 2 || canvas.height < 2) {

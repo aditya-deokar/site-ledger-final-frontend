@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -122,10 +122,10 @@ function SortHeader<Row>({
     <button
       type="button"
       onClick={() => onToggle(column.key)}
-      className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.24em] text-slate-600 transition-colors hover:text-slate-900"
+      className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.24em] text-muted-foreground transition-colors hover:text-foreground"
     >
       <span>{column.label}</span>
-      <ArrowUpDown className={cn('h-3.5 w-3.5', isActive ? 'text-cyan-700' : 'text-slate-400')} />
+      <ArrowUpDown className={cn('h-3.5 w-3.5', isActive ? 'text-primary' : 'text-muted-foreground/60')} />
       {isActive && <span className="sr-only">{direction === 'asc' ? 'sorted ascending' : 'sorted descending'}</span>}
     </button>
   );
@@ -140,16 +140,16 @@ function toneClasses(tone: StatCard['tone']) {
     case 'amber':
       return 'border-amber-200 bg-amber-50 text-amber-800';
     case 'blue':
-      return 'border-cyan-200 bg-cyan-50 text-cyan-800';
+      return 'border-primary/20 bg-primary/10 text-primary';
     default:
-      return 'border-slate-200 bg-slate-50 text-slate-800';
+      return 'border-border bg-muted text-foreground';
   }
 }
 
 function amountClasses(value: number) {
   if (value > 0) return 'text-emerald-700';
   if (value < 0) return 'text-rose-700';
-  return 'text-slate-700';
+  return 'text-foreground';
 }
 
 function badgeClasses(value: string) {
@@ -163,8 +163,9 @@ function badgeClasses(value: string) {
   if (normalized.includes('OUT') || normalized.includes('DEDUCTION') || normalized.includes('FAILED') || normalized.includes('REFUND')) {
     return 'border-rose-200 bg-rose-50 text-rose-700';
   }
-  return 'border-cyan-200 bg-cyan-50 text-cyan-700';
+  return 'border-primary/20 bg-primary/10 text-primary';
 }
+
 
 export function TransactionHistoryView({ action, selectedEntity, onBack }: Props) {
   const [sortKey, setSortKey] = useState('date');
@@ -172,11 +173,18 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!selectedEntity?.id && action !== 'all-transactions') {
+      toast.error('No entity selected. Redirecting...');
+      onBack();
+    }
+  }, [action, selectedEntity?.id, onBack]);
+
   const companyActivityQuery = useQuery({
     queryKey: ['company-activity', action],
     queryFn: () => companyService.getActivity(undefined, 50),
     retry: false,
-    enabled: action === 'all-transactions' || action === 'company-transactions',
+    enabled: action === 'all-transactions',
   });
 
   const siteActivityQuery = useQuery({
@@ -215,7 +223,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   });
 
   const queryState = (
-    action === 'all-transactions' || action === 'company-transactions'
+    action === 'all-transactions'
       ? companyActivityQuery
       : action === 'site-transactions'
         ? siteActivityQuery
@@ -236,8 +244,6 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
         return 'All Transactions';
       case 'site-transactions':
         return 'Site Ledger';
-      case 'company-transactions':
-        return 'Company Ledger';
       case 'investor-transactions':
         return 'Investor Ledger';
       case 'vendor-transactions':
@@ -257,8 +263,6 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
         return 'company-wide';
       case 'site-transactions':
         return 'site';
-      case 'company-transactions':
-        return 'company';
       case 'investor-transactions':
         return 'investor';
       case 'vendor-transactions':
@@ -275,11 +279,10 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   const rows = useMemo<HistoryRow[]>(() => {
     switch (action) {
       case 'all-transactions':
-      case 'company-transactions':
         return (companyActivityQuery.data?.data?.activities ?? []).map((activity) => ({
           id: activity.id,
           date: activity.date,
-          scope: action === 'all-transactions' ? 'all' : 'company',
+          scope: 'all',
           raw: activity,
         }));
       case 'site-transactions':
@@ -297,8 +300,8 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           raw: transaction,
         }));
       case 'vendor-transactions':
-        return (vendorStatementQuery.data?.data?.statement ?? []).map((entry) => ({
-          id: entry.referenceId,
+        return (vendorStatementQuery.data?.data?.statement ?? []).map((entry, index) => ({
+          id: entry.referenceId || `vs-${entry.date}-${entry.amount}-${index}`,
           date: entry.date,
           scope: 'vendor',
           raw: entry,
@@ -333,12 +336,11 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   const columns = useMemo<SortableColumn<HistoryRow>[]>(() => {
     switch (action) {
       case 'all-transactions':
-      case 'company-transactions':
         return [
           {
             key: 'date',
             label: 'Date',
-            render: (row) => <span className="font-semibold text-slate-700">{formatShortDate((row.raw as CompanyActivityItem).date)}</span>,
+            render: (row) => <span className="font-semibold text-foreground">{formatShortDate((row.raw as CompanyActivityItem).date)}</span>,
             getSortValue: (row) => (row.raw as CompanyActivityItem).date,
             exportValue: (row) => (row.raw as CompanyActivityItem).date,
           },
@@ -356,7 +358,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             key: 'description',
             label: 'Description',
             className: 'min-w-[18rem]',
-            render: (row) => <span className="font-medium text-slate-800">{(row.raw as CompanyActivityItem).description}</span>,
+            render: (row) => <span className="font-medium text-foreground">{(row.raw as CompanyActivityItem).description}</span>,
             getSortValue: (row) => (row.raw as CompanyActivityItem).description,
             exportValue: (row) => (row.raw as CompanyActivityItem).description,
           },
@@ -376,7 +378,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'date',
             label: 'Date',
-            render: (row) => <span className="font-semibold text-slate-700">{formatShortDate((row.raw as SiteReportActivityRow).createdAt)}</span>,
+            render: (row) => <span className="font-semibold text-foreground">{formatShortDate((row.raw as SiteReportActivityRow).createdAt)}</span>,
             getSortValue: (row) => (row.raw as SiteReportActivityRow).createdAt,
             exportValue: (row) => (row.raw as SiteReportActivityRow).createdAt,
           },
@@ -394,14 +396,14 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             key: 'title',
             label: 'Title',
             className: 'min-w-[16rem]',
-            render: (row) => <span className="font-medium text-slate-800">{(row.raw as SiteReportActivityRow).title}</span>,
+            render: (row) => <span className="font-medium text-foreground">{(row.raw as SiteReportActivityRow).title}</span>,
             getSortValue: (row) => (row.raw as SiteReportActivityRow).title,
             exportValue: (row) => (row.raw as SiteReportActivityRow).title,
           },
           {
             key: 'counterparty',
             label: 'Counterparty',
-            render: (row) => <span className="text-slate-600">{(row.raw as SiteReportActivityRow).counterparty ?? '-'}</span>,
+            render: (row) => <span className="text-muted-foreground">{(row.raw as SiteReportActivityRow).counterparty ?? '-'}</span>,
             getSortValue: (row) => (row.raw as SiteReportActivityRow).counterparty ?? '',
             exportValue: (row) => (row.raw as SiteReportActivityRow).counterparty ?? '',
           },
@@ -426,7 +428,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             key: 'note',
             label: 'Note',
             className: 'min-w-[12rem]',
-            render: (row) => <span className="text-slate-600">{(row.raw as SiteReportActivityRow).note ?? '-'}</span>,
+            render: (row) => <span className="text-muted-foreground">{(row.raw as SiteReportActivityRow).note ?? '-'}</span>,
             getSortValue: (row) => (row.raw as SiteReportActivityRow).note ?? '',
             exportValue: (row) => (row.raw as SiteReportActivityRow).note ?? '',
           },
@@ -438,7 +440,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             label: 'Date',
             render: (row) => {
               const transaction = row.raw as InvestorTransaction;
-              return <span className="font-semibold text-slate-700">{formatShortDate(transaction.paymentDate ?? transaction.createdAt)}</span>;
+              return <span className="font-semibold text-foreground">{formatShortDate(transaction.paymentDate ?? transaction.createdAt)}</span>;
             },
             getSortValue: (row) => {
               const transaction = row.raw as InvestorTransaction;
@@ -506,7 +508,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'date',
             label: 'Date',
-            render: (row) => <span className="font-semibold text-slate-700">{formatShortDate((row.raw as VendorStatementEntry).date)}</span>,
+            render: (row) => <span className="font-semibold text-foreground">{formatShortDate((row.raw as VendorStatementEntry).date)}</span>,
             getSortValue: (row) => (row.raw as VendorStatementEntry).date,
             exportValue: (row) => (row.raw as VendorStatementEntry).date,
           },
@@ -523,7 +525,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'site',
             label: 'Site',
-            render: (row) => <span className="font-medium text-slate-700">{(row.raw as VendorStatementEntry).siteName ?? '-'}</span>,
+            render: (row) => <span className="font-medium text-foreground">{(row.raw as VendorStatementEntry).siteName ?? '-'}</span>,
             getSortValue: (row) => (row.raw as VendorStatementEntry).siteName ?? '',
             exportValue: (row) => (row.raw as VendorStatementEntry).siteName ?? '',
           },
@@ -550,7 +552,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'balance',
             label: 'Balance',
-            render: (row) => <span className="font-black tabular-nums text-cyan-800">{formatINR((row.raw as VendorStatementEntry).balance)}</span>,
+            render: (row) => <span className="font-black tabular-nums text-primary">{formatINR((row.raw as VendorStatementEntry).balance)}</span>,
             getSortValue: (row) => (row.raw as VendorStatementEntry).balance,
             exportValue: (row) => (row.raw as VendorStatementEntry).balance,
           },
@@ -560,7 +562,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'date',
             label: 'Date',
-            render: (row) => <span className="font-semibold text-slate-700">{formatShortDate((row.raw as CustomerPaymentHistoryItem).createdAt)}</span>,
+            render: (row) => <span className="font-semibold text-foreground">{formatShortDate((row.raw as CustomerPaymentHistoryItem).createdAt)}</span>,
             getSortValue: (row) => (row.raw as CustomerPaymentHistoryItem).createdAt,
             exportValue: (row) => (row.raw as CustomerPaymentHistoryItem).createdAt,
           },
@@ -577,14 +579,14 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'mode',
             label: 'Mode',
-            render: (row) => <span className="font-medium text-slate-700">{(row.raw as CustomerPaymentHistoryItem).paymentMode ?? '-'}</span>,
+            render: (row) => <span className="font-medium text-foreground">{(row.raw as CustomerPaymentHistoryItem).paymentMode ?? '-'}</span>,
             getSortValue: (row) => (row.raw as CustomerPaymentHistoryItem).paymentMode ?? '',
             exportValue: (row) => (row.raw as CustomerPaymentHistoryItem).paymentMode ?? '',
           },
           {
             key: 'reference',
             label: 'Ref',
-            render: (row) => <span className="font-mono text-[11px] text-slate-600">{(row.raw as CustomerPaymentHistoryItem).referenceNumber ?? '-'}</span>,
+            render: (row) => <span className="font-mono text-[11px] text-muted-foreground">{(row.raw as CustomerPaymentHistoryItem).referenceNumber ?? '-'}</span>,
             getSortValue: (row) => (row.raw as CustomerPaymentHistoryItem).referenceNumber ?? '',
             exportValue: (row) => (row.raw as CustomerPaymentHistoryItem).referenceNumber ?? '',
           },
@@ -609,7 +611,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             key: 'note',
             label: 'Note',
             className: 'min-w-[14rem]',
-            render: (row) => <span className="text-slate-600">{(row.raw as CustomerPaymentHistoryItem).note ?? '-'}</span>,
+            render: (row) => <span className="text-muted-foreground">{(row.raw as CustomerPaymentHistoryItem).note ?? '-'}</span>,
             getSortValue: (row) => (row.raw as CustomerPaymentHistoryItem).note ?? '',
             exportValue: (row) => (row.raw as CustomerPaymentHistoryItem).note ?? '',
           },
@@ -619,7 +621,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'date',
             label: 'Date',
-            render: (row) => <span className="font-semibold text-slate-700">{formatShortDate((row.raw as EmployeeTransaction).date)}</span>,
+            render: (row) => <span className="font-semibold text-foreground">{formatShortDate((row.raw as EmployeeTransaction).date)}</span>,
             getSortValue: (row) => (row.raw as EmployeeTransaction).date,
             exportValue: (row) => (row.raw as EmployeeTransaction).date,
           },
@@ -637,7 +639,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             key: 'description',
             label: 'Description',
             className: 'min-w-[18rem]',
-            render: (row) => <span className="font-medium text-slate-800">{(row.raw as EmployeeTransaction).description}</span>,
+            render: (row) => <span className="font-medium text-foreground">{(row.raw as EmployeeTransaction).description}</span>,
             getSortValue: (row) => (row.raw as EmployeeTransaction).description,
             exportValue: (row) => (row.raw as EmployeeTransaction).description,
           },
@@ -661,7 +663,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           {
             key: 'method',
             label: 'Method',
-            render: (row) => <span className="text-slate-600">{(row.raw as EmployeeTransaction).paymentMethod ?? '-'}</span>,
+            render: (row) => <span className="text-muted-foreground">{(row.raw as EmployeeTransaction).paymentMethod ?? '-'}</span>,
             getSortValue: (row) => (row.raw as EmployeeTransaction).paymentMethod ?? '',
             exportValue: (row) => (row.raw as EmployeeTransaction).paymentMethod ?? '',
           },
@@ -700,14 +702,10 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   }, [columns, rows, sortDirection, sortKey]);
 
   const stats = useMemo<StatCard[]>(() => {
-    const count = { label: 'Rows', value: String(rows.length), tone: 'slate' as const };
-
     switch (action) {
-      case 'all-transactions':
-      case 'company-transactions': {
+      case 'all-transactions': {
         const total = rows.reduce((sum, row) => sum + Math.abs((row.raw as CompanyActivityItem).amount), 0);
         return [
-          count,
           { label: 'Gross Flow', value: formatINR(total), tone: 'blue' },
         ];
       }
@@ -721,7 +719,6 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           return sum + (item.direction === 'OUT' ? Math.abs(item.amount) : 0);
         }, 0);
         return [
-          count,
           { label: 'Inflow', value: formatINR(inflow), tone: 'emerald' },
           { label: 'Outflow', value: formatINR(outflow), tone: 'red' },
           { label: 'Net', value: formatINR(inflow - outflow), tone: inflow - outflow >= 0 ? 'blue' : 'amber' },
@@ -729,17 +726,23 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
       }
       case 'investor-transactions':
         return [
-          count,
           { label: 'Outstanding', value: formatINR(investorTransactionsQuery.data?.data?.outstandingPrincipal ?? 0), tone: 'amber' },
           { label: 'Paid', value: formatINR(rows.reduce((sum, row) => sum + (row.raw as InvestorTransaction).amountPaid, 0)), tone: 'emerald' },
         ];
       case 'vendor-transactions':
+      {
+        const billedRows = rows.filter((row) => {
+          const entry = row.raw as VendorStatementEntry;
+          return entry.entryType === 'BILL';
+        }).length;
+
         return [
-          count,
           { label: 'Paid', value: formatINR(vendorStatementQuery.data?.data?.totalPaid ?? 0), tone: 'emerald' },
           { label: 'Billed', value: formatINR(vendorStatementQuery.data?.data?.totalBilled ?? 0), tone: 'red' },
-          { label: 'Closing', value: formatINR(vendorStatementQuery.data?.data?.closingBalance ?? 0), tone: 'blue' },
+          { label: 'Outstanding', value: formatINR(vendorStatementQuery.data?.data?.closingBalance ?? 0), tone: 'amber' },
+          { label: 'Bill Count', value: String(billedRows), tone: 'slate' },
         ];
+      }
       case 'customer-transactions': {
         const inflow = rows.reduce((sum, row) => {
           const item = row.raw as CustomerPaymentHistoryItem;
@@ -750,7 +753,6 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           return sum + (item.direction === 'OUT' ? item.amount : 0);
         }, 0);
         return [
-          count,
           { label: 'Collected', value: formatINR(inflow), tone: 'emerald' },
           { label: 'Refunded', value: formatINR(outflow), tone: 'red' },
           { label: 'Net', value: formatINR(inflow - outflow), tone: inflow - outflow >= 0 ? 'blue' : 'amber' },
@@ -761,14 +763,13 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
         const deducted = employeeTransactionsQuery.data?.data?.summary.totalDeducted ?? 0;
         const pending = employeeTransactionsQuery.data?.data?.summary.pendingAmount ?? 0;
         return [
-          count,
           { label: 'Paid', value: formatINR(paid), tone: 'emerald' },
           { label: 'Deducted', value: formatINR(deducted), tone: 'red' },
           { label: 'Pending', value: formatINR(pending), tone: 'amber' },
         ];
       }
       default:
-        return [count];
+        return [];
     }
   }, [
     action,
@@ -873,11 +874,11 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" onClick={handleExcelDownload} className="h-10 rounded-none border-cyan-200 bg-cyan-50 px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-800 hover:bg-cyan-100">
+          <Button type="button" variant="outline" onClick={handleExcelDownload} className="h-10 rounded-none border-border bg-background px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-foreground hover:bg-muted">
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Excel
           </Button>
-          <Button type="button" variant="outline" onClick={() => void handlePdfDownload()} disabled={isExportingPdf} className="h-10 rounded-none border-rose-200 bg-rose-50 px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-rose-800 hover:bg-rose-100">
+          <Button type="button" variant="outline" onClick={() => void handlePdfDownload()} disabled={isExportingPdf} className="h-10 rounded-none border-border bg-background px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-foreground hover:bg-muted">
             {isExportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
             PDF
           </Button>
@@ -886,57 +887,57 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
 
       <div
         ref={exportRef}
-        className="overflow-hidden border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-cyan-50 shadow-[0_16px_60px_rgba(15,23,42,0.08)]"
+        className="overflow-hidden border border-border bg-background"
       >
-        <div className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.12),_transparent_35%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(240,249,255,0.98))] px-5 py-5">
+        <div className="border-b border-border bg-background px-5 py-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white/90 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.3em] text-cyan-800">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.3em] text-muted-foreground">
                 <Wallet className="h-3.5 w-3.5" />
                 {subLabel}
               </div>
               <div>
-                <h2 className="text-2xl font-serif text-slate-900">{title}</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  {sortedRows.length} visible records • sorted by {sortKey.replaceAll('-', ' ')} ({sortDirection})
+                <h2 className="text-2xl font-serif text-foreground">{title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {sortedRows.length} entries found
                 </p>
               </div>
             </div>
 
-            <div className="grid min-w-full grid-cols-2 gap-3 sm:min-w-[22rem] sm:grid-cols-2 lg:max-w-[30rem]">
-              {stats.map((stat) => (
-                <div key={stat.label} className={cn('border px-3 py-3', toneClasses(stat.tone))}>
-                  <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] opacity-80">{stat.label}</p>
-                  <p className="mt-1 text-base font-black tabular-nums">{stat.value}</p>
-                </div>
-              ))}
-            </div>
+            {stats.length > 0 && (
+              <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-2 lg:w-auto lg:grid-cols-4 lg:justify-end">
+                {stats.map((stat) => (
+                  <div key={stat.label} className={cn('min-w-0 border px-3 py-3', toneClasses(stat.tone))}>
+                    <p className="text-[9px] font-extrabold uppercase tracking-[0.24em] opacity-80">{stat.label}</p>
+                    <p className="mt-1 text-base font-black tabular-nums">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {queryState.isLoading ? (
-          <div className="flex min-h-72 items-center justify-center bg-white">
-            <div className="flex items-center gap-3 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading transactions...
-            </div>
+          <div className="flex flex-col items-center justify-center py-20 gap-4 bg-background">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading transactions...</p>
           </div>
         ) : queryState.error ? (
           <div className="border-t border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
             We couldn&apos;t load this transaction history right now.
           </div>
         ) : sortedRows.length === 0 ? (
-          <div className="border-t border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+          <div className="border-t border-border bg-background p-10 text-center text-sm text-muted-foreground">
             No transaction records found for this selection.
           </div>
         ) : (
-          <div className="bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
-              <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.24em] text-slate-600">
+          <div className="bg-background">
+            <div className="flex items-center justify-between border-b border-border bg-muted/40 px-5 py-3">
+              <div className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.24em] text-muted-foreground">
                 <Download className="h-3.5 w-3.5" />
                 Ledger Table
               </div>
-              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                 <span className="inline-flex items-center gap-1"><ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" /> Inflow</span>
                 <span className="inline-flex items-center gap-1"><ArrowDownLeft className="h-3.5 w-3.5 text-rose-600" /> Outflow</span>
               </div>
@@ -945,9 +946,9 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
             <div className="overflow-x-auto">
               <Table className="min-w-full border-collapse">
                 <TableHeader>
-                  <TableRow className="border-b border-slate-200 bg-slate-100/90 hover:bg-slate-100/90">
+                  <TableRow className="border-b border-border bg-muted/60 hover:bg-muted/60">
                     {columns.map((column) => (
-                      <TableHead key={column.key} className={cn('h-12 border-r border-slate-200 px-4 last:border-r-0', column.className)}>
+                      <TableHead key={column.key} className={cn('h-12 border-r border-border px-4 last:border-r-0', column.className)}>
                         <SortHeader
                           column={column}
                           activeKey={sortKey}
@@ -963,14 +964,14 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
                     <TableRow
                       key={row.id}
                       className={cn(
-                        'border-b border-slate-200 hover:bg-cyan-50/60',
-                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60',
+                        'border-b border-border hover:bg-muted/30',
+                        index % 2 === 0 ? 'bg-background' : 'bg-muted/10',
                       )}
                     >
                       {columns.map((column) => (
                         <TableCell
                           key={`${row.id}-${column.key}`}
-                          className={cn('border-r border-slate-200 px-4 py-3 align-middle text-xs last:border-r-0', column.className)}
+                          className={cn('border-r border-border px-4 py-3 align-middle text-xs last:border-r-0', column.className)}
                         >
                           {column.render(row)}
                         </TableCell>

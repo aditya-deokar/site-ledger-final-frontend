@@ -13,7 +13,9 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
 import { useCreateEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
+import { useSalaryReminders } from '@/hooks/api/salary-reminder.hooks';
 import type { Employee } from '@/schemas/employee.schema';
 
 import { AttendanceMatrixSection } from './attendance-matrix-section';
@@ -40,6 +42,7 @@ export function EmployeesPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
+  const [historyEmployee, setHistoryEmployee] = useState<Employee | null>(null);
 
   useEffect(() => {
     setSection(getEmployeesSectionFromParam(searchParams.get('section')));
@@ -55,6 +58,22 @@ export function EmployeesPage() {
   const summary = data?.data?.summary ?? { active: 0, inactive: 0, terminated: 0 };
   const total = data?.data?.total ?? 0;
   const totalSalary = employees.reduce((sum, employee) => sum + employee.salary, 0);
+  const now = new Date();
+  const { data: reminderData } = useSalaryReminders({
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+  });
+  const unpaidReminderByEmployeeId = useMemo(() => {
+    const map = new Map<string, 'pending' | 'overdue'>();
+    const reminders = reminderData?.data?.reminders ?? [];
+
+    reminders.forEach((reminder) => {
+      if (reminder.status === 'paid') return;
+      map.set(reminder.employeeId, reminder.status);
+    });
+
+    return map;
+  }, [reminderData]);
 
   const departments = useMemo(
     () => Array.from(new Set(employees.map((employee) => employee.department)))
@@ -166,13 +185,21 @@ export function EmployeesPage() {
           <StatCard icon={Wallet} label="Visible Payroll" value={formatCurrency(totalSalary)} />
         </div>
 
-        {section === 'reminders' ? (
+        {historyEmployee ? (
+          <TransactionHistoryView
+            action="employee-transactions"
+            selectedEntity={historyEmployee}
+            onBack={() => setHistoryEmployee(null)}
+          />
+        ) : section === 'reminders' ? (
           <SalaryRemindersSection />
         ) : section === 'attendance' ? (
           <AttendanceMatrixSection employees={employees} />
         ) : (
           <EmployeesDirectorySection
             employees={employees}
+            unpaidReminderByEmployeeId={unpaidReminderByEmployeeId}
+            onViewHistory={setHistoryEmployee}
             onEditEmployee={setEditEmployee}
             onDeleteEmployee={setDeleteEmployee}
           />

@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
+import { useQueries } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -27,7 +28,6 @@ import { createFlatSchema } from "@/schemas/site.schema"
 import {
   useCancelDeal,
   useCustomerAgreement,
-  useCustomerPayments,
   useRecordCustomerPayment,
   useUpdateCustomer,
 } from "@/hooks/api/customer.hooks"
@@ -39,7 +39,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  CompactModeToggle,
   DetailDensityMode,
   KpiBox,
 } from "@/components/dashboard/customer-detail-primitives"
@@ -48,6 +47,7 @@ import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { getApiErrorMessage } from "@/lib/api-error"
 import { downloadReceiptPDF, downloadStatementPDF } from "@/lib/pdf-generator"
 import { cn } from "@/lib/utils"
+import { customerService } from "@/services/customer.service"
 import { toast } from "sonner"
 
 function formatINR(value: number) {
@@ -128,8 +128,6 @@ type CancelDealError = {
   refundAmount?: number
   shortfall?: number
 }
-
-const LEDGER_PREVIEW_ROWS = 4
 
 const editCustomerProfileSchema = updateCustomerSchema.extend({
   customFlatId: createFlatSchema.shape.customFlatId,
@@ -426,32 +424,30 @@ function CustomerFlatsCard({
   onSelect,
 }: {
   deals: CustomerWithSite[]
-  selectedCustomerId: string
+  selectedCustomerId: string | null
   density: DetailDensityMode
-  onSelect: (customerId: string) => void
+  onSelect: (customerId: string | null) => void
 }) {
-  const compact = density === "compact"
-
   return (
     <div className="border border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-2.5 py-2">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground/50">Customer Flats</p>
-          <p className="mt-0.5 text-[9px] text-muted-foreground/70">Select a flat to load its agreement and ledger.</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground/70">Customer Flats</p>
+          <p className="mt-1 text-xs text-muted-foreground">Select a flat to load agreement and pricing details.</p>
         </div>
-        <span className="shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">{deals.length} Deals</span>
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">{deals.length} Deals</span>
       </div>
 
       <table className="w-full table-fixed text-left">
-        <thead className="border-b border-border bg-muted/[0.03]">
-          <tr className={cn("font-bold uppercase tracking-[0.14em] text-muted-foreground/55", compact ? "text-[7px]" : "text-[8px]")}>
-            <th className={cn(compact ? "w-[17%] px-2 py-1.5" : "w-[17%] px-2 py-1.5")}>Site</th>
-            <th className={cn(compact ? "w-[28%] px-2 py-1.5" : "w-[28%] px-2 py-1.5")}>Unit</th>
-            <th className={cn(compact ? "w-[14%] px-2 py-1.5" : "w-[14%] px-2 py-1.5")}>Agreement</th>
-            <th className={cn(compact ? "w-[13%] px-2 py-1.5" : "w-[13%] px-2 py-1.5")}>Paid</th>
-            <th className={cn(compact ? "w-[13%] px-2 py-1.5" : "w-[13%] px-2 py-1.5")}>Balance</th>
-            <th className={cn(compact ? "w-[7%] px-2 py-1.5" : "w-[7%] px-2 py-1.5")}>Status</th>
-            <th className={cn(compact ? "w-[8%] px-2 py-1.5" : "w-[8%] px-2 py-1.5")}>Date</th>
+        <thead className="border-b border-border bg-muted/30">
+          <tr className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground">
+            <th className="w-[17%] px-3 py-3">Site</th>
+            <th className="w-[28%] px-3 py-3">Unit</th>
+            <th className="w-[14%] px-3 py-3">Agreement</th>
+            <th className="w-[13%] px-3 py-3">Paid</th>
+            <th className="w-[13%] px-3 py-3">Balance</th>
+            <th className="w-[7%] px-3 py-3">Status</th>
+            <th className="w-[8%] px-3 py-3">Date</th>
           </tr>
         </thead>
         <tbody>
@@ -465,37 +461,30 @@ function CustomerFlatsCard({
                 key={deal.id}
                 onClick={() => onSelect(deal.id)}
                 className={cn(
-                  "cursor-pointer border-b border-border/50 align-top transition-colors hover:bg-muted/20",
-                  compact ? "text-[10px]" : "text-[11px]",
+                  "cursor-pointer border-b border-border/60 align-top transition-colors hover:bg-muted/20 text-[13px]",
                   selectedCustomerId === deal.id && "bg-primary/5",
                 )}
               >
-                <td className={cn("align-top", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3">
                   <p className="truncate font-semibold text-foreground">{deal.siteName || "\u2014"}</p>
                 </td>
-                <td className={cn("align-top", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3">
                   <p className="truncate text-foreground">{deal.wingName ? `${deal.wingName} / ${dealFloor}` : dealFloor}</p>
                   <p className="truncate font-semibold text-foreground">{dealFlat}</p>
                 </td>
-                <td className={cn("align-top font-semibold text-foreground", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3 font-semibold text-foreground">
                   {formatINR(deal.sellingPrice)}
                 </td>
-                <td className={cn("align-top font-semibold text-emerald-600", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3 font-semibold text-emerald-600">
                   {formatINR(deal.amountPaid)}
                 </td>
-                <td
-                  className={cn(
-                    "align-top font-semibold",
-                    deal.remaining > 0 ? "text-red-500" : "text-emerald-600",
-                    compact ? "px-2 py-1.5" : "px-2 py-1.5",
-                  )}
-                >
+                <td className={cn("align-top px-3 py-3 font-semibold", deal.remaining > 0 ? "text-red-500" : "text-emerald-600")}>
                   {formatINR(deal.remaining)}
                 </td>
-                <td className={cn("align-top font-medium text-foreground", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3 font-medium text-foreground">
                   {dealStatus}
                 </td>
-                <td className={cn("align-top text-muted-foreground/80", compact ? "px-2 py-1.5" : "px-2 py-1.5")}>
+                <td className="align-top px-3 py-3 text-muted-foreground/80">
                   {formatDate(deal.createdAt)}
                 </td>
               </tr>
@@ -507,83 +496,6 @@ function CustomerFlatsCard({
   )
 }
 
-function CustomerSnapshotCard({
-  customer,
-  density,
-  siteName,
-  floorDisplayName,
-  flatDisplayName,
-  displayCreatedAt,
-  statusDisplay,
-  isCancelled,
-}: {
-  customer: CustomerWithSite
-  density: DetailDensityMode
-  siteName?: string
-  floorDisplayName: string
-  flatDisplayName: string
-  displayCreatedAt?: string
-  statusDisplay: string
-  isCancelled: boolean
-}) {
-  const compact = density === "compact"
-  const statusTone = isCancelled
-    ? "border-red-500/20 bg-red-500/10 text-red-500"
-    : customer.flatStatus === "SOLD" || customer.remaining <= 0
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
-      : "border-amber-500/20 bg-amber-500/10 text-amber-600"
-
-  return (
-    <div className="border border-border bg-background p-2.5">
-      <div className="mb-2.5 flex items-center justify-between gap-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground/50">Customer Snapshot</p>
-        <span className={cn("inline-flex items-center border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.16em]", statusTone)}>
-          {statusDisplay}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-        {[
-          { label: "Name", value: customer.name },
-          { label: "Site", value: siteName || "\u2014" },
-          { label: "Phone", value: customer.phone || "\u2014" },
-          { label: "Wing", value: customer.wingName || "\u2014" },
-          { label: "Email", value: customer.email || "\u2014" },
-          { label: "Floor", value: floorDisplayName },
-          { label: "Booking Amt", value: formatINR(customer.bookingAmount) },
-          { label: "Flat", value: flatDisplayName },
-          { label: "Booked / Sale", value: formatDate(displayCreatedAt) },
-          { label: "Unit Type", value: customer.unitType || customer.flatType || "\u2014" },
-        ].map((item) => (
-          <div key={item.label} className="min-w-0">
-            <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">{item.label}</p>
-            <p className={cn("mt-0.5 break-words text-foreground", compact ? "text-[11px] leading-snug" : "text-xs")}>{item.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {isCancelled ? (
-        <div className="mt-2.5 border-t border-border pt-2">
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-red-500/75">Cancelled On</p>
-              <p className="mt-0.5 text-[11px] text-foreground">{formatDate(customer.cancelledAt)}</p>
-            </div>
-            <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-red-500/75">Released From</p>
-              <p className="mt-0.5 text-[11px] text-foreground">{customer.cancelledFromFlatStatus || "\u2014"}</p>
-            </div>
-            <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-red-500/75">Reason</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-foreground">{customer.cancellationReason || "\u2014"}</p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 function CustomerLedgerTable({
   payments,
   density,
@@ -591,18 +503,16 @@ function CustomerLedgerTable({
   payments: CustomerPaymentHistoryItem[]
   density: DetailDensityMode
 }) {
-  const compact = density === "compact"
-
   return (
     <table className="w-full table-fixed text-left">
-      <thead className="border-b border-border bg-muted/[0.03]">
-        <tr className={cn("font-bold uppercase tracking-[0.14em] text-muted-foreground/55", compact ? "text-[7px]" : "text-[8px]")}>
-          <th className={cn(compact ? "w-[12%] px-2 py-1.5" : "w-[12%] px-2.5 py-2")}>Date</th>
-          <th className={cn(compact ? "w-[10%] px-2 py-1.5" : "w-[10%] px-2.5 py-2")}>Type</th>
-          <th className={cn(compact ? "w-[12%] px-2 py-1.5" : "w-[12%] px-2.5 py-2")}>Mode</th>
-          <th className={cn(compact ? "w-[16%] px-2 py-1.5" : "w-[16%] px-2.5 py-2")}>Reference</th>
-          <th className={cn(compact ? "w-[14%] px-2 py-1.5" : "w-[14%] px-2.5 py-2")}>Amount</th>
-          <th className={cn(compact ? "w-[36%] px-2 py-1.5" : "w-[36%] px-2.5 py-2")}>Note</th>
+      <thead className="border-b border-border bg-muted/30">
+        <tr className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground">
+          <th className="w-[12%] px-3 py-3">Date</th>
+          <th className="w-[10%] px-3 py-3">Type</th>
+          <th className="w-[12%] px-3 py-3">Mode</th>
+          <th className="w-[16%] px-3 py-3">Reference</th>
+          <th className="w-[14%] px-3 py-3">Amount</th>
+          <th className="w-[36%] px-3 py-3">Note</th>
         </tr>
       </thead>
       <tbody>
@@ -610,29 +520,23 @@ function CustomerLedgerTable({
           const isRefund = payment.direction === "OUT" || payment.movementType === "CUSTOMER_REFUND"
 
           return (
-            <tr key={payment.id} className={cn("border-b border-border/50 align-top", compact ? "text-[10px]" : "text-[11px]")}>
-              <td className={cn("align-top text-muted-foreground/80", compact ? "px-2 py-1.5" : "px-2.5 py-2")}>
+            <tr key={payment.id} className="border-b border-border/60 align-top text-[13px] hover:bg-muted/20">
+              <td className="align-top px-3 py-3 text-muted-foreground/80">
                 {formatDate(payment.createdAt)}
               </td>
-              <td className={cn("align-top font-medium text-foreground", compact ? "px-2 py-1.5" : "px-2.5 py-2")}>
+              <td className="align-top px-3 py-3 font-medium text-foreground">
                 {getLedgerEntryLabel(payment)}
               </td>
-              <td className={cn("align-top text-foreground", compact ? "px-2 py-1.5" : "px-2.5 py-2")}>
+              <td className="align-top px-3 py-3 text-foreground">
                 {formatPaymentMode(payment.paymentMode)}
               </td>
-              <td className={cn("align-top break-words text-muted-foreground/80", compact ? "px-2 py-1.5" : "px-2.5 py-2")}>
+              <td className="align-top break-words px-3 py-3 text-muted-foreground/80">
                 {payment.referenceNumber || "\u2014"}
               </td>
-              <td
-                className={cn(
-                  "align-top font-semibold",
-                  isRefund ? "text-red-500" : "text-emerald-600",
-                  compact ? "px-2 py-1.5" : "px-2.5 py-2",
-                )}
-              >
+              <td className={cn("align-top px-3 py-3 font-semibold", isRefund ? "text-red-500" : "text-emerald-600")}>
                 {isRefund ? `- ${formatINR(payment.amount)}` : formatINR(payment.amount)}
               </td>
-              <td className={cn("align-top break-words text-muted-foreground/80", compact ? "px-2 py-1.5" : "px-2.5 py-2")}>
+              <td className="align-top break-words px-3 py-3 text-muted-foreground/80">
                 {payment.note || "\u2014"}
               </td>
             </tr>
@@ -643,46 +547,11 @@ function CustomerLedgerTable({
   )
 }
 
-function CustomerLedgerCard({
-  payments,
-  density,
-  onOpenAll,
-}: {
-  payments: CustomerPaymentHistoryItem[]
-  density: DetailDensityMode
-  onOpenAll: () => void
-}) {
-  const compact = density === "compact"
-  const hasExtraRows = payments.length > LEDGER_PREVIEW_ROWS
-  const visiblePayments = payments.slice(0, LEDGER_PREVIEW_ROWS)
-
+function InfoCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground/50">Customer Ledger</p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground/70">Latest {Math.min(LEDGER_PREVIEW_ROWS, payments.length || LEDGER_PREVIEW_ROWS)} entries for this flat.</p>
-        </div>
-        {hasExtraRows ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onOpenAll}
-            className={cn("rounded-none text-[8px] font-bold uppercase tracking-[0.16em]", compact ? "h-7 px-2.5" : "h-8 px-3")}
-          >
-            View All
-          </Button>
-        ) : null}
-      </div>
-
-      {payments.length === 0 ? (
-        <div className="flex items-center justify-center px-4 py-6 text-center text-[11px] text-muted-foreground/65">
-          No customer ledger entries yet for this flat.
-        </div>
-      ) : (
-        <CustomerLedgerTable payments={visiblePayments} density={density} />
-      )}
+    <div className="border border-border bg-muted/20 p-3">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground/70">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-foreground">{value}</p>
     </div>
   )
 }
@@ -690,42 +559,55 @@ function CustomerLedgerCard({
 export function CustomerDetailPageContent({
   customer: initialCustomer,
   customerDeals,
+  initialAction,
 }: {
   customer: CustomerWithSite
   customerDeals: CustomerWithSite[]
+  initialAction?: string | null
 }) {
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
-  const [compactMode, setCompactMode] = useState(true)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [paymentPickerOpen, setPaymentPickerOpen] = useState(false)
-  const [ledgerDialogOpen, setLedgerDialogOpen] = useState(false)
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
   const [isDownloadingStatement, setIsDownloadingStatement] = useState(false)
-  const [selectedCustomerId, setSelectedCustomerId] = useState(initialCustomer.id)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [paymentTargetCustomerId, setPaymentTargetCustomerId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"flats" | "transactions">("flats")
 
-  const density: DetailDensityMode = compactMode ? "compact" : "comfortable"
-  const customer = useMemo(
-    () => customerDeals.find((deal) => deal.id === selectedCustomerId) ?? customerDeals[0] ?? initialCustomer,
-    [customerDeals, initialCustomer, selectedCustomerId],
+  const density: DetailDensityMode = "comfortable"
+  const selectedDeal = useMemo(
+    () => customerDeals.find((deal) => deal.id === selectedCustomerId) ?? null,
+    [customerDeals, selectedCustomerId],
   )
-  const siteId = customer.siteId ?? ""
-  const siteName = customer.siteName ?? undefined
+  const customer = useMemo(() => customerDeals[0] ?? initialCustomer, [customerDeals, initialCustomer])
+  const activeDeal = selectedDeal ?? customer
+  const siteId = activeDeal.siteId ?? ""
 
   const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({
     onSuccess: () => {
       setIsPaymentModalOpen(false)
     },
   })
-  const { data: agreementData, isLoading: isAgreementLoading, isError: isAgreementError, error: agreementError } = useCustomerAgreement(customer.id)
-  const { data: paymentHistoryData, isError: isPaymentsError } = useCustomerPayments(customer.id)
+  const { data: agreementData, isLoading: isAgreementLoading, isError: isAgreementError, error: agreementError } = useCustomerAgreement(activeDeal.id)
+  const paymentHistoryQueries = useQueries({
+    queries: customerDeals.map((deal) => ({
+      queryKey: ["customerPayments", deal.id],
+      queryFn: () => customerService.getPayments(deal.id),
+      enabled: Boolean(deal.id),
+    })),
+  })
   const { data: siteData, isError: isSiteError } = useSite(siteId)
   const { data: companyData } = useCompany()
 
   const agreement = agreementData?.data?.agreement
-  const paymentHistory = (paymentHistoryData?.data?.payments ?? []) as CustomerPaymentHistoryItem[]
+  const paymentHistory = useMemo(() => {
+    const all = paymentHistoryQueries.flatMap((query) => (query.data?.data?.payments ?? []) as CustomerPaymentHistoryItem[])
+    const unique = new Map<string, CustomerPaymentHistoryItem>()
+    all.forEach((item) => unique.set(item.id, item))
+    return Array.from(unique.values())
+  }, [paymentHistoryQueries])
   const orderedPaymentHistory = useMemo(
     () => [...paymentHistory].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()),
     [paymentHistory],
@@ -734,23 +616,14 @@ export function CustomerDetailPageContent({
     () => orderedPaymentHistory.filter((payment) => payment.direction === "IN" && payment.movementType === "CUSTOMER_PAYMENT"),
     [orderedPaymentHistory],
   )
-  const fallbackCreatedAt = useMemo(
-    () => orderedPaymentHistory[orderedPaymentHistory.length - 1]?.createdAt,
-    [orderedPaymentHistory],
-  )
-  const displayCreatedAt = customer.createdAt || fallbackCreatedAt
-  const isCancelled = customer.dealStatus === "CANCELLED"
-  const agreementTotal = agreement?.totals.payableTotal ?? customer.sellingPrice
-  const collectedAmount = agreement?.amountPaid ?? customer.amountPaid
-  const remainingAmount = Math.max(agreement?.remaining ?? customer.remaining, 0)
-  const isSold = customer.flatStatus === "SOLD" || (!isCancelled && remainingAmount <= 0)
-  const statusBadgeLabel = isCancelled ? "CANCELLED" : (customer.flatStatus ?? "ACTIVE")
-  const statusDisplay = isCancelled ? "CANCELLED" : (customer.flatStatus ?? "ACTIVE")
-  const flatDisplayName = getFlatDisplayName(customer)
-  const floorDisplayName = getFloorDisplayName(customer)
-  const canEdit = !isCancelled && Boolean(customer.flatId) && Boolean(siteId)
-  const canCancel = !isCancelled && Boolean(customer.flatId) && Boolean(siteId)
-  const canAddPayment = !isCancelled && remainingAmount > 0 && Boolean(siteId)
+  const isCancelled = activeDeal.dealStatus === "CANCELLED"
+  const agreementTotal = agreement?.totals.payableTotal ?? activeDeal.sellingPrice
+  const collectedAmount = agreement?.amountPaid ?? activeDeal.amountPaid
+  const remainingAmount = Math.max(agreement?.remaining ?? activeDeal.remaining, 0)
+  const isSold = activeDeal.flatStatus === "SOLD" || (!isCancelled && remainingAmount <= 0)
+  const statusBadgeLabel = isCancelled ? "CANCELLED" : (activeDeal.flatStatus ?? "ACTIVE")
+  const canEdit = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
+  const canCancel = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
 
   const payableDeals = useMemo(
     () =>
@@ -759,6 +632,7 @@ export function CustomerDetailPageContent({
       ),
     [customerDeals],
   )
+  const canAddPayment = payableDeals.length > 0
   const paymentTargetDeal = useMemo(
     () => payableDeals.find((deal) => deal.id === paymentTargetCustomerId) ?? null,
     [payableDeals, paymentTargetCustomerId],
@@ -770,13 +644,21 @@ export function CustomerDetailPageContent({
       : 0
   const issueMessages = [
     isAgreementError ? `Agreement: ${getApiErrorMessage(agreementError, "Could not load agreement.")}` : null,
-    isPaymentsError ? "Payment history could not be fully loaded. Statements and receipt snapshots may be incomplete until this resolves." : null,
+    paymentHistoryQueries.some((query) => query.isError) ? "Payment history could not be fully loaded. Statements and receipt snapshots may be incomplete until this resolves." : null,
     isSiteError ? "Site details could not be fully loaded. Receipt address and project context may be incomplete." : null,
   ].filter(Boolean) as string[]
 
   useEffect(() => {
-    setLedgerDialogOpen(false)
-  }, [customer.id])
+    if ((initialAction === "edit" || initialAction === "cancel") && !selectedCustomerId && customerDeals.length > 0) {
+      setSelectedCustomerId(customerDeals[0].id)
+    }
+    if (initialAction === "edit" && canEdit) {
+      setEditOpen(true)
+    }
+    if (initialAction === "cancel" && canCancel) {
+      setCancelOpen(true)
+    }
+  }, [initialAction, canEdit, canCancel, customerDeals, selectedCustomerId])
 
   const handleDownloadReceipt = async () => {
     const latestPayment = receiptPayments[0]
@@ -790,9 +672,9 @@ export function CustomerDetailPageContent({
     setIsDownloadingReceipt(true)
     try {
       await downloadReceiptPDF(
-        customer.id,
+        activeDeal.id,
         latestPayment.id,
-        customer,
+        activeDeal,
         latestPayment,
         agreement,
         siteData.data.site,
@@ -816,8 +698,8 @@ export function CustomerDetailPageContent({
     setIsDownloadingStatement(true)
     try {
       await downloadStatementPDF(
-        customer.id,
-        customer,
+        activeDeal.id,
+        activeDeal,
         orderedPaymentHistory,
         agreement,
         siteData.data.site,
@@ -842,7 +724,7 @@ export function CustomerDetailPageContent({
       return
     }
 
-    const initialTarget = payableDeals.find((deal) => deal.id === customer.id) ?? payableDeals[0]
+    const initialTarget = payableDeals.find((deal) => deal.id === activeDeal.id) ?? payableDeals[0]
     setPaymentTargetCustomerId(initialTarget?.id ?? null)
     setPaymentPickerOpen(true)
   }
@@ -857,18 +739,18 @@ export function CustomerDetailPageContent({
                 href="/customers"
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
-                  "h-7 min-h-0 shrink-0 rounded-none px-2 text-[8px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground",
+                  "h-9 min-h-0 shrink-0 rounded-none px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Customers
               </Link>
-              <h1 className={cn("min-w-0 truncate font-sans font-bold tracking-tight text-foreground", compactMode ? "text-xl" : "text-2xl")}>
+              <h1 className="min-w-0 truncate font-sans text-2xl font-bold tracking-tight text-foreground">
                 {customer.name}
               </h1>
               <span
                 className={cn(
-                  "shrink-0 border px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.16em]",
+                  "shrink-0 border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]",
                   isCancelled
                     ? "border-red-500/20 bg-red-500/10 text-red-500"
                     : isSold
@@ -878,11 +760,12 @@ export function CustomerDetailPageContent({
               >
                 {statusBadgeLabel}
               </span>
-              <span className="min-w-0 truncate text-[10px] text-muted-foreground/75">{getDealLocationLabel(customer)}</span>
+              <span className="min-w-0 truncate text-base text-muted-foreground/85">
+                {customer.phone || "No phone"} {customer.email ? `• ${customer.email}` : ""} • {customerDeals.length} flats
+              </span>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <CompactModeToggle checked={compactMode} density={density} onCheckedChange={setCompactMode} />
               <Button
                 variant="outline"
                 onClick={handleDownloadReceipt}
@@ -904,7 +787,7 @@ export function CustomerDetailPageContent({
               {canAddPayment ? (
                 <Button onClick={openPaymentFlow} className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]">
                   <IndianRupee className="h-3.5 w-3.5" />
-                  Payment
+                  Add Transaction
                 </Button>
               ) : null}
               {canEdit ? (
@@ -937,68 +820,98 @@ export function CustomerDetailPageContent({
               ))}
             </div>
           ) : null}
+
+          <div className="mt-3 flex gap-1 border-b border-border">
+            <button
+              type="button"
+              onClick={() => setActiveTab("flats")}
+              className={cn(
+                "border-b-2 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors",
+                activeTab === "flats" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Flats
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("transactions")}
+              className={cn(
+                "border-b-2 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] transition-colors",
+                activeTab === "transactions" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+              hidden
+            >
+              Transactions
+            </button>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <InfoCell label="Customer" value={customer.name} />
+            <InfoCell label="Phone" value={customer.phone || "-"} />
+            <InfoCell label="Email" value={customer.email || "-"} />
+            <InfoCell label="Flats" value={String(customerDeals.length)} />
+            <InfoCell label="Selected Flat" value={selectedDeal ? getDealLocationLabel(selectedDeal) : "None selected"} />
+          </div>
         </div>
 
-        <div className="grid min-h-0 grid-cols-3 gap-3">
-          <div className="col-span-2 flex min-h-0 flex-col gap-2">
-            <div className="grid grid-cols-4 gap-2">
-              <KpiBox density={density} label="Agreement Total" value={formatINR(agreementTotal)} />
-              <KpiBox density={density} label="Total Paid" tone="success" value={formatINR(collectedAmount)} />
-              <KpiBox
-                density={density}
-                label="Remaining Balance"
-                tone={isCancelled || remainingAmount <= 0 ? "success" : "danger"}
-                value={formatINR(isCancelled ? 0 : remainingAmount)}
-              />
-              <KpiBox
-                density={density}
-                label="Progress"
-                tone={isSold ? "success" : "primary"}
-                value={`${progressPercent.toFixed(compactMode ? 0 : 1)}%`}
-                progress={progressPercent}
-                progressLabel={isSold ? "Collected" : "Collections"}
-              />
-            </div>
-
-            <div className="border border-border bg-background px-3 py-2.5">
-              <CustomerAgreementPanel
-                customerId={customer.id}
-                siteId={siteId}
-                canEdit={canEdit}
-                agreement={agreement}
-                isLoading={isAgreementLoading}
-                contextLabel={getDealLocationLabel(customer)}
-                compact
-              />
-            </div>
-          </div>
-
-          <div className="col-span-1 flex min-h-0 flex-col gap-2">
-            <CustomerSnapshotCard
-              customer={customer}
-              density={density}
-              siteName={siteName}
-              floorDisplayName={floorDisplayName}
-              flatDisplayName={flatDisplayName}
-              displayCreatedAt={displayCreatedAt}
-              statusDisplay={statusDisplay}
-              isCancelled={isCancelled}
-            />
-
+        {activeTab === "flats" ? (
+          <div className="flex min-h-0 flex-col gap-3">
             <CustomerFlatsCard
               deals={customerDeals}
               selectedCustomerId={selectedCustomerId}
               density={density}
               onSelect={setSelectedCustomerId}
             />
-          </div>
-        </div>
+            <div className="flex min-h-0 flex-col gap-2">
+              {selectedDeal ? (
+                <>
+                  <div className="grid grid-cols-4 gap-2">
+                    <KpiBox density={density} label="Agreement Total" value={formatINR(agreementTotal)} />
+                    <KpiBox density={density} label="Total Paid" tone="success" value={formatINR(collectedAmount)} />
+                    <KpiBox
+                      density={density}
+                      label="Remaining Balance"
+                      tone={isCancelled || remainingAmount <= 0 ? "success" : "danger"}
+                      value={formatINR(isCancelled ? 0 : remainingAmount)}
+                    />
+                    <KpiBox
+                      density={density}
+                      label="Progress"
+                      tone={isSold ? "success" : "primary"}
+                      value={`${progressPercent.toFixed(0)}%`}
+                      progress={progressPercent}
+                      progressLabel={isSold ? "Collected" : "Collections"}
+                    />
+                  </div>
 
-        <CustomerLedgerCard
-          payments={orderedPaymentHistory}
-          density={density}
-          onOpenAll={() => setLedgerDialogOpen(true)}
-        />
+                  <div className="border border-border bg-background px-3 py-2.5">
+                    <CustomerAgreementPanel
+                      customerId={activeDeal.id}
+                      siteId={siteId}
+                      canEdit={canEdit}
+                      agreement={agreement}
+                      isLoading={isAgreementLoading}
+                      contextLabel={getDealLocationLabel(activeDeal)}
+                      compact
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="border border-dashed border-border bg-background p-8 text-center text-sm text-muted-foreground">
+                  Select a flat above to view agreement totals and pricing items.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="border border-border bg-background p-3">
+            {orderedPaymentHistory.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">No transactions found for this customer.</div>
+            ) : (
+              <CustomerLedgerTable payments={orderedPaymentHistory} density={density} />
+            )}
+          </div>
+        )}
+
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -1007,7 +920,7 @@ export function CustomerDetailPageContent({
             <DialogTitle className="text-2xl font-serif tracking-tight">Edit customer</DialogTitle>
           </DialogHeader>
           <div className="px-8 py-6">
-            {canEdit ? <EditForm customer={customer} siteId={siteId} density={density} onClose={() => setEditOpen(false)} /> : null}
+            {canEdit ? <EditForm customer={activeDeal} siteId={siteId} density={density} onClose={() => setEditOpen(false)} /> : null}
           </div>
         </DialogContent>
       </Dialog>
@@ -1020,7 +933,7 @@ export function CustomerDetailPageContent({
           <div className="px-8 py-6">
             {canCancel ? (
               <CancelConfirm
-                customer={customer}
+                customer={activeDeal}
                 siteId={siteId}
                 density={density}
                 onClose={() => setCancelOpen(false)}
@@ -1077,31 +990,16 @@ export function CustomerDetailPageContent({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={ledgerDialogOpen} onOpenChange={setLedgerDialogOpen}>
-        <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto rounded-none border-border p-0">
-          <DialogHeader className="border-b border-border px-6 py-4">
-            <DialogTitle className="text-xl font-serif tracking-tight">Customer Ledger</DialogTitle>
-          </DialogHeader>
-          <div className="px-6 py-4">
-            {orderedPaymentHistory.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">No customer ledger entries yet for this flat.</div>
-            ) : (
-              <CustomerLedgerTable payments={orderedPaymentHistory} density={density} />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {isPaymentModalOpen && canAddPayment ? (
         <RecordPaymentModal
           title={`Customer: ${paymentTargetDeal?.name || customer.name}`}
           totalAmount={paymentTargetDeal?.sellingPrice ?? agreementTotal}
           currentlyPaid={paymentTargetDeal?.amountPaid ?? collectedAmount}
           entityType="customer-booking"
-          entityId={paymentTargetDeal?.id ?? customer.id}
+          entityId={paymentTargetDeal?.id ?? activeDeal.id}
           onSubmit={(paymentInput: RecordPaymentInput) =>
             recordPayment({
-              customerId: paymentTargetDeal?.id ?? customer.id,
+              customerId: paymentTargetDeal?.id ?? activeDeal.id,
               siteId: paymentTargetDeal?.siteId ?? siteId,
               data: paymentInput,
             })
@@ -1116,3 +1014,5 @@ export function CustomerDetailPageContent({
     </div>
   )
 }
+
+

@@ -6,9 +6,10 @@ import { useAllCustomers } from '@/hooks/api/customer.hooks';
 import type { CustomerGroup, CustomerWithSite } from '@/schemas/customer.schema';
 import { groupCustomerDeals } from '@/lib/customer-grouping';
 import { cn } from '@/lib/utils';
-import { Search, Phone, Building2, ChevronRight } from 'lucide-react';
+import { Search, Phone, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 function formatINR(n: number) { return '\u20B9' + n.toLocaleString('en-IN'); }
 
@@ -81,10 +82,14 @@ export default function CustomersPage() {
     return { totalReceivable, totalReceived, totalRemaining, totalDeals };
   }, [filtered]);
 
-  const handleSelectCustomer = useCallback((customer: CustomerGroup) => {
-    const targetDeal = customer.deals[0];
-    if (!targetDeal) return;
-    router.push(`/customers/${targetDeal.id}`);
+  const handleSelectCustomer = useCallback((customer: CustomerGroup, action?: 'view' | 'edit' | 'cancel') => {
+    const groupId = encodeURIComponent(customer.groupKey);
+    if (!action || action === 'view') {
+      router.push(`/customers/${groupId}`);
+      return;
+    }
+
+    router.push(`/customers/${groupId}?action=${action}`);
   }, [router]);
 
   const tabs: { key: StatusFilter; label: string }[] = useMemo(() => [
@@ -95,11 +100,20 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-        <div>
-          <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Customers</h1>
-          <p className="mt-2 text-base text-muted-foreground italic">
-            Track bookings, payments, and customer records across all sites.
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Customers</h1>
+            <p className="mt-2 text-base text-muted-foreground italic">
+              Track bookings, payments, and customer records across all sites.
+            </p>
+          </div>
+          <Button
+            onClick={() => router.push('/sites')}
+            className="h-10 rounded-none px-4 text-[11px] font-bold uppercase tracking-[0.16em]"
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add Customer
+          </Button>
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -159,29 +173,19 @@ export default function CustomersPage() {
             ) : (
               <div className="border border-border divide-y divide-border overflow-hidden">
                 <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
-                  <div className="col-span-3 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Customer</div>
-                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Flats / Sites</div>
-                  <div className="col-span-1 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Status</div>
-                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Selling Price</div>
-                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid</div>
-                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Remaining</div>
+                  <div className="col-span-6 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Customer Detail</div>
+                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Paid Total</div>
+                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50">Remaining</div>
+                  <div className="col-span-2 text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 text-right">Actions</div>
                 </div>
 
                 {filtered.map((group) => {
-                  const latestDeal = group.deals[0];
-                  const siteCount = new Set(group.deals.map((deal) => deal.siteId).filter(Boolean)).size;
-                  const isAllCancelled = group.deals.every((deal) => deal.dealStatus === 'CANCELLED');
-                  const hasAnySold = group.deals.some((deal) => deal.flatStatus === 'SOLD' && deal.dealStatus !== 'CANCELLED');
-                  const statusLabel = isAllCancelled ? 'CANCELLED' : hasAnySold ? 'SOLD' : 'BOOKED';
-
                   return (
-                    <button
+                    <div
                       key={group.groupKey}
-                      onClick={() => handleSelectCustomer(group)}
-                      aria-label={`View details for ${group.displayName}`}
-                      className="group w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/30 hover:border-l-4 hover:border-l-primary transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 cursor-pointer items-center text-left"
+                      className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 px-4 lg:px-6 py-4 hover:bg-muted/20 transition-all duration-150 items-center text-left"
                     >
-                      <div className="lg:col-span-3 flex items-center gap-3">
+                      <div className="lg:col-span-6 flex items-center gap-3">
                         <div className={cn('w-9 h-9 flex items-center justify-center text-white text-[10px] font-bold tracking-widest shrink-0', ac(group.displayName))}>
                           {ini(group.displayName)}
                         </div>
@@ -192,60 +196,50 @@ export default function CustomersPage() {
                               <Phone className="w-3 h-3" /> {group.phone}
                             </span>
                           )}
+                          {group.email ? (
+                            <p className="text-[11px] text-muted-foreground truncate mt-1">{group.email}</p>
+                          ) : null}
                         </div>
                       </div>
 
-                      <div className="lg:col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Building2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{siteCount} site{siteCount === 1 ? '' : 's'}</span>
-                        <span className="text-muted-foreground/30">\u00b7</span>
-                        <span className="shrink-0 flex items-center gap-1 font-bold">
-                          {group.dealCount} flat{group.dealCount === 1 ? '' : 's'}
+                      <div className="lg:col-span-2">
+                        <p className="text-base lg:text-lg font-sans font-bold text-emerald-600">{formatINR(group.totalPaid)}</p>
+                      </div>
+
+                      <div className="lg:col-span-2">
+                        <span className={cn('text-base lg:text-lg font-sans font-bold', group.totalRemaining > 0 ? 'text-red-500' : 'text-emerald-600')}>
+                          {formatINR(group.totalRemaining)}
                         </span>
                       </div>
 
-                      <div className="lg:col-span-1 flex items-center lg:block">
-                        <span className={cn(
-                          'px-2.5 py-1 text-[11px] font-bold tracking-widest uppercase inline-block',
-                          statusLabel === 'CANCELLED'
-                            ? 'bg-red-500/10 text-red-500'
-                            : statusLabel === 'SOLD'
-                              ? 'bg-emerald-500/10 text-emerald-600'
-                              : 'bg-amber-500/10 text-amber-600',
-                        )}>
-                          {statusLabel}
-                        </span>
+                      <div className="lg:col-span-2 flex items-center justify-start lg:justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCustomer(group, 'view')}
+                          className="h-10 w-10 border border-border flex items-center justify-center text-foreground hover:border-primary hover:text-primary transition-colors"
+                          aria-label={`View ${group.displayName}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCustomer(group, 'edit')}
+                          className="h-10 w-10 border border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                          aria-label={`Edit ${group.displayName}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCustomer(group, 'cancel')}
+                          className="h-10 w-10 border border-border flex items-center justify-center text-muted-foreground hover:border-red-500/40 hover:text-red-500 transition-colors"
+                          aria-label={`Delete ${group.displayName}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
 
-                      <div className="grid grid-cols-3 lg:contents gap-4 pt-2 lg:pt-0 border-t border-border/50 lg:border-none">
-                        <div className="lg:col-span-2">
-                          <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1">Selling</p>
-                          <span className="text-base lg:text-lg font-sans font-bold text-foreground">{formatINR(group.totalSellingPrice)}</span>
-                        </div>
-                        <div className="lg:col-span-2">
-                          <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1">Paid</p>
-                          <span className="text-base lg:text-lg font-sans font-bold text-emerald-600">{formatINR(group.totalPaid)}</span>
-                          <div className="mt-1 h-1 bg-muted overflow-hidden w-full lg:w-20">
-                            <div className="h-full bg-primary" style={{ width: `${group.totalSellingPrice > 0 ? Math.min(100, (group.totalPaid / group.totalSellingPrice) * 100) : 0}%` }} />
-                          </div>
-                        </div>
-                        <div className="lg:col-span-2 lg:text-right flex items-center justify-between lg:justify-end gap-2">
-                          <div>
-                            <p className="lg:hidden text-[8px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1 text-left">Remaining</p>
-                            <span className={cn('text-base lg:text-lg font-sans font-bold', group.totalRemaining > 0 ? 'text-red-500' : 'text-emerald-600')}>
-                              {formatINR(group.totalRemaining)}
-                            </span>
-                          </div>
-                          <ChevronRight className="w-5 h-5 text-muted-foreground/40 shrink-0 group-hover:text-primary transition-colors" />
-                        </div>
-                      </div>
-
-                      {latestDeal && (
-                        <div className="lg:col-span-12 text-[10px] text-muted-foreground/60">
-                          Latest: {latestDeal.siteName || 'Unknown site'} / {latestDeal.wingName ? `${latestDeal.wingName} / ` : ''}{latestDeal.floorName || (latestDeal.floorNumber !== null ? `Floor ${latestDeal.floorNumber}` : 'Floor -')} / {latestDeal.customFlatId || (latestDeal.flatNumber !== null ? `Flat ${latestDeal.flatNumber}` : 'Flat -')}
-                        </div>
-                      )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

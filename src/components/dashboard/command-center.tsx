@@ -59,7 +59,8 @@ import { ContextInsightPanel } from '@/components/dashboard/navigator/command-ce
 import { EntitySelector } from '@/components/dashboard/navigator/command-center/entity-selector';
 import { KeyList } from '@/components/dashboard/navigator/command-center/key-list';
 import { SiteQuickPickerSelector } from '@/components/dashboard/navigator/command-center/site-quick-picker-selector';
-import type { Phase } from '@/components/dashboard/navigator/command-center/types';
+import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
+import type { Phase, TransactionHistoryAction } from '@/components/dashboard/navigator/command-center/types';
 import {
   employeeStatusLabel,
   formatINR,
@@ -106,6 +107,15 @@ type NavigatorDataQueryKind =
   | 'customers'
   | 'employees'
   | 'siteCustomers';
+
+const TRANSACTION_HISTORY_ACTIONS: TransactionHistoryAction[] = [
+  'all-transactions',
+  'site-transactions',
+  'investor-transactions',
+  'vendor-transactions',
+  'customer-transactions',
+  'employee-transactions',
+];
 
 type NavigatorDataQueryConfig = {
   kind: NavigatorDataQueryKind;
@@ -2667,7 +2677,23 @@ export default function CommandCenter() {
         };
       }
 
+      if (selectedAction === 'investor-transactions') {
+        return {
+          kind: 'investors',
+          queryKey: investorKeys.list(),
+          queryFn: () => investorService.getInvestors(undefined, undefined),
+        };
+      }
+
       if (selectedCategory.id === 'vendors') {
+        return {
+          kind: 'vendors',
+          queryKey: ['vendors', undefined],
+          queryFn: () => vendorService.getVendors(undefined),
+        };
+      }
+
+      if (selectedAction === 'vendor-transactions') {
         return {
           kind: 'vendors',
           queryKey: ['vendors', undefined],
@@ -2683,7 +2709,23 @@ export default function CommandCenter() {
         };
       }
 
+      if (selectedAction === 'customer-transactions') {
+        return {
+          kind: 'customers',
+          queryKey: ['allCustomers', undefined],
+          queryFn: () => customerService.getAllCustomers(undefined),
+        };
+      }
+
       if (selectedCategory.id === 'employees') {
+        return {
+          kind: 'employees',
+          queryKey: employeeKeys.list(),
+          queryFn: () => employeeService.getEmployees(undefined),
+        };
+      }
+
+      if (selectedAction === 'employee-transactions') {
         return {
           kind: 'employees',
           queryKey: employeeKeys.list(),
@@ -2751,6 +2793,7 @@ export default function CommandCenter() {
 
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
+  const isTransactionHistoryAction = !!selectedAction && TRANSACTION_HISTORY_ACTIONS.includes(selectedAction as TransactionHistoryAction);
 
   // ──── Keyboard Navigation ────────────────────────────────────────────────
 
@@ -2801,10 +2844,10 @@ export default function CommandCenter() {
     }
 
     if (phase === 'categories' && !isInput) {
-      if (e.key === 'ArrowDown' || e.key === 'j') {
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setCatIdx((i) => Math.min(i + 1, CATEGORIES.length - 1));
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      } else if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCatIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' || e.key === ' ') {
@@ -2821,10 +2864,10 @@ export default function CommandCenter() {
         }
       }
     } else if (phase === 'actions' && !isInput) {
-      if (e.key === 'ArrowDown' || e.key === 'j') {
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setActIdx((i) => Math.min(i + 1, actions.length - 1));
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      } else if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setActIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' || e.key === ' ') {
@@ -2860,10 +2903,10 @@ export default function CommandCenter() {
       }
     } else if (phase === 'selector' && !isInput) {
       // Entity selector list nav
-      if (e.key === 'ArrowDown' || e.key === 'j') {
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setSelIdx((i) => Math.min(i + 1, selectorItems.length - 1));
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      } else if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSelIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter') {
@@ -2883,10 +2926,10 @@ export default function CommandCenter() {
         setPhase('actions');
       }
     } else if (phase === 'sub-selector' && !isInput) {
-      if (e.key === 'ArrowDown' || e.key === 'j') {
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         setSubSelIdx((i) => Math.min(i + 1, subSelectorItems.length - 1));
-      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      } else if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setSubSelIdx((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter') {
@@ -2938,7 +2981,14 @@ export default function CommandCenter() {
   // Focus container on phase change so keyboard works
   useEffect(() => {
     const isSiteSelector = phase === 'selector' && selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
-    const isDropdownEntitySelector = phase === 'selector' && (selectedCategory?.id === 'investors' || selectedCategory?.id === 'vendors' || selectedCategory?.id === 'customers');
+    const isDropdownEntitySelector = phase === 'selector' && (
+      selectedCategory?.id === 'investors'
+      || selectedCategory?.id === 'vendors'
+      || selectedCategory?.id === 'customers'
+      || selectedAction === 'investor-transactions'
+      || selectedAction === 'vendor-transactions'
+      || selectedAction === 'customer-transactions'
+    );
     if (phase !== 'form' && !isSiteSelector && !isDropdownEntitySelector) {
       containerRef.current?.focus();
     }
@@ -2978,6 +3028,16 @@ export default function CommandCenter() {
 
   function renderForm() {
     const props = { onSuccess: handleFormSuccess, onBack: handleFormBack };
+
+    if (selectedAction && TRANSACTION_HISTORY_ACTIONS.includes(selectedAction as TransactionHistoryAction)) {
+      return (
+        <TransactionHistoryView
+          action={selectedAction as TransactionHistoryAction}
+          selectedEntity={selectedEntity}
+          onBack={handleFormBack}
+        />
+      );
+    }
 
     // Actions
     if (selectedAction === 'book-flat') {
@@ -3126,15 +3186,29 @@ export default function CommandCenter() {
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground/40">
             {phase === 'categories' && 'Select a category'}
             {phase === 'actions' && `${selectedCategory.label} - select an action`}
-            {phase === 'selector' && (selectedAction === 'record-payment' ? 'Select Site' : `Select ${selectedCategory.label.slice(0, -1)}`)}
+            {phase === 'selector' && (
+              selectedAction === 'record-payment'
+                ? 'Select Site'
+                : selectedAction === 'site-transactions'
+                  ? 'Select Site'
+                  : selectedAction === 'investor-transactions'
+                    ? 'Select Investor'
+                    : selectedAction === 'vendor-transactions'
+                      ? 'Select Vendor'
+                      : selectedAction === 'customer-transactions'
+                        ? 'Select Customer'
+                        : selectedAction === 'employee-transactions'
+                          ? 'Select Employee'
+                          : `Select ${selectedCategory.label.slice(0, -1)}`
+            )}
             {phase === 'sub-selector' && 'Select Customer'}
-            {phase === 'form' && 'Fill in the details below'}
+            {phase === 'form' && (isTransactionHistoryAction ? 'Review transaction history below' : 'Fill in the details below')}
           </p>
         </div>
 
         {/* Content area */}
-        <div className="grid w-full gap-8 xl:grid-cols-[minmax(0,44rem)_minmax(0,1fr)]">
-          <div className="w-full max-w-2xl">
+        <div className={cn('grid w-full gap-8', isTransactionHistoryAction && phase === 'form' ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,44rem)_minmax(0,1fr)]')}>
+          <div className={cn('w-full', isTransactionHistoryAction && phase === 'form' ? 'max-w-none' : 'max-w-2xl')}>
 
           {/* â”€â”€ Phase: Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {phase === 'categories' && (
@@ -3293,6 +3367,14 @@ export default function CommandCenter() {
                   title={
                     selectedAction === 'record-payment'
                       ? 'Select Site for Customer Payment'
+                      : selectedAction === 'investor-transactions'
+                        ? 'Select Investor'
+                        : selectedAction === 'vendor-transactions'
+                          ? 'Select Vendor'
+                          : selectedAction === 'customer-transactions'
+                            ? 'Select Customer'
+                            : selectedAction === 'employee-transactions'
+                              ? 'Select Employee'
                       : selectedCategory.id === 'investors'
                         ? 'Select Investor'
                         : selectedCategory.id === 'vendors'
@@ -3346,14 +3428,16 @@ export default function CommandCenter() {
           )}
           </div>
 
-          <ContextInsightPanel
-            action={selectedAction}
-            site={contextSite}
-            customer={selectedSubEntity}
-            focusedFloorNumber={focusedFloorNumber}
-            focusedWingId={focusedWingId}
-            focusedVendorId={focusedVendorId}
-          />
+          {!(isTransactionHistoryAction && phase === 'form') && (
+            <ContextInsightPanel
+              action={selectedAction}
+              site={contextSite}
+              customer={selectedSubEntity}
+              focusedFloorNumber={focusedFloorNumber}
+              focusedWingId={focusedWingId}
+              focusedVendorId={focusedVendorId}
+            />
+          )}
         </div>
       </div>
   );

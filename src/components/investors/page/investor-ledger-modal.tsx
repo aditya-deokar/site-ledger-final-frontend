@@ -43,7 +43,11 @@ export function InvestorLedgerModal({
   return (
     <>
       <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-        <div className="animate-in slide-in-from-right flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl duration-200">
+        <div className="absolute inset-0" onClick={onClose} />
+        <div
+          className="animate-in slide-in-from-right relative flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl duration-200"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="flex items-start justify-between border-b border-border px-8 pb-4 pt-8">
             <div>
               <h3 className="text-2xl font-serif text-foreground">

@@ -19,3 +19,11 @@ export interface CategoryDef {
 }
 
 export type Phase = 'categories' | 'actions' | 'selector' | 'sub-selector' | 'form';
+
+export type TransactionHistoryAction =
+  | 'all-transactions'
+  | 'site-transactions'
+  | 'investor-transactions'
+  | 'vendor-transactions'
+  | 'customer-transactions'
+  | 'employee-transactions';

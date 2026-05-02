@@ -83,9 +83,9 @@ export function VendorProfile({ vendorId, vendorName, onClose }: { vendorId: str
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
         <div className="absolute inset-0" onClick={onClose} />
-        <div className="relative flex max-h-[85vh] w-full max-w-5xl flex-col border border-border bg-background shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="relative flex h-full w-full max-w-5xl flex-col border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-200">
           <div className="flex items-start justify-between border-b border-border px-8 pb-4 pt-8 shrink-0">
             <div>
               <h3 className="text-xl font-serif text-foreground">Vendor Ledger{vendorName ? `: ${vendorName}` : ""}</h3>

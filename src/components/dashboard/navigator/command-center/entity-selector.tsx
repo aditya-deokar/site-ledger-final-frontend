@@ -43,13 +43,20 @@ interface EntitySelectorProps {
 }
 
 function getEntityTitle(category: CategoryDef, item: EntityRecord) {
+  if (category.id === 'investors') {
+    const investorId = item.id ? ` · ${item.id}` : '';
+    return `${item.name || 'Untitled'}${investorId}`;
+  }
   if (category.id === 'customers') return item.name || 'Untitled';
   if (item.customFlatId || item.flatNumber) return `Flat ${item.customFlatId || item.flatNumber}`;
   return item.name || 'Untitled';
 }
 
 function getInvestorMeta(item: EntityRecord) {
-  const contact = [item.phone, item.email].filter(Boolean).join(' / ');
+  const contact = [
+    item.phone ? `Phone: ${item.phone}` : null,
+    item.email ? `Email: ${item.email}` : null,
+  ].filter(Boolean).join('  |  ');
   const typeLabel = item.type === 'FIXED_RATE' ? 'Fixed Rate' : item.type === 'EQUITY' ? 'Equity' : item.type;
   const terms = item.type === 'FIXED_RATE'
     ? (item.fixedRate !== null && item.fixedRate !== undefined
@@ -57,7 +64,10 @@ function getInvestorMeta(item: EntityRecord) {
       : null)
     : (item.equityPercentage !== null && item.equityPercentage !== undefined ? `${item.equityPercentage}% equity` : null);
 
-  return [contact, item.siteName, typeLabel, terms].filter(Boolean);
+  const siteLabel = item.siteName ? `Site: ${item.siteName}` : null;
+  const investorTypeLabel = typeLabel ? `Type: ${typeLabel}` : null;
+
+  return [contact, siteLabel, investorTypeLabel, terms].filter(Boolean);
 }
 
 function getVendorMeta(item: EntityRecord) {
@@ -98,6 +108,38 @@ function getSearchText(category: CategoryDef, item: EntityRecord) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function getEntityKeywords(category: CategoryDef, item: EntityRecord) {
+  const baseKeywords = [
+    item.id,
+    item.name,
+    item.phone,
+    item.email,
+    item.siteName,
+    item.type,
+    item.status,
+    item.address,
+    item.customFlatId,
+    item.flatNumber,
+    item.floorName,
+    item.floorNumber,
+    item.wingName,
+    item.unitType,
+    item.flatType,
+    item.dealStatus,
+  ].filter(Boolean).map((value) => String(value).toLowerCase());
+
+  if (category.id === 'investors') {
+    return [
+      ...baseKeywords,
+      String(item.fixedRate ?? ''),
+      String(item.equityPercentage ?? ''),
+      getSearchText(category, item),
+    ].filter(Boolean);
+  }
+
+  return [...baseKeywords, getSearchText(category, item)].filter(Boolean);
+}
+
 export function EntitySelector({
   category,
   action,
@@ -117,16 +159,16 @@ export function EntitySelector({
   if (loading) return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <button 
-          onClick={onBack} 
+        <button
+          onClick={onBack}
           data-navbtn="true"
-          className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group"
+          className="group flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 transition-colors hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           Back
         </button>
       </div>
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className="flex flex-col items-center justify-center gap-4 py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</p>
       </div>
@@ -134,16 +176,16 @@ export function EntitySelector({
   );
 
   if (items.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">No items found.</p>
-      <button onClick={onBack} className="text-[10px] font-bold text-primary uppercase hover:underline">Go Back</button>
+    <div className="flex flex-col items-center justify-center gap-4 py-20">
+      <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">No items found.</p>
+      <button onClick={onBack} className="text-[10px] font-bold uppercase text-primary hover:underline">Go Back</button>
     </div>
   );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <button onClick={onBack} className="flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-foreground transition-colors group">
+        <button onClick={onBack} className="group flex items-center gap-2 self-start text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 transition-colors hover:text-foreground">
           <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           Back
         </button>
@@ -151,14 +193,14 @@ export function EntitySelector({
       </div>
 
       {isDropdownSelector && (
-        <div className="border border-border bg-muted/20 p-4">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search {dropdownLabel}</p>
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search {dropdownLabel}</p>
           <SearchableSelect
             options={items.map((item) => ({
               value: item.id ?? '',
               label: getEntityTitle(category, item),
-              description: getEntityMeta(category, item).join(' - '),
-              keywords: getSearchText(category, item).split(' '),
+              description: getEntityMeta(category, item).join(' • '),
+              keywords: getEntityKeywords(category, item),
             }))}
             value=""
             onValueChange={(id) => {
@@ -166,15 +208,21 @@ export function EntitySelector({
               if (selectedItem) onSelect(selectedItem);
             }}
             placeholder={`Select ${dropdownLabel.toLowerCase()}...`}
-            searchPlaceholder={isCustomerSelector ? 'Search name, phone, site, flat, floor, unit...' : `Search name, phone, email, ${isInvestorSelector ? 'site, ' : ''}or type...`}
+            searchPlaceholder={
+              isCustomerSelector
+                ? 'Search name, phone, site, flat, floor, unit...'
+                : isInvestorSelector
+                  ? 'Search name, number, email, site, type, or ID...'
+                  : 'Search name, phone, email, site, or type...'
+            }
             emptyText={`No ${dropdownLabel.toLowerCase()} matches your search.`}
             autoFocus
           />
-          <p className="mt-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/35">
+          <p className="text-[10px] text-muted-foreground/70">
             {isInvestorSelector
-              ? 'Search by name, phone, site, type, or rate'
+              ? 'Search by name, number, email, site, type, rate, or ID'
               : isVendorSelector
-                ? 'Search by name, phone, email, or type'
+                ? 'Search by name, phone, email, site, or type'
                 : 'Search by name, phone, site, wing, floor, flat, or unit type'}
           </p>
         </div>
@@ -207,7 +255,7 @@ export function EntitySelector({
                 )}
               </div>
               {focused && (
-                <span className="text-[9px] font-bold uppercase tracking-widest text-primary animate-in fade-in duration-200">
+                <span className="animate-in fade-in text-[9px] font-bold uppercase tracking-widest text-primary duration-200">
                   Confirm Enter
                 </span>
               )}
