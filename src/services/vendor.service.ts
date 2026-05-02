@@ -22,8 +22,8 @@ export const vendorService = {
   getVendorPayments: (id: string): Promise<VendorPaymentsResponse> =>
     api.get(`/vendors/${id}/payments`),
 
-  getVendorStatement: (id: string): Promise<VendorStatementResponse> =>
-    api.get(`/vendors/${id}/statement`),
+  getVendorStatement: (id: string, page?: number, size?: number): Promise<VendorStatementResponse> =>
+    api.get(`/vendors/${id}/statement`, { params: { page, size } }),
 
   createVendor: (data: CreateVendorInput) =>
     api.post('/vendors', data),

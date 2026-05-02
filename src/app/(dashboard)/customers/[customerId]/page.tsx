@@ -78,7 +78,7 @@ export default function CustomerDetailPage() {
   }, [data, customerId])
 
   return (
-    <div className="mx-auto h-[calc(100dvh-8rem)] w-full max-w-[1680px] min-w-0 overflow-hidden animate-in fade-in duration-500">
+    <div className="w-full min-w-0 overflow-x-hidden animate-in fade-in duration-500">
       {isLoading ? (
         <DetailSkeleton />
       ) : isError ? (

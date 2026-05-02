@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
+import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Lazy load tab components
@@ -433,6 +434,97 @@ function ExistingOwnersTab({ siteId, siteName }: { siteId: string; siteName?: st
   )
 }
 // Ã¢â€â‚¬Ã¢â€â‚¬ Page Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+function SiteOverviewPanel({ site, isRedevelopment }: { site: any; isRedevelopment: boolean }) {
+  const { data: siteCustomersData } = useSiteCustomers(site.id);
+  const siteCustomers = (siteCustomersData?.data?.customers ?? []) as Array<{
+    dealStatus?: string;
+    sellingPrice?: number;
+    amountPaid?: number;
+    remaining?: number;
+  }>;
+  const createdDate = new Date(site.createdAt).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  }).toUpperCase();
+  const activeDeals = siteCustomers.filter((customer) => customer.dealStatus !== 'CANCELLED');
+  const cancelledDeals = siteCustomers.length - activeDeals.length;
+  const totalAgreementValue = activeDeals.reduce((sum, customer) => sum + (customer.sellingPrice ?? 0), 0);
+  const totalCollected = activeDeals.reduce((sum, customer) => sum + (customer.amountPaid ?? 0), 0);
+  const totalOutstanding = activeDeals.reduce((sum, customer) => sum + Math.max(customer.remaining ?? 0, 0), 0);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="border-l-4 border-primary pl-8 flex flex-col gap-8">
+        <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Structural Data</p>
+        <div className="flex flex-col gap-6">
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Site Name</p>
+            <p className="text-2xl font-serif text-foreground capitalize">{site.name}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Project Address</p>
+            <p className="text-base text-muted-foreground leading-relaxed">{site.address}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-muted p-5 flex flex-col gap-1.5">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Floors</p>
+              <p className="text-3xl font-sans font-bold text-foreground">{site.totalFloors || 0}</p>
+            </div>
+            <div className="bg-muted p-5 flex flex-col gap-1.5">
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Flats</p>
+              <p className="text-3xl font-sans font-bold text-foreground">{site.totalFlats || 0} <span className="text-sm font-sans text-muted-foreground">Units</span></p>
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Commencement Date</p>
+            <p className="text-base font-medium text-foreground">{createdDate}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-border p-6 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Deal Status</p>
+        </div>
+        <div className="flex flex-col gap-4 mt-2">
+          {[
+            { label: 'Total Customers', count: siteCustomers.length, color: 'bg-muted-foreground/20' },
+            { label: 'Active Deals', count: activeDeals.length, color: 'bg-primary' },
+            { label: 'Cancelled Deals', count: cancelledDeals, color: 'bg-red-500' },
+            ...(isRedevelopment
+              ? [
+                  { label: 'Customer Flats', count: site.flatsSummary.customerFlats ?? 0, color: 'bg-primary' },
+                  { label: 'Owner Flats', count: site.flatsSummary.ownerFlats ?? 0, color: 'bg-violet-500' },
+                ]
+              : []),
+          ].map(({ label, count, color }) => (
+            <div key={label} className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={cn('w-3 h-3 shrink-0', color)} />
+                <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground whitespace-nowrap">{label}</span>
+              </div>
+              <span className="text-3xl font-sans font-bold text-foreground">{String(count).padStart(2, '0')}</span>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3">
+          <div className="border border-border bg-muted/20 p-3">
+            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Agreement Value</p>
+            <p className="mt-1 text-lg font-sans font-bold text-foreground">₹{formatINR(totalAgreementValue)}</p>
+          </div>
+          <div className="border border-border bg-muted/20 p-3">
+            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Collected</p>
+            <p className="mt-1 text-lg font-sans font-bold text-emerald-600">₹{formatINR(totalCollected)}</p>
+          </div>
+          <div className="border border-border bg-muted/20 p-3">
+            <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50">Outstanding</p>
+            <p className="mt-1 text-lg font-sans font-bold text-red-500">₹{formatINR(totalOutstanding)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SiteDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
   const pathname = usePathname();
@@ -499,11 +591,6 @@ export default function SiteDetailPage() {
   const site = data.data.site;
   const isRedevelopment = site.projectType === 'REDEVELOPMENT';
 
-  const { flatsSummary } = site;
-  const createdDate = new Date(site.createdAt).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  }).toUpperCase();
-
   const fundStats = [
     { label: 'Partner Fund', value: site.partnerAllocatedFund },
     { label: 'Investor Fund', value: site.investorAllocatedFund },
@@ -513,9 +600,10 @@ export default function SiteDetailPage() {
     { label: 'Projected Profit', value: Number.isFinite(site.totalProfit) ? site.totalProfit : null, green: true },
   ];
 
+
   const tabs = [
     { key: 'overview', label: 'Overview' },
-    { key: 'ledger', label: 'Site Ledger' },
+    { key: 'ledger', label: 'Transaction History' },
     { key: 'expenses', label: 'Expenses' },
     { key: 'floors', label: 'Floors & Flats' },
     { key: 'investors', label: 'Investors' },
@@ -543,10 +631,19 @@ export default function SiteDetailPage() {
   return (
     <>
       <div className="flex flex-col gap-0 animate-in fade-in duration-700">
+        <div className="mb-4">
+          <Link
+            href="/sites"
+            className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/70 transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back to Sites
+          </Link>
+        </div>
 
         {/* Page title + actions */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-10">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif text-foreground tracking-tight capitalize">{site.name}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif text-foreground tracking-tight capitalize">{site.name}</h1>
           <div className="flex flex-col items-stretch gap-2 shrink-0">
             <div className="flex items-center gap-2">
               <Link
@@ -615,88 +712,16 @@ export default function SiteDetailPage() {
 
         {/* Overview tab */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-            {/* Structural Data */}
-            <div className="border-l-4 border-primary pl-8 flex flex-col gap-8">
-              <p className="text-[11px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Structural Data</p>
-              <div className="flex flex-col gap-6">
-                <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Site Name</p>
-                  <p className="text-2xl font-serif text-foreground capitalize">{site.name}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Project Address</p>
-                  <p className="text-base text-muted-foreground leading-relaxed">{site.address}</p>
-                  
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted p-5 flex flex-col gap-1.5">
-                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Floors</p>
-                    <p className="text-3xl font-sans font-bold text-foreground">
-                      {/* G + {site.totalFloors - 1 > 0 ? site.totalFloors - 1 : site.totalFloors} */}
-                      {site.totalFloors || 0}
-                    </p>
-                  </div>
-                  <div className="bg-muted p-5 flex flex-col gap-1.5">
-                    <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Flats</p>
-                    <p className="text-3xl font-sans font-bold text-foreground">{site.totalFlats || 0} <span className="text-sm font-sans text-muted-foreground">Units</span></p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/40 mb-1.5">Commencement Date</p>
-                  <p className="text-base font-medium text-foreground">{createdDate}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Inventory Status */}
-            <div className="border border-border p-6 flex flex-col gap-6">
-              <div className="flex items-center justify-between">
-                <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Inventory Status</p>
-                <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-bold tracking-widest uppercase">
-                  Real-Time
-                </span>
-              </div>
-
-              <InventoryBar
-                available={flatsSummary.available}
-                booked={flatsSummary.booked}
-                sold={flatsSummary.sold}
-                total={site.totalFlats || 0}
-              />
-
-              <div className="flex flex-col gap-4 mt-2">
-                {[
-                  { label: 'Available Units', count: flatsSummary.available, color: 'bg-muted-foreground/20' },
-                  { label: 'Booked (Pending)', count: flatsSummary.booked, color: 'bg-amber-500' },
-                  { label: 'Sold & Registered', count: flatsSummary.sold, color: 'bg-primary' },
-                  ...(isRedevelopment
-                    ? [
-                        { label: 'Customer Flats', count: flatsSummary.customerFlats ?? 0, color: 'bg-primary' },
-                        { label: 'Owner Flats', count: flatsSummary.ownerFlats ?? 0, color: 'bg-violet-500' },
-                      ]
-                    : []),
-                ].map(({ label, count, color }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={cn('w-3 h-3 shrink-0', color)} />
-                      <span className="text-xs font-bold tracking-widest uppercase text-muted-foreground whitespace-nowrap">{label}</span>
-                    </div>
-                    <span className="text-3xl font-sans font-bold text-foreground">{String(count).padStart(2, '0')}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-
-
-          </div>
+          <SiteOverviewPanel site={site} isRedevelopment={isRedevelopment} />
         )}
 
         {activeTab === 'ledger' && (
           <Suspense fallback={<TabContentLoadingFallback />}>
-            <FundHistoryPanel siteId={site.id} />
+            <TransactionHistoryView
+              action="site-transactions"
+              selectedEntity={{ id: site.id, name: site.name }}
+              onBack={() => handleTabChange('overview')}
+            />
           </Suspense>
         )}
 
@@ -731,3 +756,4 @@ export default function SiteDetailPage() {
     </>
   );
 }
+

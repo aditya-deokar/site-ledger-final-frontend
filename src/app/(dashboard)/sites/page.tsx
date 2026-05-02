@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { useCallback, useMemo, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import Link from 'next/link';
 import { useQueries } from '@tanstack/react-query';
 import {
@@ -11,6 +11,7 @@ import {
   Banknote,
   Building2,
   CalendarDays,
+  Filter,
   Grid3x3,
   Layers,
   Loader2,
@@ -44,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { cn } from '@/lib/utils';
@@ -52,6 +54,7 @@ type ViewMode = 'active' | 'closed';
 type ProjectFilter = 'all' | 'NEW_CONSTRUCTION' | 'REDEVELOPMENT';
 type InventoryFilter = 'all' | 'HAS_AVAILABLE' | 'HAS_BOOKED' | 'SOLD_OUT';
 type FundFilter = 'all' | 'POSITIVE' | 'DEPLETED';
+const SITES_BATCH_SIZE = 8;
 
 function formatINR(n: number) {
   return '\u20B9' + n.toLocaleString('en-IN');
@@ -211,11 +214,11 @@ const SiteCard = memo(function SiteCard({ site, wings }: { site: Site; wings: Wi
   return (
     <>
       <div className="bg-card border border-border shadow-sm flex flex-col h-full">
-        <div className="px-6 pt-6 pb-4 border-b border-border">
+        <div className="px-4 pt-4 pb-3 border-b border-border">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h3 className="text-2xl font-serif tracking-tight text-foreground">{site.name}</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-serif tracking-tight text-foreground truncate">{site.name}</h3>
                 <span className={cn(
                   'px-2 py-0.5 text-[9px] font-bold tracking-widest uppercase',
                   site.isActive
@@ -230,10 +233,8 @@ const SiteCard = memo(function SiteCard({ site, wings }: { site: Site; wings: Wi
                   </span>
                 )}
               </div>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 mt-1.5">
-                Slug: {site.slug}
-              </p>
-              <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/50 mt-1.5 flex items-center gap-1.5">
+              <p className="mt-1 text-sm text-muted-foreground truncate">{site.address || 'No address added'}</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50 mt-1.5 flex items-center gap-1.5">
                 <CalendarDays className="w-3 h-3" />
                 Created {formatDate(site.createdAt)}
               </p>
@@ -267,100 +268,36 @@ const SiteCard = memo(function SiteCard({ site, wings }: { site: Site; wings: Wi
           </div>
         </div>
 
-        <div className="px-6 py-3 border-b border-border bg-muted/20">
-          <div className="flex items-start gap-2">
-            <Building2 className="w-3.5 h-3.5 mt-0.5 text-muted-foreground/60 shrink-0" />
-            {wings.length > 0 ? (
-              <div className="min-w-0 space-y-1">
-                <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">
-                  {wings.length} Wing{wings.length === 1 ? '' : 's'}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {wings.slice(0, 4).map((wing) => (
-                    <span key={wing.id} className="px-2 py-0.5 text-[10px] font-bold tracking-widest uppercase bg-background border border-border text-foreground/80">
-                      {wing.name} · {wing.floorsCount}F
-                    </span>
-                  ))}
-                  {wings.length > 4 && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold tracking-widest uppercase bg-background border border-border text-muted-foreground">
-                      +{wings.length - 4} More
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">
-                Single Block Configuration
-              </p>
-            )}
+        <div className="px-4 py-2 border-b border-border bg-muted/20">
+          <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">
+            {wings.length > 0 ? `${wings.length} Wing${wings.length === 1 ? '' : 's'}` : 'Single Block'} · {site.totalFloors || 0} Floors
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border border-b border-border">
+          <div className="px-4 py-3 flex flex-col gap-1">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/55">Total Flats</span>
+            <p className="text-xl font-sans font-bold tracking-tight">{String(site.totalFlats || 0).padStart(2, '0')}</p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-1">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/55">Available</span>
+            <p className="text-xl font-sans font-bold tracking-tight">{String(available || 0).padStart(2, '0')}</p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-1">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/55">Sold</span>
+            <p className="text-xl font-sans font-bold tracking-tight">{String(sold || 0).padStart(2, '0')}</p>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-1">
+            <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/55">Balance</span>
+            <p className="text-lg font-sans font-bold tracking-tight text-primary">{formatINR(site.remainingFund)}</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 divide-x divide-y divide-border border-b border-border">
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Building2 className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Wings</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(wings.length || 1).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Layers className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Total Floors</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(site.totalFloors || 0).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Grid3x3 className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Available</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(available || 0).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Grid3x3 className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Booked</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(booked || 0).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Grid3x3 className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Sold</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(sold || 0).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Grid3x3 className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Total Flats</span>
-            </div>
-            <p className="text-3xl font-sans font-bold tracking-tight">{String(site.totalFlats || 0).padStart(2, '0')}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Banknote className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Allocated Fund</span>
-            </div>
-            <p className="text-2xl font-sans font-bold tracking-tight">{formatINR(site.allocatedFund)}</p>
-          </div>
-          <div className="px-6 py-4 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Wallet className="w-3 h-3" />
-              <span className="text-xs font-bold tracking-widest uppercase">Site Balance</span>
-            </div>
-            <p className="text-2xl font-sans font-bold tracking-tight text-primary">{formatINR(site.remainingFund)}</p>
-          </div>
-        </div>
-
-        <div className="px-6 py-3 flex items-center justify-between gap-2">
+        <div className="px-4 py-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <FlatChip count={available} label="Available" color="text-foreground bg-muted" />
             <FlatChip count={booked} label="Booked" color="text-amber-600 bg-amber-500/10" />
             <FlatChip count={sold} label="Sold" color="text-emerald-600 bg-emerald-500/10" />
-            <FlatChip count={site.totalFlats ?? 0} label="Total" color="text-primary bg-primary/10" />
           </div>
           <Link
             href={`/sites/${site.id}`}
@@ -375,7 +312,6 @@ const SiteCard = memo(function SiteCard({ site, wings }: { site: Site; wings: Wi
     </>
   );
 });
-
 export default function SitesPage() {
   const [view, setView] = useState<ViewMode>('active');
   const [createOpen, setCreateOpen] = useState(false);
@@ -385,6 +321,9 @@ export default function SitesPage() {
   const [fundFilter, setFundFilter] = useState<FundFilter>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(SITES_BATCH_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const setViewMode = useCallback((v: ViewMode) => setView(v), []);
   const showArchived = view === 'closed' ? 'only' as const : undefined;
@@ -472,6 +411,33 @@ export default function SitesPage() {
     setDateTo('');
   }, []);
 
+  useEffect(() => {
+    setVisibleCount(SITES_BATCH_SIZE);
+  }, [search, projectFilter, inventoryFilter, fundFilter, dateFrom, dateTo, view]);
+
+  const hasMoreSites = filteredSites.length > visibleCount;
+  const visibleSites = useMemo(
+    () => filteredSites.slice(0, visibleCount),
+    [filteredSites, visibleCount],
+  );
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMoreSites) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setVisibleCount((current) => Math.min(current + SITES_BATCH_SIZE, filteredSites.length));
+      },
+      { root: null, rootMargin: '240px 0px', threshold: 0 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreSites, filteredSites.length]);
+
   if (isLoading) {
     return <SitesSkeleton />;
   }
@@ -518,100 +484,39 @@ export default function SitesPage() {
           </div>
         </div>
 
-        <div className="border border-border p-4 sm:p-5 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            <div className="relative lg:col-span-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by site, slug, or address..."
-                className="pl-10 h-10 bg-muted border-none rounded-none text-sm"
-              />
-              {search && (
-                <button
-                  type="button"
-                  aria-label="Clear site search"
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            <select
-              value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value as ProjectFilter)}
-              className="lg:col-span-2 h-10 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest uppercase"
-            >
-              <option value="all">All Projects</option>
-              <option value="NEW_CONSTRUCTION">New Construction</option>
-              <option value="REDEVELOPMENT">Redevelopment</option>
-            </select>
-
-            <select
-              value={inventoryFilter}
-              onChange={(event) => setInventoryFilter(event.target.value as InventoryFilter)}
-              className="lg:col-span-2 h-10 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest uppercase"
-            >
-              <option value="all">All Inventory</option>
-              <option value="HAS_AVAILABLE">Has Available</option>
-              <option value="HAS_BOOKED">Has Booked</option>
-              <option value="SOLD_OUT">Sold Out</option>
-            </select>
-
-            <select
-              value={fundFilter}
-              onChange={(event) => setFundFilter(event.target.value as FundFilter)}
-              className="lg:col-span-2 h-10 bg-muted border-none text-[10px] px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest uppercase"
-            >
-              <option value="all">All Funds</option>
-              <option value="POSITIVE">Balance &gt; 0</option>
-              <option value="DEPLETED">Balance 0</option>
-            </select>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={resetFilters}
-              disabled={!hasFilters}
-              className="lg:col-span-2 h-10 rounded-none text-[10px] font-bold tracking-widest uppercase"
-            >
-              Clear Filters
-            </Button>
+        <div className="flex w-full gap-2 lg:w-auto">
+          <div className="relative w-full lg:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by site, slug, or address..."
+              className="pl-10 pr-10 h-10 bg-background border-border rounded-none text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear site search"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">Created From</span>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => setDateFrom(event.target.value)}
-                className="h-10 bg-muted border-none rounded-none text-sm"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/60">Created To</span>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(event) => setDateTo(event.target.value)}
-                className="h-10 bg-muted border-none rounded-none text-sm"
-              />
-            </label>
-            <div className="sm:col-span-2 flex flex-wrap items-center gap-2 pb-1">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                Showing {filteredSites.length} of {sites.length} sites
-              </span>
-              {hasFilters && (
-                <span className="px-2 py-1 text-[10px] font-bold tracking-widest uppercase bg-primary/10 text-primary">
-                  Filters Active
-                </span>
-              )}
-            </div>
-          </div>
+          <Button variant="outline" onClick={() => setFilterOpen(true)} className="h-10 rounded-none px-3">
+            <Filter className="mr-2 h-4 w-4" /> Filters
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+            Showing {visibleSites.length} of {filteredSites.length} sites
+          </span>
+          {hasFilters && (
+            <span className="px-2 py-1 text-[10px] font-bold tracking-widest uppercase bg-primary/10 text-primary">
+              Filters Active
+            </span>
+          )}
         </div>
 
         {filteredSites.length === 0 ? (
@@ -637,7 +542,7 @@ export default function SitesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredSites.map((site) => (
+            {visibleSites.map((site) => (
               <SiteCard 
                 key={site.id} 
                 site={site} 
@@ -646,9 +551,94 @@ export default function SitesPage() {
             ))}
           </div>
         )}
+        {filteredSites.length > 0 && (
+          <div ref={loadMoreRef} className="flex min-h-10 items-center justify-center">
+            {hasMoreSites ? (
+              <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading more sites...
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+                End of sites
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">
+          <DialogHeader><DialogTitle>Filter Sites</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Project Type</p>
+              <select
+                value={projectFilter}
+                onChange={(event) => setProjectFilter(event.target.value as ProjectFilter)}
+                className="mt-2 h-10 w-full border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All Projects</option>
+                <option value="NEW_CONSTRUCTION">New Construction</option>
+                <option value="REDEVELOPMENT">Redevelopment</option>
+              </select>
+            </div>
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Inventory</p>
+              <select
+                value={inventoryFilter}
+                onChange={(event) => setInventoryFilter(event.target.value as InventoryFilter)}
+                className="mt-2 h-10 w-full border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All Inventory</option>
+                <option value="HAS_AVAILABLE">Has Available</option>
+                <option value="HAS_BOOKED">Has Booked</option>
+                <option value="SOLD_OUT">Sold Out</option>
+              </select>
+            </div>
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Fund Balance</p>
+              <select
+                value={fundFilter}
+                onChange={(event) => setFundFilter(event.target.value as FundFilter)}
+                className="mt-2 h-10 w-full border border-border bg-background px-2 text-sm"
+              >
+                <option value="all">All Funds</option>
+                <option value="POSITIVE">Balance &gt; 0</option>
+                <option value="DEPLETED">Balance 0</option>
+              </select>
+            </div>
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Created From</p>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => setDateFrom(event.target.value)}
+                className="mt-2 h-10 rounded-none border-border bg-background text-sm"
+              />
+            </div>
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Created To</p>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(event) => setDateTo(event.target.value)}
+                className="mt-2 h-10 rounded-none border-border bg-background text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={resetFilters} disabled={!hasFilters}>
+              Reset
+            </Button>
+            <Button onClick={() => setFilterOpen(false)}>Apply</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <CreateSiteDrawer open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }
+
+

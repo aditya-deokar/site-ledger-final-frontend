@@ -26,8 +26,8 @@ export const customerService = {
   recordPayment: (customerId: string, data: RecordPaymentInput) =>
     api.patch(`/customers/${customerId}/payment`, data),
 
-  getPayments: (customerId: string): Promise<CustomerPaymentsResponse> =>
-    api.get(`/customers/${customerId}/payments`),
+  getPayments: (customerId: string, page?: number, size?: number): Promise<CustomerPaymentsResponse> =>
+    api.get(`/customers/${customerId}/payments`, { params: { page, size } }),
 
   getAgreement: (customerId: string): Promise<CustomerAgreementResponse> =>
     api.get(`/customers/${customerId}/agreement`),
@@ -43,4 +43,7 @@ export const customerService = {
 
   cancelDeal: (siteId: string, flatId: string, customerId: string, data: CancelDealInput) =>
     api.patch(`/sites/${siteId}/flats/${flatId}/customer/${customerId}/cancel`, data),
+
+  deleteCustomer: (customerId: string) =>
+    api.delete(`/customers/${customerId}`),
 };

@@ -27,6 +27,7 @@ import {
 import { createFlatSchema } from "@/schemas/site.schema"
 import {
   useCancelDeal,
+  useDeleteCustomer,
   useCustomerAgreement,
   useRecordCustomerPayment,
   useUpdateCustomer,
@@ -438,7 +439,8 @@ function CustomerFlatsCard({
         <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/60">{deals.length} Deals</span>
       </div>
 
-      <table className="w-full table-fixed text-left">
+      <div className="w-full overflow-x-auto">
+      <table className="min-w-[880px] w-full table-fixed text-left">
         <thead className="border-b border-border bg-muted/30">
           <tr className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground">
             <th className="w-[17%] px-3 py-3">Site</th>
@@ -461,8 +463,8 @@ function CustomerFlatsCard({
                 key={deal.id}
                 onClick={() => onSelect(deal.id)}
                 className={cn(
-                  "cursor-pointer border-b border-border/60 align-top transition-colors hover:bg-muted/20 text-[13px]",
-                  selectedCustomerId === deal.id && "bg-primary/5",
+                  "cursor-pointer border-b border-border/60 align-top text-[13px] transition-colors hover:bg-primary/10 hover:outline hover:outline-1 hover:outline-primary/30",
+                  selectedCustomerId === deal.id && "bg-primary/10 outline outline-1 outline-primary/30",
                 )}
               >
                 <td className="align-top px-3 py-3">
@@ -492,6 +494,7 @@ function CustomerFlatsCard({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
@@ -504,7 +507,8 @@ function CustomerLedgerTable({
   density: DetailDensityMode
 }) {
   return (
-    <table className="w-full table-fixed text-left">
+    <div className="w-full overflow-x-auto">
+    <table className="min-w-[860px] w-full table-fixed text-left">
       <thead className="border-b border-border bg-muted/30">
         <tr className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground">
           <th className="w-[12%] px-3 py-3">Date</th>
@@ -544,6 +548,7 @@ function CustomerLedgerTable({
         })}
       </tbody>
     </table>
+    </div>
   )
 }
 
@@ -568,12 +573,14 @@ export function CustomerDetailPageContent({
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [paymentPickerOpen, setPaymentPickerOpen] = useState(false)
   const [isDownloadingReceipt, setIsDownloadingReceipt] = useState(false)
   const [isDownloadingStatement, setIsDownloadingStatement] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [paymentTargetCustomerId, setPaymentTargetCustomerId] = useState<string | null>(null)
+  const [deleteTargetCustomerId, setDeleteTargetCustomerId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"flats" | "transactions">("flats")
 
   const density: DetailDensityMode = "comfortable"
@@ -588,6 +595,12 @@ export function CustomerDetailPageContent({
   const { mutate: recordPayment, isPending: isPaying } = useRecordCustomerPayment({
     onSuccess: () => {
       setIsPaymentModalOpen(false)
+    },
+  })
+  const { mutate: deleteCustomer, isPending: isDeletingCustomer } = useDeleteCustomer({
+    onSuccess: () => {
+      setDeleteOpen(false)
+      router.push("/customers")
     },
   })
   const { data: agreementData, isLoading: isAgreementLoading, isError: isAgreementError, error: agreementError } = useCustomerAgreement(activeDeal.id)
@@ -624,6 +637,8 @@ export function CustomerDetailPageContent({
   const statusBadgeLabel = isCancelled ? "CANCELLED" : (activeDeal.flatStatus ?? "ACTIVE")
   const canEdit = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
   const canCancel = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
+  const canDelete = Boolean(selectedDeal)
+  const canDownloadDocs = Boolean(selectedDeal && selectedDeal.siteId)
 
   const payableDeals = useMemo(
     () =>
@@ -649,7 +664,13 @@ export function CustomerDetailPageContent({
   ].filter(Boolean) as string[]
 
   useEffect(() => {
-    if ((initialAction === "edit" || initialAction === "cancel") && !selectedCustomerId && customerDeals.length > 0) {
+    if (customerDeals.length === 1 && !selectedCustomerId) {
+      setSelectedCustomerId(customerDeals[0].id)
+    }
+  }, [customerDeals, selectedCustomerId])
+
+  useEffect(() => {
+    if ((initialAction === "edit" || initialAction === "cancel" || initialAction === "delete") && !selectedCustomerId && customerDeals.length > 0) {
       setSelectedCustomerId(customerDeals[0].id)
     }
     if (initialAction === "edit" && canEdit) {
@@ -658,7 +679,11 @@ export function CustomerDetailPageContent({
     if (initialAction === "cancel" && canCancel) {
       setCancelOpen(true)
     }
-  }, [initialAction, canEdit, canCancel, customerDeals, selectedCustomerId])
+    if (initialAction === "delete" && canDelete) {
+      setDeleteTargetCustomerId(activeDeal.id)
+      setDeleteOpen(true)
+    }
+  }, [initialAction, canEdit, canCancel, canDelete, customerDeals, selectedCustomerId, activeDeal.id])
 
   const handleDownloadReceipt = async () => {
     const latestPayment = receiptPayments[0]
@@ -730,11 +755,11 @@ export function CustomerDetailPageContent({
   }
 
   return (
-    <div className="h-full min-h-0 w-full overflow-hidden">
-      <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3 overflow-hidden">
+    <div className="h-full min-h-0 w-full overflow-x-hidden">
+      <div className="grid h-full min-h-0 grid-rows-[auto_auto_1fr] gap-3 overflow-x-hidden">
         <div className="border border-border bg-background px-3 py-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Link
                 href="/customers"
                 className={cn(
@@ -760,30 +785,34 @@ export function CustomerDetailPageContent({
               >
                 {statusBadgeLabel}
               </span>
-              <span className="min-w-0 truncate text-base text-muted-foreground/85">
+              <span className="min-w-0 break-words text-sm text-muted-foreground/85">
                 {customer.phone || "No phone"} {customer.email ? `• ${customer.email}` : ""} • {customerDeals.length} flats
               </span>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handleDownloadReceipt}
-                disabled={isDownloadingReceipt || receiptPayments.length === 0}
-                className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]"
-              >
-                {isDownloadingReceipt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Receipt
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleDownloadStatement}
-                disabled={isDownloadingStatement}
-                className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]"
-              >
-                {isDownloadingStatement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Statement
-              </Button>
+            <div className="flex max-w-full flex-wrap items-center gap-2 lg:justify-end">
+              {canDownloadDocs ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadReceipt}
+                    disabled={isDownloadingReceipt || receiptPayments.length === 0}
+                    className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]"
+                  >
+                    {isDownloadingReceipt ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Receipt
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadStatement}
+                    disabled={isDownloadingStatement}
+                    className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]"
+                  >
+                    {isDownloadingStatement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Statement
+                  </Button>
+                </>
+              ) : null}
               {canAddPayment ? (
                 <Button onClick={openPaymentFlow} className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]">
                   <IndianRupee className="h-3.5 w-3.5" />
@@ -808,6 +837,19 @@ export function CustomerDetailPageContent({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Cancel
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeleteTargetCustomerId(activeDeal.id)
+                    setDeleteOpen(true)
+                  }}
+                  className="h-8 gap-1.5 rounded-none border-red-500/30 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-red-500 hover:bg-red-500/5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
                 </Button>
               ) : null}
             </div>
@@ -864,7 +906,7 @@ export function CustomerDetailPageContent({
             <div className="flex min-h-0 flex-col gap-2">
               {selectedDeal ? (
                 <>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <KpiBox density={density} label="Agreement Total" value={formatINR(agreementTotal)} />
                     <KpiBox density={density} label="Total Paid" tone="success" value={formatINR(collectedAmount)} />
                     <KpiBox
@@ -903,7 +945,7 @@ export function CustomerDetailPageContent({
             </div>
           </div>
         ) : (
-          <div className="border border-border bg-background p-3">
+          <div className="border border-border bg-background p-3 overflow-x-auto">
             {orderedPaymentHistory.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">No transactions found for this customer.</div>
             ) : (
@@ -984,6 +1026,56 @@ export function CustomerDetailPageContent({
                 className="h-10 rounded-none text-[9px] font-bold uppercase tracking-widest"
               >
                 Continue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-h-[min(90vh,90vh)] max-w-2xl overflow-y-auto rounded-none border-border p-0">
+          <DialogHeader className="border-b border-border px-8 py-6">
+            <DialogTitle className="text-2xl font-serif tracking-tight">Delete customer record</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 px-8 py-6">
+            <p className="text-sm text-muted-foreground">
+              Delete removes a customer record permanently. For booking reversal, prefer <span className="font-semibold text-foreground">Cancel Deal</span>.
+            </p>
+            {customerDeals.length > 1 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">Select flat/customer record to delete</p>
+                {customerDeals.map((deal) => (
+                  <button
+                    key={deal.id}
+                    type="button"
+                    onClick={() => setDeleteTargetCustomerId(deal.id)}
+                    className={cn(
+                      "w-full border px-4 py-3 text-left transition-colors",
+                      deleteTargetCustomerId === deal.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/20",
+                    )}
+                  >
+                    <p className="text-sm font-semibold">{getDealLocationLabel(deal)}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Paid {formatINR(deal.amountPaid)} / Remaining {formatINR(deal.remaining)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDeleteOpen(false)} className="h-10 rounded-none text-[9px] font-bold uppercase tracking-widest">
+                Keep
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (!deleteTargetCustomerId) return
+                  deleteCustomer(deleteTargetCustomerId)
+                }}
+                disabled={!deleteTargetCustomerId || isDeletingCustomer}
+                className="h-10 rounded-none text-[9px] font-bold uppercase tracking-widest"
+              >
+                {isDeletingCustomer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
               </Button>
             </div>
           </div>

@@ -140,7 +140,10 @@ export interface CustomerPaymentHistoryItem {
 
 export interface CustomerPaymentsResponse {
   ok: boolean;
-  data: { payments: CustomerPaymentHistoryItem[] };
+  data: { 
+    payments: CustomerPaymentHistoryItem[];
+    summary?: { totalCollected: number; totalRefunded: number; netAmount: number; };
+  };
 }
 
 export interface CustomerAgreementLine {

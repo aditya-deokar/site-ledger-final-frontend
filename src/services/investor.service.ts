@@ -36,8 +36,8 @@ export const investorService = {
     api.get(`/sites/${siteId}/investors`),
 
   // Transactions
-  getTransactions: (investorId: string): Promise<TransactionsResponse> =>
-    api.get(`/investors/${investorId}/transactions`),
+  getTransactions: (investorId: string, page?: number, size?: number): Promise<TransactionsResponse> =>
+    api.get(`/investors/${investorId}/transactions`, { params: { page, size } }),
 
   addTransaction: (investorId: string, data: TransactionInput) =>
     api.post(`/investors/${investorId}/transactions`, data),

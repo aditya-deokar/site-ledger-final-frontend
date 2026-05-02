@@ -275,7 +275,6 @@ function VendorsHistoryView({
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedKinds, setSelectedKinds] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedModes, setSelectedModes] = useState<string[]>([]);
   const [datePreset, setDatePreset] = useState<DatePreset>('ALL');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -343,7 +342,6 @@ function VendorsHistoryView({
       if (selectedTypes.length && !selectedTypes.includes(row.vendorType)) return false;
       if (selectedKinds.length && !selectedKinds.includes(row.transactionKind)) return false;
       if (selectedStatuses.length && !selectedStatuses.includes(row.paymentStatus)) return false;
-      if (selectedModes.length && !selectedModes.includes('N/A')) return false;
       if (referencePresence === 'HAS_REF' && !row.referenceId) return false;
       if (referencePresence === 'MISSING_REF' && row.referenceId) return false;
       if (min !== undefined && row.amount < min) return false;
@@ -366,7 +364,7 @@ function VendorsHistoryView({
       ].filter(Boolean).join(' ').toLowerCase();
       return searchable.includes(searchText);
     });
-  }, [rows, search, selectedVendorIds, selectedSites, selectedTypes, selectedKinds, selectedStatuses, selectedModes, datePreset, customFrom, customTo, minAmount, maxAmount, referencePresence]);
+  }, [rows, search, selectedVendorIds, selectedSites, selectedTypes, selectedKinds, selectedStatuses, datePreset, customFrom, customTo, minAmount, maxAmount, referencePresence]);
 
   const sorted = useMemo(() => {
     const data = [...filtered];
@@ -436,7 +434,7 @@ function VendorsHistoryView({
     const targetRow = payRow;
     setIsPaying(true);
     try {
-      await siteService.updateExpensePayment(targetRow.siteId, targetRow.expenseId, {
+      await siteService.updateExpensePayment(targetRow.siteId!, targetRow.expenseId!, {
         amount: payment.amount,
         note: payment.note,
       });
@@ -551,26 +549,28 @@ function VendorsHistoryView({
                             setPayRow(row);
                           }}
                           className={cn(
-                            'inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors',
+                            'inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-bold transition-colors',
                             row.paymentStatus === 'PARTIAL'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20'
                               : row.paymentStatus === 'OVERDUE'
-                                ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                                : 'border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100',
+                                ? 'border-red-500/20 bg-red-500/10 text-red-600 hover:bg-red-500/20'
+                                : 'border-red-500/20 bg-red-500/10 text-red-600 hover:bg-red-500/20',
                           )}
+                          title="View and record payment"
                         >
+                          <Eye className="h-3.5 w-3.5" />
                           {row.paymentStatus}
                         </button>
                       ) : (
                         <span className={cn(
-                          'inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider',
+                          'border px-2 py-1 text-[10px] font-bold',
                           row.paymentStatus === 'PAID'
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            ? 'border-green-500/20 bg-green-500/10 text-green-600'
                             : row.paymentStatus === 'PARTIAL'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600'
                               : row.paymentStatus === 'OVERDUE'
-                                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                : 'border-yellow-200 bg-yellow-50 text-yellow-700',
+                                ? 'border-red-500/20 bg-red-500/10 text-red-600'
+                                : 'border-red-500/20 bg-red-500/10 text-red-600',
                         )}>
                           {row.paymentStatus}
                         </span>
@@ -587,9 +587,9 @@ function VendorsHistoryView({
       </div>
 
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
-        <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto rounded-none">
+        <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">
           <DialogHeader><DialogTitle>Filter Vendor Transactions</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4">
             <FilterSection title="Vendor">
               <MultiSelectDropdownField values={vendors.map((v) => ({ value: v.id, label: v.name }))} selected={selectedVendorIds} onChange={setSelectedVendorIds} placeholder="Select vendor(s)" />
             </FilterSection>
@@ -604,9 +604,6 @@ function VendorsHistoryView({
             </FilterSection>
             <FilterSection title="Payment Status">
               <MultiSelectDropdownField values={[{ value: 'PAID', label: 'Paid' }, { value: 'PARTIAL', label: 'Partial' }, { value: 'PENDING', label: 'Pending' }, { value: 'OVERDUE', label: 'Overdue' }]} selected={selectedStatuses} onChange={setSelectedStatuses} placeholder="Select status(es)" />
-            </FilterSection>
-            <FilterSection title="Payment Mode">
-              <MultiSelectDropdownField values={[{ value: 'N/A', label: 'N/A' }]} selected={selectedModes} onChange={setSelectedModes} placeholder="Select mode(s)" />
             </FilterSection>
             <FilterSection title="Date Range">
               <select value={datePreset} onChange={(e) => setDatePreset(e.target.value as DatePreset)} className="mt-1 h-10 w-full border border-border bg-background px-2 text-sm">
@@ -640,7 +637,6 @@ function VendorsHistoryView({
               setSelectedTypes([]);
               setSelectedKinds([]);
               setSelectedStatuses([]);
-              setSelectedModes([]);
               setDatePreset('ALL');
               setCustomFrom('');
               setCustomTo('');
@@ -741,6 +737,8 @@ function MultiSelectDropdownField({
 export default function VendorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
+  const [listFilterOpen, setListFilterOpen] = useState(false);
+  const [contactFilter, setContactFilter] = useState<'ALL' | 'HAS_PHONE' | 'HAS_EMAIL' | 'HAS_ANY' | 'NO_CONTACT'>('ALL');
   const { data, isLoading } = useVendors();
   const [addOpen, setAddOpen] = useState(false);
   const [editVendor, setEditVendor] = useState<Vendor | null>(null);
@@ -791,6 +789,12 @@ export default function VendorsPage() {
       }
 
       const displayId = getVendorDisplayId(vendor.id).toLowerCase();
+      const hasPhone = Boolean(vendor.phone?.trim());
+      const hasEmail = Boolean(vendor.email?.trim());
+      if (contactFilter === 'HAS_PHONE' && !hasPhone) return false;
+      if (contactFilter === 'HAS_EMAIL' && !hasEmail) return false;
+      if (contactFilter === 'HAS_ANY' && !(hasPhone || hasEmail)) return false;
+      if (contactFilter === 'NO_CONTACT' && (hasPhone || hasEmail)) return false;
       const searchableText = [
         vendor.name,
         vendor.id,
@@ -805,7 +809,7 @@ export default function VendorsPage() {
 
       return searchableText.includes(normalizedSearchQuery);
     });
-  }, [allVendors, searchQuery, typeFilter]);
+  }, [allVendors, searchQuery, typeFilter, contactFilter]);
 
   const hasActiveFilters = Boolean(typeFilter || searchQuery.trim());
   return (
@@ -813,12 +817,22 @@ export default function VendorsPage() {
       <div className="space-y-8 animate-in fade-in duration-700">
 
         {!showHistory && (
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Vendors</h1>
-              <p className="mt-2 text-base text-muted-foreground italic">
-                Manage your company-wide vendor registry.
-              </p>
+          <div className="space-y-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Vendors</h1>
+                <p className="mt-2 text-base text-muted-foreground italic">
+                  Manage your company-wide vendor registry.
+                </p>
+              </div>
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-end lg:w-auto">
+                <Button
+                  onClick={handleOpenAdd}
+                  className="h-11 rounded-none px-5 text-sm font-semibold gap-2 whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" /> Add Vendor
+                </Button>
+              </div>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
               <div className="relative flex-1 lg:w-80">
@@ -840,15 +854,54 @@ export default function VendorsPage() {
                   </button>
                 )}
               </div>
-              <Button
-                onClick={handleOpenAdd}
-                className="h-11 rounded-none px-5 text-sm font-semibold gap-2 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4" /> Add Vendor
+              <Button variant="outline" onClick={() => setListFilterOpen(true)} className="h-11 rounded-none px-3">
+                <Filter className="mr-2 h-4 w-4" /> Filters
               </Button>
             </div>
           </div>
         )}
+
+        <Dialog open={listFilterOpen} onOpenChange={setListFilterOpen}>
+          <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">
+            <DialogHeader><DialogTitle>Filter Vendors</DialogTitle></DialogHeader>
+            <div className="grid grid-cols-1 gap-4">
+              <FilterSection title="Vendor Type">
+                <select
+                  value={typeFilter ?? ''}
+                  onChange={(e) => handleSetType(e.target.value || undefined)}
+                  className="mt-1 h-10 w-full border border-border bg-background px-2 text-sm"
+                >
+                  <option value="">All</option>
+                  {tabs.filter((t) => t.key).map((t) => (
+                    <option key={t.key} value={t.key}>{t.label}</option>
+                  ))}
+                </select>
+              </FilterSection>
+              <FilterSection title="Contact Presence">
+                <select
+                  value={contactFilter}
+                  onChange={(e) => setContactFilter(e.target.value as 'ALL' | 'HAS_PHONE' | 'HAS_EMAIL' | 'HAS_ANY' | 'NO_CONTACT')}
+                  className="mt-1 h-10 w-full border border-border bg-background px-2 text-sm"
+                >
+                  <option value="ALL">All</option>
+                  <option value="HAS_PHONE">Has phone</option>
+                  <option value="HAS_EMAIL">Has email</option>
+                  <option value="HAS_ANY">Has any contact</option>
+                  <option value="NO_CONTACT">No contact</option>
+                </select>
+              </FilterSection>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => {
+                handleSetType(undefined);
+                setContactFilter('ALL');
+              }}>
+                Reset
+              </Button>
+              <Button onClick={() => setListFilterOpen(false)}>Apply</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {showHistory ? (
           <VendorsHistoryView

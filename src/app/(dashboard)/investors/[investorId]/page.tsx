@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Loader2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Eye, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +12,14 @@ import { useInvestor } from '@/hooks/api/investor.hooks';
 import { useInvestorLedger } from '@/components/investors/page/use-investor-ledger';
 import { formatFixedRateTerms } from '@/lib/investors';
 import { cn } from '@/lib/utils';
+import { exportElementToPdf } from '@/lib/pdf-export';
 import {
   formatDate,
   formatINR,
   formatTransactionKind,
   transactionKindClasses,
 } from '@/components/investors/page/utils';
+import { toast } from 'sonner';
 
 export default function InvestorLedgerPage() {
   const params = useParams();
@@ -49,6 +52,52 @@ export default function InvestorLedgerPage() {
 function InvestorLedgerPageContent({ investor }: { investor: any }) {
   const ledger = useInvestorLedger(investor);
   const { register, handleSubmit, formState: { errors } } = ledger.form;
+  const exportRef = useRef<HTMLDivElement>(null);
+  const [isPdfing, setIsPdfing] = useState(false);
+
+  const handleExcelDownload = () => {
+    if (!ledger.transactions.length) {
+      toast.error('No transactions to export.');
+      return;
+    }
+
+    const header = ['Date', 'Kind', 'Amount', 'Paid', 'Due', 'Status', 'Note'];
+    const body = ledger.transactions.map((tx: any) => [
+      formatDate(tx.createdAt),
+      formatTransactionKind(tx.kind, investor.type),
+      Math.abs(tx.amount),
+      tx.amountPaid,
+      tx.remaining,
+      tx.paymentStatus,
+      tx.note || '-',
+    ]);
+
+    const html = `<table><thead><tr>${header.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${String(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${investor.name.replace(/\s+/g, '-').toLowerCase()}-ledger.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Excel export downloaded.');
+  };
+
+  const handlePdfDownload = async () => {
+    if (!exportRef.current) {
+      toast.error('Nothing to export.');
+      return;
+    }
+    setIsPdfing(true);
+    try {
+      await exportElementToPdf(exportRef.current, `${investor.name.replace(/\s+/g, '-').toLowerCase()}-ledger.pdf`);
+      toast.success('PDF export downloaded.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to export PDF.');
+    } finally {
+      setIsPdfing(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -90,6 +139,41 @@ function InvestorLedgerPageContent({ investor }: { investor: any }) {
           : <Stat label="Available To Record" value={formatINR(ledger.availableProfitShareToRecord)} />}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {!ledger.addMode && !investor.isClosed && (
+            <>
+              <Button size="sm" onClick={() => ledger.openAddMode('invest')} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
+                <ArrowDownLeft className="mr-1 h-3 w-3" /> Add Capital
+              </Button>
+              {investor.type === 'FIXED_RATE' ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('interest')} className="h-9 rounded-none border-amber-500/30 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                    <ArrowUpRight className="mr-1 h-3 w-3" /> Record Interest
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('return')} className="h-9 rounded-none border-red-500/30 text-[10px] font-bold uppercase tracking-widest text-red-500">
+                    <ArrowUpRight className="mr-1 h-3 w-3" /> Return Principal / Close
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('interest')} disabled={!ledger.canRecordProfitShare} className="h-9 rounded-none border-amber-500/30 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                  <ArrowUpRight className="mr-1 h-3 w-3" /> Record Profit Share
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExcelDownload} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
+            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Excel
+          </Button>
+          <Button variant="outline" onClick={() => void handlePdfDownload()} disabled={isPdfing} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
+            {isPdfing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-1 h-3.5 w-3.5" />} PDF
+          </Button>
+        </div>
+      </div>
+
+      <div ref={exportRef}>
       <div className="overflow-hidden border border-border">
         <div className="grid grid-cols-6 gap-4 bg-muted/30 px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.22em] text-muted-foreground">
           <span>Date</span>
@@ -126,12 +210,14 @@ function InvestorLedgerPageContent({ investor }: { investor: any }) {
                   <button
                     onClick={() => ledger.setPayTx(transaction)}
                     className={cn(
-                      'border px-2 py-1 text-[10px] font-bold transition-colors',
+                      'inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-bold transition-colors ring-1',
                       transaction.paymentStatus === 'PARTIAL'
-                        ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20'
-                        : 'border-red-500/20 bg-red-500/10 text-red-600 hover:bg-red-500/20',
+                        ? 'border-yellow-500/40 bg-yellow-500/15 text-yellow-700 ring-yellow-500/30 hover:bg-yellow-500/25'
+                        : 'border-red-500/40 bg-red-500/15 text-red-700 ring-red-500/30 hover:bg-red-500/25',
                     )}
+                    title="View and record payment"
                   >
+                    <Eye className="h-3.5 w-3.5" />
                     {transaction.paymentStatus}
                   </button>
                 )}
@@ -141,28 +227,7 @@ function InvestorLedgerPageContent({ investor }: { investor: any }) {
           ))
         )}
       </div>
-
-      {!ledger.addMode && !investor.isClosed && (
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => ledger.openAddMode('invest')} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
-            <ArrowDownLeft className="mr-1 h-3 w-3" /> Add Capital
-          </Button>
-          {investor.type === 'FIXED_RATE' ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('interest')} className="h-9 rounded-none border-amber-500/30 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-                <ArrowUpRight className="mr-1 h-3 w-3" /> Record Interest
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('return')} className="h-9 rounded-none border-red-500/30 text-[10px] font-bold uppercase tracking-widest text-red-500">
-                <ArrowUpRight className="mr-1 h-3 w-3" /> Return Principal / Close
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => ledger.openAddMode('interest')} disabled={!ledger.canRecordProfitShare} className="h-9 rounded-none border-amber-500/30 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-              <ArrowUpRight className="mr-1 h-3 w-3" /> Record Profit Share
-            </Button>
-          )}
-        </div>
-      )}
+      </div>
 
       {ledger.addMode && (
         <form onSubmit={handleSubmit(ledger.onSubmit)} className="space-y-3 border border-border p-4">

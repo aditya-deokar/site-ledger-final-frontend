@@ -137,6 +137,7 @@ export interface TransactionsResponse {
   ok: boolean;
   data: {
     transactions: Transaction[];
+    summary?: { outstandingPrincipal: number; totalPaid: number; };
     totalInvested: number;
     totalReturned: number;
     interestPaid: number;

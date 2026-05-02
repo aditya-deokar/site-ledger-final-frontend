@@ -183,7 +183,9 @@ export interface SiteReport {
 export interface SiteReportResponse {
   ok: boolean;
   data: {
-    report: SiteReport;
+    summary?: { totalInflow: number; totalOutflow: number; };
+    report?: SiteReport;
+    recentActivity?: SiteReportActivityRow[];
   };
 }
 

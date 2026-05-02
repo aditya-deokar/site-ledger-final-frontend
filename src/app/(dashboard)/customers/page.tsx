@@ -82,7 +82,7 @@ export default function CustomersPage() {
     return { totalReceivable, totalReceived, totalRemaining, totalDeals };
   }, [filtered]);
 
-  const handleSelectCustomer = useCallback((customer: CustomerGroup, action?: 'view' | 'edit' | 'cancel') => {
+  const handleSelectCustomer = useCallback((customer: CustomerGroup, action?: 'view' | 'edit' | 'delete') => {
     const groupId = encodeURIComponent(customer.groupKey);
     if (!action || action === 'view') {
       router.push(`/customers/${groupId}`);
@@ -108,7 +108,7 @@ export default function CustomersPage() {
             </p>
           </div>
           <Button
-            onClick={() => router.push('/sites')}
+            onClick={() => router.push('/navigator')}
             className="h-10 rounded-none px-4 text-[11px] font-bold uppercase tracking-[0.16em]"
           >
             <Plus className="mr-1 h-4 w-4" />
@@ -231,7 +231,7 @@ export default function CustomersPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleSelectCustomer(group, 'cancel')}
+                          onClick={() => handleSelectCustomer(group, 'delete')}
                           className="h-10 w-10 border border-border flex items-center justify-center text-muted-foreground hover:border-red-500/40 hover:text-red-500 transition-colors"
                           aria-label={`Delete ${group.displayName}`}
                         >

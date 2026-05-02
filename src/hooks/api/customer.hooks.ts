@@ -139,3 +139,14 @@ export const useCancelDeal = (options?: { onSuccess?: () => void }) => {
     },
   });
 };
+
+export const useDeleteCustomer = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (customerId: string) => customerService.deleteCustomer(customerId),
+    onSuccess: () => {
+      invalidateCustomerRelatedQueries(queryClient);
+      options?.onSuccess?.();
+    },
+  });
+};

@@ -29,20 +29,6 @@ export interface SalaryRemindersResponse {
   };
 }
 
-export interface GenerateRemindersInput {
-  year: number;
-  month: number;
-  employeeIds?: string[];
-}
-
-export interface GenerateRemindersResponse {
-  ok: boolean;
-  data: {
-    reminders: SalaryReminder[];
-    created: number;
-  };
-}
-
 export interface MarkReminderPaidInput {
   paidAt?: string;
   transactionId?: string;
@@ -55,9 +41,6 @@ export const salaryReminderService = {
     status?: 'pending' | 'paid' | 'overdue';
   }): Promise<SalaryRemindersResponse> =>
     api.get('/employees/salary-reminders', { params: filters }),
-
-  generateReminders: (data: GenerateRemindersInput): Promise<GenerateRemindersResponse> =>
-    api.post('/employees/salary-reminders/generate', data),
 
   markReminderPaid: (
     id: string,

@@ -23,8 +23,8 @@ export const siteService = {
   getSite: (id: string): Promise<SiteDetailResponse> =>
     api.get(`/sites/${id}`),
 
-  getSiteReport: (id: string): Promise<SiteReportResponse> =>
-    api.get(`/sites/${id}/report`),
+  getSiteReport: (id: string, page?: number, size?: number): Promise<SiteReportResponse> =>
+    api.get(`/sites/${id}/report`, { params: { page, size } }),
 
   createSite: (data: CreateSiteInput) =>
     api.post('/sites', data),

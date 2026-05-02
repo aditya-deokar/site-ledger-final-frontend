@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   BriefcaseBusiness,
+  Filter,
   Plus,
   Search,
   Users,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
 import { useCreateEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
@@ -38,6 +40,8 @@ export function EmployeesPage() {
 
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
+  const [status, setStatus] = useState<'active' | 'inactive' | 'terminated' | ''>('');
+  const [filterOpen, setFilterOpen] = useState(false);
   const [section, setSection] = useState<EmployeesSection>('directory');
   const [addOpen, setAddOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
@@ -51,7 +55,8 @@ export function EmployeesPage() {
   const filters = useMemo(() => ({
     search: search.trim() || undefined,
     department: department.trim() || undefined,
-  }), [search, department]);
+    status: status || undefined,
+  }), [search, department, status]);
 
   const { data, isLoading } = useEmployees(filters);
   const employees = data?.data?.employees ?? [];
@@ -115,25 +120,6 @@ export function EmployeesPage() {
           </div>
 
           <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-            <div className="relative flex-1 lg:w-80">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search by name, ID, phone, email"
-                className="h-11 rounded-none bg-background pl-10 pr-10 text-sm"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 transition-colors hover:text-foreground"
-                  aria-label="Clear employee search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
             <Button
               onClick={() => setAddOpen(true)}
               className="h-11 whitespace-nowrap gap-2 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest"
@@ -142,6 +128,31 @@ export function EmployeesPage() {
               Add Employee
             </Button>
           </div>
+        </div>
+
+        <div className="flex w-full gap-2 lg:w-auto">
+          <div className="relative w-full lg:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name, ID, phone, email"
+              className="h-10 rounded-none bg-background pl-10 pr-10 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 transition-colors hover:text-foreground"
+                aria-label="Clear employee search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button variant="outline" onClick={() => setFilterOpen(true)} className="h-10 rounded-none px-3">
+            <Filter className="mr-2 h-4 w-4" /> Filters
+          </Button>
         </div>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -162,20 +173,6 @@ export function EmployeesPage() {
             ))}
           </div>
 
-          <div className="w-full lg:w-64">
-            <select
-              value={department}
-              onChange={(event) => setDepartment(event.target.value)}
-              className="h-10 w-full rounded-none border border-border bg-background px-3 text-xs font-bold uppercase tracking-widest text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="">All Departments</option>
-              {departments.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -252,6 +249,48 @@ export function EmployeesPage() {
           onClose={() => setDeleteEmployee(null)}
         />
       )}
+
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">
+          <DialogHeader><DialogTitle>Filter Employees</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Department</p>
+              <select
+                value={department}
+                onChange={(event) => setDepartment(event.target.value)}
+                className="mt-2 h-10 w-full border border-border bg-background px-3 text-sm"
+              >
+                <option value="">All Departments</option>
+                {departments.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-none border border-border bg-muted/10 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Status</p>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value as 'active' | 'inactive' | 'terminated' | '')}
+                className="mt-2 h-10 w-full border border-border bg-background px-3 text-sm"
+              >
+                <option value="">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="terminated">Terminated</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setDepartment(''); setStatus(''); }}>
+              Reset
+            </Button>
+            <Button onClick={() => setFilterOpen(false)}>Apply</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

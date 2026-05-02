@@ -75,12 +75,16 @@ export const employeeService = {
   getTransactions: (
     employeeId: string,
     filters?: EmployeeTransactionFilters,
+    page?: number,
+    size?: number,
   ): Promise<EmployeeTransactionsResponse> =>
     api.get(`/transactions/${employeeId}`, {
       params: {
         ...(filters?.type ? { type: filters.type } : {}),
         ...(filters?.startDate ? { startDate: toApiDate(filters.startDate) } : {}),
         ...(filters?.endDate ? { endDate: toApiDate(filters.endDate) } : {}),
+        ...(page !== undefined ? { page } : {}),
+        ...(size !== undefined ? { size } : {}),
       },
     }),
 

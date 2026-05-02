@@ -111,6 +111,7 @@ export interface CompanyActivityItem {
 export interface CompanyActivityResponse {
   ok: boolean;
   data: {
+    summary?: { grossFlow: number; totalInflow: number; totalOutflow: number };
     activities: CompanyActivityItem[];
     nextCursor: string | null;
   };

@@ -125,9 +125,6 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                 className="h-12 rounded-none border-none bg-muted text-[10px] font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20"
                 {...register("name")}
               />
-              <p className="text-[10px] text-muted-foreground/60">
-                This name is reused across site dashboards and prefilled receipt screens.
-              </p>
               {errors.name && <p className="text-[10px] text-destructive">{errors.name.message}</p>}
             </div>
 
@@ -138,9 +135,6 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                 className="min-h-20 resize-none rounded-none border-none bg-muted text-[10px] font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20"
                 {...register("address")}
               />
-              <p className="text-[10px] text-muted-foreground/60">
-                This address becomes the default site location shown in receipt downloads.
-              </p>
               {errors.address && <p className="text-[10px] text-destructive">{errors.address.message}</p>}
             </div>
 
@@ -214,9 +208,6 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                   ].join(" ")}
                 >
                   <p className="text-[10px] font-bold uppercase tracking-widest">No</p>
-                  <p className="mt-2 text-[10px] text-muted-foreground/70">
-                    Standard setup with a single building structure.
-                  </p>
                 </button>
 
                 <button
@@ -230,9 +221,6 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                   ].join(" ")}
                 >
                   <p className="text-[10px] font-bold uppercase tracking-widest">Yes</p>
-                  <p className="mt-2 text-[10px] text-muted-foreground/70">
-                    Configure separate wings (A, B, C...) and floors per wing.
-                  </p>
                 </button>
               </div>
             </div>
@@ -319,9 +307,6 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                     className="h-12 rounded-none border-none bg-muted text-[10px] font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 focus-visible:bg-card focus-visible:ring-primary/20"
                     {...register("totalFloors", { setValueAs: parseOptionalPositiveInteger })}
                   />
-                  <p className="text-[10px] text-muted-foreground/60">
-                    Optional. Leave blank to configure floors later from Site Structure.
-                  </p>
                   {errors.totalFloors && <p className="text-[10px] text-destructive">{errors.totalFloors.message}</p>}
                 </div>
 
@@ -338,18 +323,9 @@ export function CreateSiteDrawer({ open, onOpenChange }: CreateSiteDrawerProps) 
                       Include Ground Floor
                     </label>
                   </div>
-                  <p className="text-[10px] text-muted-foreground/60">
-                    Check this if the site includes a ground floor.
-                  </p>
                 </div>
               </>
             )}
-
-            <div className="border border-dashed border-border bg-muted/20 p-4 text-[10px] leading-relaxed text-muted-foreground">
-              {hasMultipleWings
-                ? "SiteLedger will create all configured wings first, then generate default floors for each wing (Ground Floor, Floor 1, Floor 2...). Floor labels remain editable from Site Structure."
-                : "When you enter floors here, SiteLedger creates the initial structure automatically. Floor labels can be edited later from the Site Structure tool."}
-            </div>
           </form>
         </div>
 
