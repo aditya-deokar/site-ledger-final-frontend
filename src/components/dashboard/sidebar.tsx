@@ -16,6 +16,7 @@ import {
   Building,
   BriefcaseBusiness,
   Wrench,
+  Settings,
   X,
 } from "lucide-react"
 import { useSalaryReminders } from "@/hooks/api/salary-reminder.hooks"
@@ -76,6 +77,7 @@ const menuItems = [
   { icon: BriefcaseBusiness, label: "Employees", href: "/employees" },
   { icon: TrendingUp, label: "Investors", href: "/investors" },
   { icon: Wrench, label: "Vendors", href: "/vendors" },
+  { icon: Settings, label: "Settings", href: "/settings" },
 ]
 
 const bottomItems = [{ icon: LogOut, label: "Logout", href: "/logout" }]

@@ -11,12 +11,44 @@ export type PartnerInput = z.infer<typeof partnerInputSchema>;
 
 export const createCompanySchema = z.object({
   name: z.string().min(1, 'Company name is required'),
+  tradeName: z.string().optional(),
   address: z.string().optional(),
+  phone: z.string().optional(),
+  gstin: z.string().optional(),
+  pan: z.string().optional(),
+  tan: z.string().optional(),
+  cin: z.string().optional(),
+  reraNumber: z.string().optional(),
+  msmeUdyamNumber: z.string().optional(),
+  epfNumber: z.string().optional(),
+  esicNumber: z.string().optional(),
+  bocwNumber: z.string().optional(),
+  logo: z.string().url().optional(),
 });
 
 export const updateCompanySchema = z.object({
   name: z.string().min(1, 'Company name is required').optional(),
+  tradeName: z.string().optional(),
   address: z.string().optional(),
+  phone: z.string().optional(),
+  gstin: z.string().optional(),
+  pan: z.string().optional(),
+  tan: z.string().optional(),
+  cin: z.string().optional(),
+  reraNumber: z.string().optional(),
+  msmeUdyamNumber: z.string().optional(),
+  epfNumber: z.string().optional(),
+  esicNumber: z.string().optional(),
+  bocwNumber: z.string().optional(),
+  logo: z.string().url().nullable().optional(),
+  receiptSettings: z.object({
+    showCompanyLogo: z.boolean().optional(),
+    showGstin: z.boolean().optional(),
+    showPan: z.boolean().optional(),
+    showReraNumber: z.boolean().optional(),
+    showCorporateAddress: z.boolean().optional(),
+    showSupportContact: z.boolean().optional(),
+  }).optional(),
 });
 
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;
@@ -37,7 +69,27 @@ export interface CompanyResponse {
     company: {
       id: string;
       name: string;
+      tradeName?: string | null;
       address: string | null;
+      phone?: string | null;
+      gstin?: string | null;
+      pan?: string | null;
+      tan?: string | null;
+      cin?: string | null;
+      reraNumber?: string | null;
+      msmeUdyamNumber?: string | null;
+      epfNumber?: string | null;
+      esicNumber?: string | null;
+      bocwNumber?: string | null;
+      logo?: string | null;
+      receiptSettings?: {
+        showCompanyLogo?: boolean;
+        showGstin?: boolean;
+        showPan?: boolean;
+        showReraNumber?: boolean;
+        showCorporateAddress?: boolean;
+        showSupportContact?: boolean;
+      } | null;
       createdAt: string;
     };
     partner_fund: number;
@@ -54,7 +106,27 @@ export interface CreateCompanyResponse {
     company: {
       id: string;
       name: string;
+      tradeName?: string | null;
       address: string | null;
+      phone?: string | null;
+      gstin?: string | null;
+      pan?: string | null;
+      tan?: string | null;
+      cin?: string | null;
+      reraNumber?: string | null;
+      msmeUdyamNumber?: string | null;
+      epfNumber?: string | null;
+      esicNumber?: string | null;
+      bocwNumber?: string | null;
+      logo?: string | null;
+      receiptSettings?: {
+        showCompanyLogo?: boolean;
+        showGstin?: boolean;
+        showPan?: boolean;
+        showReraNumber?: boolean;
+        showCorporateAddress?: boolean;
+        showSupportContact?: boolean;
+      } | null;
       createdAt: string;
     };
   };

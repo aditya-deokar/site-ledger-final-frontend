@@ -276,14 +276,6 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
   const exportRef = useRef<HTMLDivElement>(null)
   const { mutate: updatePayment, isPending: updatingPayment } = useUpdateExpensePayment(siteId, { onSuccess: () => setPayExpense(null) })
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   const expenses: Expense[] = data?.data?.expenses ?? []
 
   const totalBilled = expenses.reduce((s, e) => s + e.amount, 0)
@@ -306,6 +298,14 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
       return haystack.includes(q)
     })
   }, [expenses, searchText, statusFilter, typeFilter])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const handleExcelDownload = () => {
     if (!expenses.length) return toast.error("No expenses to export.")

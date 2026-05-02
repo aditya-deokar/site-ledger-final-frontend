@@ -78,7 +78,7 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8">
       <div className="flex flex-col gap-3">
         <h1 className="text-3xl font-serif tracking-tight text-foreground sm:text-4xl">New Password</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
