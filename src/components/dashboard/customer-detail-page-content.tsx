@@ -634,7 +634,6 @@ export function CustomerDetailPageContent({
   const collectedAmount = agreement?.amountPaid ?? activeDeal.amountPaid
   const remainingAmount = Math.max(agreement?.remaining ?? activeDeal.remaining, 0)
   const isSold = activeDeal.flatStatus === "SOLD" || (!isCancelled && remainingAmount <= 0)
-  const statusBadgeLabel = isCancelled ? "CANCELLED" : (activeDeal.flatStatus ?? "ACTIVE")
   const canEdit = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
   const canCancel = Boolean(selectedDeal) && !isCancelled && Boolean(activeDeal.flatId) && Boolean(siteId)
   const canDelete = Boolean(selectedDeal)
@@ -701,6 +700,7 @@ export function CustomerDetailPageContent({
         latestPayment.id,
         activeDeal,
         latestPayment,
+        receiptPayments,
         agreement,
         siteData.data.site,
         companyData.data.company,
@@ -770,24 +770,6 @@ export function CustomerDetailPageContent({
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Customers
               </Link>
-              <h1 className="min-w-0 truncate font-sans text-2xl font-bold tracking-tight text-foreground">
-                {customer.name}
-              </h1>
-              <span
-                className={cn(
-                  "shrink-0 border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]",
-                  isCancelled
-                    ? "border-red-500/20 bg-red-500/10 text-red-500"
-                    : isSold
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
-                      : "border-amber-500/20 bg-amber-500/10 text-amber-600",
-                )}
-              >
-                {statusBadgeLabel}
-              </span>
-              <span className="min-w-0 break-words text-sm text-muted-foreground/85">
-                {customer.phone || "No phone"} {customer.email ? `• ${customer.email}` : ""} • {customerDeals.length} flats
-              </span>
             </div>
 
             <div className="flex max-w-full flex-wrap items-center gap-2 lg:justify-end">
@@ -826,7 +808,6 @@ export function CustomerDetailPageContent({
                   className="h-8 gap-1.5 rounded-none px-3 text-[8px] font-bold uppercase tracking-[0.16em]"
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                  Edit
                 </Button>
               ) : null}
               {canCancel ? (
@@ -836,20 +817,6 @@ export function CustomerDetailPageContent({
                   className="h-8 gap-1.5 rounded-none border-red-500/30 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-red-500 hover:bg-red-500/5"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Cancel
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDeleteTargetCustomerId(activeDeal.id)
-                    setDeleteOpen(true)
-                  }}
-                  className="h-8 gap-1.5 rounded-none border-red-500/30 px-3 text-[8px] font-bold uppercase tracking-[0.16em] text-red-500 hover:bg-red-500/5"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
                 </Button>
               ) : null}
             </div>

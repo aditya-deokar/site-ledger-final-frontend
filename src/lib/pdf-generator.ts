@@ -1,4 +1,5 @@
 import type { jsPDF } from "jspdf"
+import { resolveCompanyLogoUrl } from "@/lib/company-logo"
 
 export interface ReceiptData {
   receiptNumber: string
@@ -11,6 +12,12 @@ export interface ReceiptData {
   note?: string
 
   companyName: string
+  companyLogoUrl?: string
+  companyAddress?: string
+  companySupportContact?: string
+  companyGstin?: string
+  companyPan?: string
+  companyReraNumber?: string
 
   customerName: string
   customerPhone?: string
@@ -41,6 +48,12 @@ export interface StatementData {
   generatedAt: string
 
   companyName: string
+  companyLogoUrl?: string
+  companyAddress?: string
+  companySupportContact?: string
+  companyGstin?: string
+  companyPan?: string
+  companyReraNumber?: string
 
   customerName: string
   customerPhone?: string
@@ -87,9 +100,53 @@ function formatSignedINR(value: number): string {
   return "Rs. " + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function getAgreementPayableTotal(agreement: any, fallback: number = 0) {
+  return agreement?.totals?.payableTotal ?? agreement?.totalValue ?? fallback
+}
+
+function getSignedPaymentAmount(payment: any) {
+  const amount = Number(payment?.amount || 0)
+  return payment?.direction === "OUT" ? -amount : amount
+}
+
+async function loadImageAsPngDataUrl(imageUrl?: string) {
+  if (!imageUrl || typeof window === "undefined") return null
+
+  try {
+    const response = await fetch(imageUrl)
+    if (!response.ok) return null
+
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = objectUrl
+      })
+
+      const canvas = document.createElement("canvas")
+      canvas.width = image.naturalWidth || image.width
+      canvas.height = image.naturalHeight || image.height
+      const context = canvas.getContext("2d")
+      if (!context) return null
+
+      context.drawImage(image, 0, 0)
+      return canvas.toDataURL("image/png")
+    } finally {
+      URL.revokeObjectURL(objectUrl)
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF("p", "mm", "a4")
+  const companyLogoDataUrl = await loadImageAsPngDataUrl(data.companyLogoUrl)
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -116,25 +173,51 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   }
 
   // ─── HEADER BAND ──────────────────────────────────────────────────────────
+  const badgeX = pageWidth - mr - 58
+  const logoBoxW = 20
+  const logoBoxH = 14
+  const logoX = ml
+  const logoY = 3
+  const textStartX = companyLogoDataUrl ? logoX + logoBoxW + 4 : ml
+  const headerTextMaxWidth = badgeX - textStartX - 6
+  const complianceParts = [
+    data.companyGstin ? `GSTIN: ${data.companyGstin}` : null,
+    data.companyPan ? `PAN: ${data.companyPan}` : null,
+    data.companyReraNumber ? `RERA: ${data.companyReraNumber}` : null,
+  ].filter(Boolean) as string[]
+  const headerLines = [
+    data.projectName,
+    data.companyAddress || data.siteAddress,
+    data.companySupportContact ? `Support: ${data.companySupportContact}` : undefined,
+    complianceParts.length > 0 ? complianceParts.join("  •  ") : undefined,
+  ].filter(Boolean) as string[]
+  const headerHeight = Math.max(22, 12 + headerLines.length * 4 + 6)
   doc.setFillColor(255, 255, 255)
-  doc.rect(0, 0, pageWidth, 18, "F")
+  doc.rect(0, 0, pageWidth, headerHeight, "F")
   
   // Add a simple border line at bottom
   doc.setDrawColor(0, 0, 0)
   doc.setLineWidth(0.5)
-  doc.line(0, 18, pageWidth, 18)
+  doc.line(0, headerHeight, pageWidth, headerHeight)
 
-  setFont("bold", 13, 0)
-  doc.text(data.companyName.toUpperCase(), ml, 7)
-  setFont("normal", 7.5, 60)
-  doc.text(data.projectName, ml, 12)
-  if (data.siteAddress) {
-    setFont("normal", 6.5, 100)
-    doc.text(doc.splitTextToSize(data.siteAddress, 100)[0], ml, 16)
+  if (companyLogoDataUrl) {
+    doc.setDrawColor(215, 215, 215)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(logoX, logoY, logoBoxW, logoBoxH, 1, 1, "S")
+    doc.addImage(companyLogoDataUrl, "PNG", logoX + 1, logoY + 1, logoBoxW - 2, logoBoxH - 2, undefined, "FAST")
   }
 
+  setFont("bold", 13, 0)
+  doc.text(data.companyName.toUpperCase(), textStartX, 7)
+
+  let headerLineY = 12
+  headerLines.forEach((line, index) => {
+    setFont(index === 0 ? "normal" : "normal", index === 0 ? 7.5 : 6.5, index === 0 ? 60 : 100)
+    doc.text(doc.splitTextToSize(line, headerTextMaxWidth)[0], textStartX, headerLineY)
+    headerLineY += 4
+  })
+
   // Receipt badge top-right - white background
-  const badgeX = pageWidth - mr - 58
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.3)
@@ -146,7 +229,7 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   setFont("normal", 6, 100)
   doc.text(data.receiptDate, badgeX + 29, 14.5, { align: "center" })
 
-  y = 22
+  y = headerHeight + 4
 
   // ─── AMOUNT HERO STRIP ────────────────────────────────────────────────────
   doc.setFillColor(248, 248, 248)
@@ -278,7 +361,6 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
     doc.text("DATE", ml + 2, y + 4)
     doc.text("TYPE", ml + 28, y + 4)
     doc.text("PARTICULARS", ml + 52, y + 4)
-    doc.text("P&L", ml + 122, y + 4)
     doc.text("AMOUNT", pageWidth - mr - 2, y + 4, { align: "right" })
     y += 6
 
@@ -292,7 +374,6 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
         doc.text("DATE", ml + 2, y + 4)
         doc.text("TYPE", ml + 28, y + 4)
         doc.text("PARTICULARS", ml + 52, y + 4)
-        doc.text("P&L", ml + 122, y + 4)
         doc.text("AMOUNT", pageWidth - mr - 2, y + 4, { align: "right" })
         y += 6
       }
@@ -305,8 +386,7 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
       setFont("normal", 6.5, 40)
       doc.text(line.createdAt.substring(0, 11), ml + 2, y + 3.8)
       doc.text(line.type.substring(0, 12), ml + 28, y + 3.8)
-      doc.text(line.label.substring(0, 38), ml + 52, y + 3.8)
-      doc.text(line.affectsProfit ? "Yes" : "No", ml + 122, y + 3.8)
+      doc.text(line.label.substring(0, 52), ml + 52, y + 3.8)
       setFont("normal", 6.5, 0)
       doc.text(formatSignedINR(line.signedAmount), pageWidth - mr - 2, y + 3.8, { align: "right" })
 
@@ -350,6 +430,7 @@ export async function downloadReceiptPDF(
   paymentId: string,
   customer: any,
   payment: any,
+  paymentHistory: any[],
   agreement: any,
   siteData: any,
   companyData: any
@@ -459,8 +540,8 @@ export async function downloadReceiptPDF(
     }
 
     // Calculate cumulative paid and balance
-    const agreementValue = agreement?.totalValue || 0
-    const payments = agreement?.payments || []
+    const agreementValue = getAgreementPayableTotal(agreement, customer?.sellingPrice || 0)
+    const payments = Array.isArray(paymentHistory) ? paymentHistory : []
     
     // Sort payments by date
     const sortedPayments = [...payments].sort((a, b) => {
@@ -472,9 +553,17 @@ export async function downloadReceiptPDF(
 
     // Calculate cumulative paid up to this payment
     let cumulativePaid = 0
+    let foundPayment = false
     for (const p of sortedPayments) {
-      cumulativePaid += p.amount
-      if (p.id === paymentId) break
+      cumulativePaid += getSignedPaymentAmount(p)
+      if (p.id === paymentId) {
+        foundPayment = true
+        break
+      }
+    }
+
+    if (!foundPayment && agreement?.amountPaid != null) {
+      cumulativePaid = Number(agreement.amountPaid)
     }
 
     const balanceDue = Math.max(agreementValue - cumulativePaid, 0)
@@ -501,6 +590,30 @@ export async function downloadReceiptPDF(
       note: payment.note || undefined,
 
       companyName: companyData?.name || "Company Name",
+      companyLogoUrl:
+        companyData?.receiptSettings?.showCompanyLogo && companyData?.logo
+          ? (resolveCompanyLogoUrl(companyData.logo) ?? undefined)
+          : undefined,
+      companyAddress:
+        companyData?.receiptSettings?.showCorporateAddress && companyData?.address
+          ? companyData.address
+          : undefined,
+      companySupportContact:
+        companyData?.receiptSettings?.showSupportContact && companyData?.phone
+          ? companyData.phone
+          : undefined,
+      companyGstin:
+        companyData?.receiptSettings?.showGstin && companyData?.gstin
+          ? companyData.gstin
+          : undefined,
+      companyPan:
+        companyData?.receiptSettings?.showPan && companyData?.pan
+          ? companyData.pan
+          : undefined,
+      companyReraNumber:
+        companyData?.receiptSettings?.showReraNumber && companyData?.reraNumber
+          ? companyData.reraNumber
+          : undefined,
 
       customerName: customer.name || "Customer Name",
       customerPhone: customer.phone || undefined,
@@ -541,6 +654,7 @@ export async function downloadReceiptPDF(
 export async function generateStatementPDF(data: StatementData, filename: string) {
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF("p", "mm", "a4")
+  const companyLogoDataUrl = await loadImageAsPngDataUrl(data.companyLogoUrl)
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -556,22 +670,48 @@ export async function generateStatementPDF(data: StatementData, filename: string
   }
 
   // ─── HEADER ───────────────────────────────────────────────────────────────
+  const badgeX = pageWidth - mr - 62
+  const logoBoxW = 20
+  const logoBoxH = 14
+  const logoX = ml
+  const logoY = 3
+  const textStartX = companyLogoDataUrl ? logoX + logoBoxW + 4 : ml
+  const headerTextMaxWidth = badgeX - textStartX - 6
+  const complianceParts = [
+    data.companyGstin ? `GSTIN: ${data.companyGstin}` : null,
+    data.companyPan ? `PAN: ${data.companyPan}` : null,
+    data.companyReraNumber ? `RERA: ${data.companyReraNumber}` : null,
+  ].filter(Boolean) as string[]
+  const headerLines = [
+    data.projectName,
+    data.companyAddress || data.siteAddress,
+    data.companySupportContact ? `Support: ${data.companySupportContact}` : undefined,
+    complianceParts.length > 0 ? complianceParts.join("  •  ") : undefined,
+  ].filter(Boolean) as string[]
+  const headerHeight = Math.max(22, 12 + headerLines.length * 4 + 6)
+
   doc.setFillColor(255, 255, 255)
-  doc.rect(0, 0, pageWidth, 18, "F")
+  doc.rect(0, 0, pageWidth, headerHeight, "F")
   doc.setDrawColor(0, 0, 0)
   doc.setLineWidth(0.5)
-  doc.line(0, 18, pageWidth, 18)
+  doc.line(0, headerHeight, pageWidth, headerHeight)
 
-  setFont("bold", 13, 0)
-  doc.text(data.companyName.toUpperCase(), ml, 7)
-  setFont("normal", 7.5, 60)
-  doc.text(data.projectName, ml, 12)
-  if (data.siteAddress) {
-    setFont("normal", 6.5, 100)
-    doc.text(doc.splitTextToSize(data.siteAddress, 100)[0], ml, 16)
+  if (companyLogoDataUrl) {
+    doc.setDrawColor(215, 215, 215)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(logoX, logoY, logoBoxW, logoBoxH, 1, 1, "S")
+    doc.addImage(companyLogoDataUrl, "PNG", logoX + 1, logoY + 1, logoBoxW - 2, logoBoxH - 2, undefined, "FAST")
   }
 
-  const badgeX = pageWidth - mr - 62
+  setFont("bold", 13, 0)
+  doc.text(data.companyName.toUpperCase(), textStartX, 7)
+
+  let headerLineY = 12
+  headerLines.forEach((line, index) => {
+    setFont("normal", index === 0 ? 7.5 : 6.5, index === 0 ? 60 : 100)
+    doc.text(doc.splitTextToSize(line, headerTextMaxWidth)[0], textStartX, headerLineY)
+    headerLineY += 4
+  })
   doc.setFillColor(245, 245, 245)
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.3)
@@ -581,7 +721,7 @@ export async function generateStatementPDF(data: StatementData, filename: string
   setFont("normal", 6.5, 100)
   doc.text(`As of ${data.generatedAt}`, badgeX + 31, 12, { align: "center" })
 
-  y = 22
+  y = headerHeight + 4
 
   // ─── SUMMARY TILES ────────────────────────────────────────────────────────
   const tileW = (cw - 4) / 3
@@ -829,7 +969,7 @@ export async function downloadStatementPDF(
     }
 
     // Calculate agreement value and totals
-    const agreementValue = agreement?.totalValue || 0
+    const agreementValue = getAgreementPayableTotal(agreement, customer?.sellingPrice || 0)
     
     // Sort payments by date
     const sortedPayments = [...payments].sort((a, b) => {
@@ -842,7 +982,7 @@ export async function downloadStatementPDF(
     // Calculate cumulative paid and balance for each payment
     let cumulativePaid = 0
     const paymentHistory = sortedPayments.map((p) => {
-      cumulativePaid += p.amount
+      cumulativePaid += getSignedPaymentAmount(p)
       const balance = Math.max(agreementValue - cumulativePaid, 0)
       
       return {
@@ -850,7 +990,7 @@ export async function downloadStatementPDF(
         mode: getPaymentModeLabel(p.paymentMode),
         reference: p.referenceNumber || undefined,
         note: p.note || undefined,
-        amount: p.amount,
+        amount: getSignedPaymentAmount(p),
         cumulativePaid,
         balance,
       }
@@ -864,6 +1004,30 @@ export async function downloadStatementPDF(
       generatedAt: formatDateTime(new Date().toISOString()),
 
       companyName: companyData?.name || "Company Name",
+      companyLogoUrl:
+        companyData?.receiptSettings?.showCompanyLogo && companyData?.logo
+          ? (resolveCompanyLogoUrl(companyData.logo) ?? undefined)
+          : undefined,
+      companyAddress:
+        companyData?.receiptSettings?.showCorporateAddress && companyData?.address
+          ? companyData.address
+          : undefined,
+      companySupportContact:
+        companyData?.receiptSettings?.showSupportContact && companyData?.phone
+          ? companyData.phone
+          : undefined,
+      companyGstin:
+        companyData?.receiptSettings?.showGstin && companyData?.gstin
+          ? companyData.gstin
+          : undefined,
+      companyPan:
+        companyData?.receiptSettings?.showPan && companyData?.pan
+          ? companyData.pan
+          : undefined,
+      companyReraNumber:
+        companyData?.receiptSettings?.showReraNumber && companyData?.reraNumber
+          ? companyData.reraNumber
+          : undefined,
 
       customerName: customer.name || "Customer Name",
       customerPhone: customer.phone || undefined,

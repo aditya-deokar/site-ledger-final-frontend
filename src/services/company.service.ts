@@ -73,42 +73,21 @@ export const companyService = {
   },
 
   uploadLogoToS3: async (file: File): Promise<string> => {
-    const customUploadUrl = process.env.NEXT_PUBLIC_COMPANY_LOGO_UPLOAD_URL;
-    if (customUploadUrl) {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch(customUploadUrl, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) throw new Error('Logo upload failed');
-      const json = await response.json();
-      const url = json?.url || json?.data?.url;
-      if (!url) throw new Error('Upload response missing URL');
-      return String(url);
-    }
+    const uploadEndpoint = process.env.NEXT_PUBLIC_COMPANY_LOGO_UPLOAD_URL || '/uploads/company-logo';
+    const formData = new FormData();
+    formData.append('file', file);
 
-    const baseUrl = process.env.NEXT_PUBLIC_S3_UPLOAD_BASE_URL;
-    if (!baseUrl) {
-      throw new Error('S3 upload not configured. Set NEXT_PUBLIC_COMPANY_LOGO_UPLOAD_URL or NEXT_PUBLIC_S3_UPLOAD_BASE_URL');
-    }
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const key = `company-logos/${Date.now()}-${safeName}`;
-    const uploadUrl = `${baseUrl.replace(/\/$/, '')}/${key}`;
-
-    const putRes = await fetch(uploadUrl, {
-      method: 'PUT',
+    const response = await api.post(uploadEndpoint, formData, {
       headers: {
-        'Content-Type': file.type || 'application/octet-stream',
+        'Content-Type': 'multipart/form-data',
       },
-      body: file,
-    });
+    }) as any;
 
-    if (!putRes.ok) {
-      throw new Error('Failed to upload logo to S3');
+    const url = response?.data?.url || response?.data?.data?.url || response?.url;
+    if (!url) {
+      throw new Error('Upload response missing URL');
     }
 
-    return uploadUrl;
+    return String(url);
   },
 };

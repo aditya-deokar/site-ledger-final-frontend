@@ -1,11 +1,11 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent } from 'react';
-import Image from 'next/image';
 import { Loader2, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { companyService } from '@/services/company.service';
 import { toast } from 'sonner';
+import { resolveCompanyLogoUrl } from '@/lib/company-logo';
 
 type Props = {
   value?: string | null;
@@ -15,6 +15,7 @@ type Props = {
 export function CompanyLogoUploader({ value, onChange }: Props) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const resolvedLogo = resolveCompanyLogoUrl(value);
 
   const handlePick = () => fileRef.current?.click();
 
@@ -44,11 +45,11 @@ export function CompanyLogoUploader({ value, onChange }: Props) {
         onChange={handleFileChange}
       />
 
-      {value ? (
+      {resolvedLogo ? (
         <div className="border border-border bg-muted/10 p-3">
           <div className="flex items-center gap-3">
             <div className="relative h-14 w-14 overflow-hidden border border-border bg-background">
-              <Image src={value} alt="Company logo" fill className="object-contain" />
+              <img src={resolvedLogo} alt="Company logo" className="h-full w-full object-contain" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" onClick={handlePick} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">

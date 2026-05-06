@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Settings2, Save } from 'lucide-react';
@@ -13,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { updateCompanySchema, UpdateCompanyInput } from '@/schemas/company.schema';
 import { useCompany, useUpdateCompany } from '@/hooks/api/company.hooks';
+import { resolveCompanyLogoUrl } from '@/lib/company-logo';
 
 type SettingsTab = 'profile' | 'receipt';
 
@@ -80,6 +80,7 @@ export default function SettingsPage() {
   }, [company, reset, receiptSettings]);
 
   const watchedLogo = watch('logo');
+  const resolvedLogo = resolveCompanyLogoUrl(watchedLogo);
   const watchedReceipt = watch('receiptSettings') ?? defaultReceiptSettings;
 
   const onSubmit = (payload: UpdateCompanyInput) => {
@@ -110,9 +111,9 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle>Company Logo</DialogTitle>
           </DialogHeader>
-          {watch('logo') ? (
+          {resolvedLogo ? (
             <div className="relative mx-auto h-[65vh] w-full overflow-hidden border border-border bg-muted/10">
-              <Image src={watch('logo') as string} alt="Company logo full preview" fill className="object-contain" />
+              <img src={resolvedLogo} alt="Company logo full preview" className="h-full w-full object-contain" />
             </div>
           ) : null}
         </DialogContent>
@@ -146,8 +147,8 @@ export default function SettingsPage() {
                   className="relative h-16 w-16 shrink-0 overflow-hidden border border-border bg-background"
                   title="View logo"
                 >
-                  {watch('logo') ? (
-                    <Image src={watch('logo') as string} alt="Company logo" fill className="object-cover" />
+                  {resolvedLogo ? (
+                    <img src={resolvedLogo} alt="Company logo" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       <Settings2 className="h-6 w-6" />
@@ -206,9 +207,9 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">Support: {watch('phone') || company?.phone}</p>
                     )}
                   </div>
-                  {watchedReceipt.showCompanyLogo && watchedLogo && (
+                  {watchedReceipt.showCompanyLogo && resolvedLogo && (
                     <div className="relative h-12 w-12 overflow-hidden border border-border bg-background">
-                      <Image src={watchedLogo} alt="Logo preview" fill className="object-contain" />
+                      <img src={resolvedLogo} alt="Logo preview" className="h-full w-full object-contain" />
                     </div>
                   )}
                 </div>
