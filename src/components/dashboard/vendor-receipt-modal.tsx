@@ -1,268 +1,336 @@
-"use client"
+'use client';
 
-import { Button } from "@/components/ui/button"
-import { exportElementToPdf } from "@/lib/pdf-export"
-import { Download, Printer, X } from "lucide-react"
-import { toast } from "sonner"
+import { Download, FileText, Printer, X } from 'lucide-react';
+import { toast } from 'sonner';
 
-function formatINR(n: number) {
-  return "\u20B9" + n.toLocaleString("en-IN")
-}
-
-function formatReceiptDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).toUpperCase()
-}
+import { useCompany } from '@/hooks/api/company.hooks';
+import { resolveCompanyLogoUrl } from '@/lib/company-logo';
+import { downloadVendorReceiptPDF } from '@/lib/pdf-generator';
+import type { VendorReceipt } from '@/schemas/vendor.schema';
 
 function escapeHtml(value: string) {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function sanitizeFilePart(value: string) {
-  return value.trim().replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "receipt"
+function formatINR(value: number) {
+  return `Rs. ${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export type VendorPaymentReceipt = {
-  id: string
-  receiptNumber: string
-  vendorName: string
-  amount: number
-  date: string
-  note: string
-  siteName: string
-  expenseAmount: number
-  expenseId: string
+function formatDate(value: string) {
+  return new Date(value).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata',
+  });
 }
 
-/** Markup for print preview & optional HTML download — structured like a professional voucher */
-function buildVendorReceiptInnerHtml(r: VendorPaymentReceipt) {
+function formatShortDate(value: string) {
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+function getPaymentModeLabel(mode?: string | null) {
+  switch (mode) {
+    case 'CASH':
+      return 'Cash';
+    case 'CHEQUE':
+      return 'Cheque';
+    case 'BANK_TRANSFER':
+      return 'Bank Transfer';
+    case 'UPI':
+      return 'UPI';
+    default:
+      return 'Not recorded';
+  }
+}
+
+function buildInfoRow(label: string, value?: string | null) {
+  if (!value) return '';
   return `
-  <div style="height:4px;background:#0d9488;width:100%"></div>
-  <div style="padding:28px 32px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc">
-    <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:flex-start">
-      <div style="min-width:200px;flex:1">
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#0f766e">Vendor payment</div>
-        <h1 style="margin:8px 0 0;font-size:28px;font-weight:600;letter-spacing:-0.02em;color:#0f172a;font-family:Georgia,serif">Payment voucher</h1>
-      </div>
-      <div style="border:1px solid #e2e8f0;background:#fff;padding:12px 16px;min-width:200px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">Receipt no.</div>
-        <div style="margin-top:4px;font-family:ui-monospace,monospace;font-size:15px;font-weight:600;color:#0f172a">${escapeHtml(r.receiptNumber)}</div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Date</div>
-        <div style="margin-top:2px;font-size:14px;font-weight:500;color:#0f172a">${escapeHtml(formatReceiptDate(r.date))}</div>
-      </div>
+    <div style="margin-bottom:12px;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7a7a;">${escapeHtml(label)}</p>
+      <p style="margin:4px 0 0;font-size:13px;line-height:1.45;color:#111827;">${escapeHtml(value)}</p>
     </div>
-  </div>
-  <div style="padding:24px 32px">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-      <div style="border:1px solid #99f6e4;background:linear-gradient(135deg,#f0fdfa 0%,#fff 100%);padding:20px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#0f766e">Amount paid</div>
-        <div style="margin-top:8px;font-size:32px;font-weight:700;letter-spacing:-0.02em;color:#0d9488">${escapeHtml(formatINR(r.amount))}</div>
-      </div>
-      <div style="border:1px solid #e2e8f0;padding:20px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b">Payee</div>
-        <div style="margin-top:8px;font-size:20px;font-weight:600;color:#0f172a">${escapeHtml(r.vendorName)}</div>
-      </div>
+  `;
+}
+
+function buildSummaryCard(label: string, value: string) {
+  return `
+    <div style="border:1px solid #d4d4d4;border-radius:4px;background:#fafafa;padding:12px 14px;">
+      <p style="margin:0;font-size:11px;font-weight:700;text-transform:uppercase;color:#7a7a7a;">${escapeHtml(label)}</p>
+      <p style="margin:12px 0 0;font-size:18px;font-weight:700;color:#111827;">${escapeHtml(value)}</p>
     </div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;font-size:14px">
-      <tbody>
-        <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
-          <td style="padding:10px 14px;width:38%;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Site / project</td>
-          <td style="padding:10px 14px;color:#0f172a">${escapeHtml(r.siteName)}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0">
-          <td style="padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Ledger payment id</td>
-          <td style="padding:10px 14px;font-family:ui-monospace,monospace;font-size:13px;word-break:break-all">${escapeHtml(r.id)}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0">
-          <td style="padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Linked expense</td>
-          <td style="padding:10px 14px;font-family:ui-monospace,monospace;font-size:13px;word-break:break-all">${escapeHtml(r.expenseId)}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0">
-          <td style="padding:10px 14px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Bill / expense amount</td>
-          <td style="padding:10px 14px;font-weight:600;color:#0f172a">${escapeHtml(formatINR(r.expenseAmount))}</td>
-        </tr>
-        <tr>
-          <td style="padding:10px 14px;vertical-align:top;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#64748b">Narration</td>
-          <td style="padding:10px 14px;color:#334155;line-height:1.5">${escapeHtml(r.note)}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="margin:20px 0 0;font-size:11px;color:#94a3b8;line-height:1.5">This document is generated from your payment ledger. It is not a separate stored receipt record.</p>
-  </div>
-  <div style="display:flex;justify-content:space-between;gap:24px;padding:24px 32px 32px;border-top:1px solid #e2e8f0">
-    <div style="flex:1;border-top:1px solid #cbd5e1;padding-top:8px;font-size:11px;text-align:left;color:#64748b">Receiver / vendor</div>
-    <div style="flex:1;border-top:1px solid #cbd5e1;padding-top:8px;font-size:11px;text-align:right;color:#64748b">For company (authorised signatory)</div>
-  </div>
-  `
+  `;
 }
 
-function buildVendorReceiptRootElement(receipt: VendorPaymentReceipt): HTMLDivElement {
-  const root = document.createElement("div")
-  root.setAttribute("class", "vendor-receipt-pdf")
-  root.style.width = "760px"
-  root.style.maxWidth = "100%"
-  root.style.background = "#ffffff"
-  root.style.color = "#0f172a"
-  root.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif'
-  root.style.boxSizing = "border-box"
-  root.style.border = "1px solid #e2e8f0"
-  root.innerHTML = buildVendorReceiptInnerHtml(receipt)
-  return root
+function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) {
+  const companyName = companyData?.name || 'Company';
+  const companyLogo =
+    companyData?.receiptSettings?.showCompanyLogo !== false && companyData?.logo
+      ? resolveCompanyLogoUrl(companyData.logo)
+      : null;
+  const companyAddress =
+    companyData?.receiptSettings?.showCorporateAddress && companyData?.address
+      ? companyData.address
+      : receipt.siteAddress || null;
+  const companyPhone =
+    companyData?.receiptSettings?.showSupportContact && companyData?.phone
+      ? companyData.phone
+      : null;
+  const companyGstin =
+    companyData?.receiptSettings?.showGstin && companyData?.gstin
+      ? companyData.gstin
+      : null;
+  const companyPan =
+    companyData?.receiptSettings?.showPan && companyData?.pan
+      ? companyData.pan
+      : null;
+  const companyRera =
+    companyData?.receiptSettings?.showReraNumber && companyData?.reraNumber
+      ? companyData.reraNumber
+      : null;
+
+  const complianceLine = [companyGstin ? `GSTIN: ${companyGstin}` : null, companyPan ? `PAN: ${companyPan}` : null, companyRera ? `RERA: ${companyRera}` : null]
+    .filter(Boolean)
+    .join(' • ');
+  const pendingAgainstBill = Math.max(receipt.billAmount - receipt.amount, 0);
+  const billParticulars = [
+    receipt.billNumber ? `Bill ${receipt.billNumber}` : null,
+    receipt.description,
+    receipt.reason,
+    receipt.siteName ? `Site: ${receipt.siteName}` : null,
+  ]
+    .filter(Boolean)
+    .join(' • ');
+  const paymentParticulars = [
+    `Paid via ${getPaymentModeLabel(receipt.paymentMode)}`,
+    receipt.referenceNumber ? `Ref ${receipt.referenceNumber}` : null,
+    receipt.note,
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  return `
+    <section style="font-family: Arial, Helvetica, sans-serif; color:#111827;">
+      <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:2px solid #111827;padding-bottom:16px;margin-bottom:16px;">
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          ${
+            companyLogo
+              ? `<div style="width:92px;height:62px;border:1px solid #d4d4d4;border-radius:4px;background:#ffffff;display:flex;align-items:center;justify-content:center;overflow:hidden;"><img src="${escapeHtml(companyLogo)}" alt="Company logo" style="max-width:100%;max-height:100%;object-fit:contain;" /></div>`
+              : ''
+          }
+          <div>
+            <h1 style="margin:0;font-size:20px;font-weight:800;letter-spacing:0.02em;">${escapeHtml(companyName.toUpperCase())}</h1>
+            ${receipt.siteName ? `<p style="margin:8px 0 0;font-size:14px;color:#111827;">${escapeHtml(receipt.siteName)}</p>` : ''}
+            ${companyAddress ? `<p style="margin:4px 0 0;font-size:13px;color:#7a4f00;">${escapeHtml(companyAddress)}</p>` : ''}
+            ${companyPhone ? `<p style="margin:4px 0 0;font-size:12px;color:#6b7280;">Support: ${escapeHtml(companyPhone)}</p>` : ''}
+            ${complianceLine ? `<p style="margin:4px 0 0;font-size:11px;color:#6b7280;">${escapeHtml(complianceLine)}</p>` : ''}
+          </div>
+        </div>
+
+        <div style="min-width:220px;border:1px solid #d4d4d4;border-radius:6px;background:#fafafa;padding:12px 16px;text-align:center;">
+          <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;color:#4b5563;">Payment Receipt</p>
+          <p style="margin:8px 0 0;font-size:20px;font-weight:800;color:#111827;">${escapeHtml(receipt.receiptNumber)}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(formatShortDate(receipt.date))}</p>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #d4d4d4;border-bottom:1px solid #d4d4d4;background:#fafafa;padding:16px 0;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:24px;">
+        <div>
+          <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;">Amount Paid</p>
+          <p style="margin:8px 0 0;font-size:24px;font-weight:800;color:#111827;">${escapeHtml(formatINR(receipt.amount))}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">Payment issued to ${escapeHtml(receipt.vendorName)}</p>
+        </div>
+        <div style="min-width:120px;border:1px solid #d4d4d4;border-radius:6px;background:#ffffff;padding:10px 16px;text-align:center;font-size:16px;font-weight:700;color:#111827;">
+          ${escapeHtml(getPaymentModeLabel(receipt.paymentMode))}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:20px;">
+        <div style="padding:0 14px 0 0;border-right:1px solid #d4d4d4;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #d4d4d4;padding-bottom:4px;">Vendor</p>
+          ${buildInfoRow('Name', receipt.vendorName)}
+          ${buildInfoRow('Phone', receipt.vendorPhone)}
+          ${buildInfoRow('Contact', receipt.contactPersonName)}
+          ${buildInfoRow('GSTIN', receipt.vendorGstin)}
+          ${buildInfoRow('Email', receipt.vendorEmail)}
+        </div>
+        <div style="padding:0 14px;border-right:1px solid #d4d4d4;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #d4d4d4;padding-bottom:4px;">Property</p>
+          ${buildInfoRow('Project', receipt.siteName)}
+          ${buildInfoRow('Bill No.', receipt.billNumber)}
+          ${buildInfoRow('Bill Date', formatShortDate(receipt.billDate))}
+          ${buildInfoRow('Due Date', receipt.dueDate ? formatShortDate(receipt.dueDate) : null)}
+          ${buildInfoRow('Address', receipt.siteAddress || receipt.vendorAddress)}
+        </div>
+        <div style="padding:0 0 0 14px;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #d4d4d4;padding-bottom:4px;">Transaction</p>
+          ${buildInfoRow('Date', formatShortDate(receipt.date))}
+          ${buildInfoRow('Mode', getPaymentModeLabel(receipt.paymentMode))}
+          ${buildInfoRow('Reference', receipt.referenceNumber ?? 'Not recorded')}
+          ${buildInfoRow('Note', receipt.note)}
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #d4d4d4;padding-top:10px;margin-bottom:20px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#4b5563;">Account Position</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          ${buildSummaryCard('Bill Amount', formatINR(receipt.billAmount))}
+          ${buildSummaryCard('Total Paid', formatINR(receipt.amount))}
+          ${buildSummaryCard('Balance Due', formatINR(pendingAgainstBill))}
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #d4d4d4;padding-top:10px;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#4b5563;">Bill Line Items</p>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#1f1f1f;color:#ffffff;">
+              <th style="padding:8px 10px;font-size:12px;text-align:left;">DATE</th>
+              <th style="padding:8px 10px;font-size:12px;text-align:left;">TYPE</th>
+              <th style="padding:8px 10px;font-size:12px;text-align:left;">PARTICULARS</th>
+              <th style="padding:8px 10px;font-size:12px;text-align:right;">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #e5e7eb;">
+              <td style="padding:10px;font-size:12px;">${escapeHtml(formatShortDate(receipt.billDate))}</td>
+              <td style="padding:10px;font-size:12px;">Bill</td>
+              <td style="padding:10px;font-size:12px;">${escapeHtml(billParticulars || 'Vendor bill')}</td>
+              <td style="padding:10px;font-size:12px;text-align:right;">${escapeHtml(formatINR(receipt.billAmount))}</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e5e7eb;background:#fafafa;">
+              <td style="padding:10px;font-size:12px;">${escapeHtml(formatShortDate(receipt.date))}</td>
+              <td style="padding:10px;font-size:12px;">Payment</td>
+              <td style="padding:10px;font-size:12px;">${escapeHtml(paymentParticulars || 'Vendor payment')}</td>
+              <td style="padding:10px;font-size:12px;text-align:right;">${escapeHtml(formatINR(receipt.amount))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:36px;">
+        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:8px;font-size:12px;color:#6b7280;">Vendor Signature</div>
+        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:8px;font-size:12px;color:#6b7280;text-align:right;">Authorised Signatory</div>
+      </div>
+
+      <p style="margin:20px 0 0;font-size:11px;color:#6b7280;text-align:center;">
+        Generated on ${escapeHtml(formatDate(receipt.createdAt || receipt.date))} • ${escapeHtml(receipt.receiptNumber)}
+      </p>
+    </section>
+  `;
 }
 
-export async function downloadVendorReceipt(receipt: VendorPaymentReceipt) {
-  const el = buildVendorReceiptRootElement(receipt)
-  el.style.position = "fixed"
-  el.style.left = "-30000px"
-  el.style.top = "0"
-  el.style.zIndex = "-1"
-  document.body.appendChild(el)
-  
-  // Wait for element to be rendered
-  await new Promise(resolve => setTimeout(resolve, 50))
-  
-  try {
-    const fileName = `Vendor-Receipt-${sanitizeFilePart(receipt.vendorName)}-${sanitizeFilePart(receipt.receiptNumber)}.pdf`
-    await exportElementToPdf(el, fileName)
-    toast.success("PDF downloaded")
-  } catch (e) {
-    console.error("Vendor receipt PDF error:", e)
-    const errorMessage = e instanceof Error ? e.message : "Unknown error"
-    
-    if (errorMessage.includes("libraries")) {
-      toast.error("Failed to load PDF libraries. Please refresh and try again.")
-    } else {
-      toast.error("Could not create PDF. Use Print and save as PDF, or try again.")
-    }
-  } finally {
-    document.body.removeChild(el)
+export function printVendorReceipt(receipt: VendorReceipt, companyData?: any) {
+  const popup = window.open('', '_blank', 'width=960,height=720');
+  if (!popup) {
+    toast.error('Pop-up was blocked. Allow pop-ups to print this receipt.');
+    return;
   }
-}
 
-function buildLegacyVendorReceiptHtmlFile(receipt: VendorPaymentReceipt) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vendor Receipt ${escapeHtml(receipt.receiptNumber)}</title>
-  <style>body { margin:0; padding:32px; background:#f1f5f9; } .wrap { max-width:760px; margin:0 auto; }</style>
-</head>
-<body>
-  <div class="wrap vendor-receipt-html-export">${buildVendorReceiptInnerHtml(receipt)}</div>
-</body>
-</html>`
-}
-
-export function downloadVendorReceiptHtmlFile(receipt: VendorPaymentReceipt) {
-  const html = buildLegacyVendorReceiptHtmlFile(receipt)
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement("a")
-  anchor.href = url
-  anchor.download = `Vendor-Receipt-${sanitizeFilePart(receipt.vendorName)}-${sanitizeFilePart(receipt.receiptNumber)}.html`
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
-  URL.revokeObjectURL(url)
-  toast.message("HTML file saved. Prefer “Download PDF” for a print-ready file.")
-}
-
-export function printVendorReceipt(receipt: VendorPaymentReceipt) {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Vendor ${escapeHtml(receipt.receiptNumber)}</title>
-  <style>
-    @page { size: A4; margin: 12mm; }
-    body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  </style>
-</head>
-<body onload="setTimeout(function(){ window.focus(); window.print(); }, 200)">
-  <div style="max-width:800px;margin:0 auto">${buildVendorReceiptInnerHtml(receipt)}</div>
-</body>
-</html>`
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=960,height=720")
-  if (!printWindow) {
-    toast.error("Pop-up was blocked. Allow pop-ups to print this receipt.")
-    return
-  }
-  printWindow.document.open()
-  printWindow.document.write(html)
-  printWindow.document.close()
+  popup.document.write(`
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Vendor Receipt ${escapeHtml(receipt.receiptNumber)}</title>
+        <style>
+          body { margin: 0; padding: 24px; background: #f3f4f6; }
+          .wrap { max-width: 980px; margin: 0 auto; background: white; padding: 36px; }
+          @media print { body { padding: 0; background: white; } .wrap { max-width: none; padding: 24px; } }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">${buildVendorReceiptInnerHtml(receipt, companyData)}</div>
+      </body>
+    </html>
+  `);
+  popup.document.close();
+  popup.focus();
+  popup.print();
 }
 
 export function VendorReceiptModal({
   receipt,
   onClose,
 }: {
-  receipt: VendorPaymentReceipt
-  onClose: () => void
+  receipt: VendorReceipt;
+  onClose: () => void;
 }) {
+  const { data: companyResponse } = useCompany();
+  const companyData = companyResponse?.data?.company;
+
+  const handleDownload = async () => {
+    try {
+      await downloadVendorReceiptPDF(receipt, companyData);
+      toast.success('Receipt downloaded successfully.');
+    } catch (error) {
+      console.error('Vendor receipt PDF error:', error);
+      toast.error('Failed to export receipt as PDF.');
+    }
+  };
+
+  const handlePrint = () => {
+    printVendorReceipt(receipt, companyData);
+  };
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-8">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-3xl border border-border bg-background shadow-2xl">
-        <div className="flex items-start justify-between border-b border-border px-8 py-6">
+      <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden border border-border bg-background shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40">Vendor payment</p>
-            <h3 className="mt-2 text-2xl font-serif text-foreground">Payment voucher</h3>
-            <p className="mt-2 text-[11px] text-muted-foreground">Review and download a PDF, or open print to save as PDF.</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-primary">Vendor Receipt</p>
+            <h3 className="mt-1 text-xl font-serif text-foreground">{receipt.receiptNumber}</h3>
           </div>
-          <button type="button" onClick={onClose} className="text-muted-foreground/40 transition-colors hover:text-foreground">
+          <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto p-6 sm:p-8">
-          <div className="border border-border bg-card shadow-sm">
-            <div
-              className="vendor-receipt-preview text-slate-900"
-              dangerouslySetInnerHTML={{ __html: buildVendorReceiptInnerHtml(receipt) }}
-            />
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 px-6 py-6">
+          <div
+            className="mx-auto max-w-5xl border border-slate-200 bg-white p-8 text-slate-900 shadow-sm"
+            dangerouslySetInnerHTML={{ __html: buildVendorReceiptInnerHtml(receipt, companyData) }}
+          />
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border px-8 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-muted-foreground">Download PDF for sharing; use Print to save as PDF from the browser if needed.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={() => void downloadVendorReceipt(receipt)}
-              className="h-10 gap-1.5 rounded-none text-[10px] font-bold uppercase tracking-widest"
-            >
-              <Download className="h-3.5 w-3.5" /> Download PDF
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => downloadVendorReceiptHtmlFile(receipt)}
-              className="h-10 rounded-none text-[10px] font-bold uppercase tracking-widest"
-            >
-              Download HTML
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => printVendorReceipt(receipt)}
-              className="h-10 gap-1.5 rounded-none text-[10px] font-bold uppercase tracking-widest"
-            >
-              <Printer className="h-3.5 w-3.5" /> Print
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+          <button
+            onClick={() => void handleDownload()}
+            className="inline-flex h-10 items-center gap-2 border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
+          >
+            <Download className="h-4 w-4" />
+            Download PDF
+          </button>
+          <button
+            onClick={handlePrint}
+            className="inline-flex h-10 items-center gap-2 border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
+          >
+            <Printer className="h-4 w-4" />
+            Print
+          </button>
+          <button
+            onClick={onClose}
+            className="inline-flex h-10 items-center gap-2 bg-primary px-4 text-[10px] font-bold uppercase tracking-widest text-black transition-colors hover:bg-primary/90"
+          >
+            <FileText className="h-4 w-4" />
+            Close
+          </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

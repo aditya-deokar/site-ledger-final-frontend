@@ -24,6 +24,13 @@ function formatDate(iso: string) {
   })
 }
 
+function getCurrentDateTimeInputValue() {
+  const now = new Date()
+  const offset = now.getTimezoneOffset()
+  const local = new Date(now.getTime() - offset * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
 function getReferenceLabel(paymentMode: PaymentMode) {
   switch (paymentMode) {
     case "CHEQUE":
@@ -107,11 +114,11 @@ export function RecordPaymentModal({
   isDownloadingStatement,
 }: RecordPaymentModalProps) {
   const remaining = Math.max(totalAmount - currentlyPaid, 0)
-  const requiresRecordedPaymentDetails = entityType === "customer-booking"
   const [paymentAmount, setPaymentAmount] = useState(remaining)
   const [note, setNote] = useState("")
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("CASH")
   const [referenceNumber, setReferenceNumber] = useState("")
+  const [paymentDate, setPaymentDate] = useState(getCurrentDateTimeInputValue())
   const [history, setHistory] = useState<PaymentRecord[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -168,7 +175,8 @@ export function RecordPaymentModal({
       amount: paymentAmount,
       note,
       paymentMode,
-      referenceNumber: requiresRecordedPaymentDetails ? referenceNumber : undefined,
+      referenceNumber,
+      paymentDate,
     }
     const parsed = recordPaymentSchema.safeParse(payload)
 
@@ -300,7 +308,7 @@ export function RecordPaymentModal({
                 </select>
               </div>
 
-              {requiresRecordedPaymentDetails && paymentMode !== "CASH" ? (
+              {paymentMode !== "CASH" ? (
                 <div className="flex flex-col gap-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40">
                     {getReferenceLabel(paymentMode)}
@@ -323,6 +331,19 @@ export function RecordPaymentModal({
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] font-bold uppercase tracking-widest opacity-40">Payment Date</Label>
+              <Input
+                type="datetime-local"
+                value={paymentDate}
+                onChange={(event) => {
+                  setPaymentDate(event.target.value)
+                  if (formError) setFormError(null)
+                }}
+                className="h-12 rounded-none border-none bg-muted text-[11px] font-bold tracking-widest text-foreground focus-visible:bg-card focus-visible:ring-primary/20"
+              />
             </div>
 
             <div className="flex flex-col gap-2">

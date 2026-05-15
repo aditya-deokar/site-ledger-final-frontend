@@ -89,6 +89,10 @@ export const siteService = {
   addExpense: (siteId: string, data: import('@/schemas/site.schema').CreateExpenseInput) =>
     api.post(`/sites/${siteId}/expenses`, data),
 
-  updateExpensePayment: (siteId: string, expenseId: string, data: { amount: number; note?: string }) =>
+  updateExpensePayment: (
+    siteId: string,
+    expenseId: string,
+    data: { amount: number; note?: string; paymentMode?: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'UPI'; referenceNumber?: string; paymentDate?: string },
+  ) =>
     api.patch(`/sites/${siteId}/expenses/${expenseId}/payment`, data),
 };

@@ -25,7 +25,7 @@ import {
   useDeleteInvestor,
   useAddTransaction,
 } from '@/hooks/api/investor.hooks';
-import { useCreateVendor, useUpdateVendor, useDeleteVendor, useVendors } from '@/hooks/api/vendor.hooks';
+import { useCreateVendor, useCreateVendorDocument, usePatchVendorStatus, useUpdateVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
 import {
   employeeKeys,
@@ -60,6 +60,7 @@ import { EntitySelector } from '@/components/dashboard/navigator/command-center/
 import { KeyList } from '@/components/dashboard/navigator/command-center/key-list';
 import { SiteQuickPickerSelector } from '@/components/dashboard/navigator/command-center/site-quick-picker-selector';
 import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
+import { VendorProfile } from '@/components/dashboard/vendor-profile';
 import type { Phase, TransactionHistoryAction } from '@/components/dashboard/navigator/command-center/types';
 import {
   employeeStatusLabel,
@@ -328,54 +329,66 @@ function CreateSiteForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
 // â”€â”€â”€ FORM: Add Partner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site: any; onSuccess: () => void; onBack: () => void; onVendorChange: (id: string | null) => void }) {
-  const { data: vendorsData } = useVendors();
+  const { data: vendorsData } = useVendors({ status: 'ACTIVE', page: 1, size: 100 });
   const vendors = vendorsData?.data?.vendors ?? [];
   const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(vendors), [vendors]);
   const { mutateAsync: createVendorQuick, isPending: isCreatingVendorQuick } = useCreateVendor();
+  const { mutateAsync: createVendorDocument } = useCreateVendorDocument();
   const [showQuickVendorCreate, setShowQuickVendorCreate] = useState(false);
   const [quickVendorName, setQuickVendorName] = useState('');
   const [quickVendorCategory, setQuickVendorCategory] = useState<string>(COMMON_VENDOR_CATEGORIES[0]);
-  const { mutate, isPending, error } = useAddExpense(site.id, {
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [isUploadingInvoice, setIsUploadingInvoice] = useState(false);
+  const { mutateAsync: addExpense, isPending, error } = useAddExpense(site.id, {
     onSuccess: () => {
       reset();
+      setInvoiceFile(null);
       toast.success('Expense added');
       onSuccess();
     }
   });
-  const { register, handleSubmit, watch, reset, setValue, setFocus, formState: { errors } } = useForm<CreateExpenseInput>({
+  const { register, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
     defaultValues: {
       type: 'GENERAL',
       reason: '',
       vendorId: '',
       description: '',
+      billNumber: '',
+      billDate: getTodayDateInputValue(),
+      dueDate: getTodayDateInputValue(),
       amount: 0,
       amountPaid: 0,
       paymentDate: getTodayDateTimeInputValue(),
       paymentMode: 'CASH',
       referenceNumber: '',
+      note: '',
     },
   });
   const expenseType = watch('type') || 'GENERAL';
   const selectedVendorId = watch('vendorId') || '';
+  const paymentMode = watch('paymentMode') || 'CASH';
+  const amountPaid = watch('amountPaid') || 0;
 
   useEffect(() => {
     onVendorChange(expenseType === 'VENDOR' ? (selectedVendorId || null) : null);
   }, [expenseType, selectedVendorId, onVendorChange]);
 
-  // No manual focus override to let FormShell handle it naturally from the first field
-
-  const onSubmit = (d: CreateExpenseInput) => {
+  const onSubmit = async (d: CreateExpenseInput) => {
     const paidAmount = d.amountPaid ?? 0;
     const payload: CreateExpenseInput = {
       ...d,
-      reason: d.reason || undefined,
+      reason: d.type === 'GENERAL' ? d.reason || undefined : undefined,
       description: d.description || undefined,
+      billNumber: d.type === 'VENDOR' ? d.billNumber?.trim() || undefined : undefined,
+      billDate: d.type === 'VENDOR' && d.billDate ? toIsoDate(d.billDate) : undefined,
+      dueDate: d.type === 'VENDOR' && d.dueDate ? toIsoDate(d.dueDate) : undefined,
       paymentDate: d.paymentDate ? toIsoDate(d.paymentDate) : undefined,
       vendorId: d.type === 'VENDOR' ? d.vendorId || undefined : undefined,
       amountPaid: paidAmount === 0 ? undefined : paidAmount,
       paymentMode: paidAmount > 0 ? d.paymentMode : undefined,
       referenceNumber: paidAmount > 0 && d.paymentMode !== 'CASH' ? d.referenceNumber?.trim() || undefined : undefined,
+      note: paidAmount > 0 ? d.note?.trim() || undefined : undefined,
     };
 
     if (payload.type === 'VENDOR' && !payload.vendorId) {
@@ -383,7 +396,34 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
       return;
     }
 
-    mutate(payload);
+    try {
+      const response = await addExpense(payload);
+
+      if (payload.type === 'VENDOR' && payload.vendorId && invoiceFile) {
+        const expenseId = response?.data?.expense?.id as string | undefined;
+        if (expenseId) {
+          setIsUploadingInvoice(true);
+          try {
+            const fileUrl = await vendorService.uploadVendorDocumentToS3(invoiceFile);
+            await createVendorDocument({
+              vendorId: payload.vendorId,
+              data: {
+                documentType: 'Invoice',
+                documentName: invoiceFile.name,
+                fileUrl,
+                siteId: site.id,
+                expenseId,
+                note: payload.description || payload.reason || undefined,
+              },
+            });
+          } finally {
+            setIsUploadingInvoice(false);
+          }
+        }
+      }
+    } catch (submitError) {
+      toast.error(getApiErrorMessage(submitError, 'Failed to add expense'));
+    }
   };
 
   const handleQuickVendorCreate = async () => {
@@ -413,20 +453,17 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
     }
   };
 
-  const paymentMode = watch('paymentMode') || 'CASH';
-  const amountPaid = watch('amountPaid') || 0;
-
   return (
     <FormShell 
       title={`Add Expense in ${site?.name}`} 
       onBack={onBack} 
-      isPending={isPending || isCreatingVendorQuick} 
+      isPending={isPending || isCreatingVendorQuick || isUploadingInvoice} 
       submitLabel="Save Expense" 
       formId="add-site-expense-form"
     >
-      <form id="add-site-expense-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+      <form id="add-site-expense-form" onSubmit={handleSubmit((values) => void onSubmit(values))} className="flex flex-col gap-6">
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to add expense')} />}
-        
+
         <Field label="Expense Type">
           <input type="hidden" {...register('type')} />
           <KeyToggle
@@ -438,91 +475,109 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
                 'border px-4 py-3 text-[10px] font-bold tracking-widest uppercase transition-all text-center',
                 selected ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/30',
               )}>
-                {t === 'GENERAL' ? 'General' : 'Vendor'}
+                {t === 'GENERAL' ? 'General' : 'Vendor Bill'}
                 {selected && <span className="ml-2 text-[9px]">*</span>}
               </div>
             )}
           />
         </Field>
+
         {expenseType === 'VENDOR' ? (
-          <Field label="Vendor" error={errors.vendorId?.message}>
-            <input type="hidden" {...register('vendorId')} />
-            <SearchableSelect
-              options={vendors.map((vendor: any) => ({
-                value: vendor.id,
-                label: vendor.name,
-                keywords: [vendor.type, vendor.phone, vendor.email].filter(Boolean),
-              }))}
-              value={selectedVendorId}
-              onValueChange={(nextValue) => setValue('vendorId', nextValue, { shouldValidate: true })}
-              placeholder="Select vendor..."
-              searchPlaceholder="Type vendor name..."
-              emptyText="No vendors match your search."
-              renderNoResults={(query) => (
-                <div className="flex flex-col gap-2">
-                  <p className="text-[10px] text-muted-foreground/60">No vendors match "{query.trim()}".</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const trimmed = query.trim();
-                      if (!trimmed) return;
-                      setQuickVendorName(trimmed);
-                      setShowQuickVendorCreate(true);
-                    }}
-                    className="h-9 border border-primary/40 bg-primary/5 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/10 transition-colors"
-                  >
-                    Create Vendor
-                  </button>
+          <>
+            <Field label="Vendor" error={errors.vendorId?.message}>
+              <input type="hidden" {...register('vendorId')} />
+              <SearchableSelect
+                options={vendors.map((vendor: any) => ({
+                  value: vendor.id,
+                  label: vendor.name,
+                  description: `${vendor.type} / ${vendor.status} / Due: ${formatINR(Number(vendor.totalOutstanding ?? 0))}`,
+                  keywords: [vendor.type, vendor.phone, vendor.email, vendor.contactPersonName, vendor.status].filter(Boolean),
+                }))}
+                value={selectedVendorId}
+                onValueChange={(nextValue) => setValue('vendorId', nextValue, { shouldValidate: true })}
+                placeholder="Select active vendor..."
+                searchPlaceholder="Type vendor name..."
+                emptyText="No active vendors match your search."
+                renderNoResults={(query) => (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[10px] text-muted-foreground/60">No vendors match "{query.trim()}".</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = query.trim();
+                        if (!trimmed) return;
+                        setQuickVendorName(trimmed);
+                        setShowQuickVendorCreate(true);
+                      }}
+                      className="h-9 border border-primary/40 bg-primary/5 text-primary text-[10px] font-bold uppercase tracking-widest hover:bg-primary/10 transition-colors"
+                    >
+                      Create Vendor
+                    </button>
+                  </div>
+                )}
+              />
+              {showQuickVendorCreate && (
+                <div className="mt-3 border border-border bg-muted/20 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Quick Create Vendor</p>
+                    <button type="button" onClick={() => setShowQuickVendorCreate(false)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
+                  </div>
+                  <div className="grid gap-2">
+                    <input
+                      value={quickVendorName}
+                      onChange={(e) => setQuickVendorName(e.target.value)}
+                      placeholder="Vendor name"
+                      className={cn(INPUT_CLS, 'h-10')}
+                    />
+                    <SearchableSelect
+                      options={vendorTypeOptions}
+                      value={quickVendorCategory}
+                      onValueChange={setQuickVendorCategory}
+                      placeholder="Select or type category..."
+                      searchPlaceholder="Search or create category..."
+                      emptyText="Type a new category name."
+                      allowCustom
+                    />
+                    <button
+                      type="button"
+                      onClick={handleQuickVendorCreate}
+                      disabled={isCreatingVendorQuick}
+                      className="mt-1 h-10 bg-primary text-black text-[10px] font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      {isCreatingVendorQuick ? 'Creating...' : 'Create & Select Vendor'}
+                    </button>
+                  </div>
                 </div>
               )}
-            />
-            {showQuickVendorCreate && (
-              <div className="mt-3 border border-border bg-muted/20 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Create Vendor</p>
-                  <button type="button" onClick={() => setShowQuickVendorCreate(false)} className="text-[10px] text-muted-foreground hover:text-foreground">Cancel</button>
-                </div>
-                <div className="grid gap-2">
-                  <input
-                    value={quickVendorName}
-                    onChange={(e) => setQuickVendorName(e.target.value)}
-                    placeholder="Vendor name"
-                    className={cn(INPUT_CLS, 'h-10')}
-                  />
-                  <SearchableSelect
-                    options={vendorTypeOptions}
-                    value={quickVendorCategory}
-                    onValueChange={setQuickVendorCategory}
-                    placeholder="Select or type category..."
-                    searchPlaceholder="Search or create category..."
-                    emptyText="Type a new category name."
-                    allowCustom
-                  />
-                  <button
-                    type="button"
-                    onClick={handleQuickVendorCreate}
-                    disabled={isCreatingVendorQuick}
-                    className="mt-1 h-10 bg-primary text-black text-[10px] font-bold uppercase tracking-widest hover:bg-primary/90 disabled:opacity-60"
-                  >
-                    {isCreatingVendorQuick ? 'Creating...' : 'Create & Select Vendor'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </Field>
+            </Field>
+
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Bill Number">
+                <input placeholder="Supplier invoice / bill no." className={INPUT_CLS} {...register('billNumber')} />
+              </Field>
+              <Field label="Bill Date">
+                <input type="date" className={INPUT_CLS} {...register('billDate')} />
+              </Field>
+              <Field label="Due Date">
+                <input type="date" className={INPUT_CLS} {...register('dueDate')} />
+              </Field>
+            </div>
+          </>
         ) : (
           <Field label="Reason" error={errors.reason?.message}>
             <input placeholder="e.g. Cement purchase, Site transport" className={INPUT_CLS} {...register('reason')} />
           </Field>
         )}
+
         <div className="grid grid-cols-2 gap-4">
           <Field label="Amount (INR)" error={errors.amount?.message}>
             <input type="number" min={0} className={INPUT_CLS} {...register('amount', { valueAsNumber: true })} />
           </Field>
-          <Field label="Amount Paid (optional)" error={errors.amountPaid?.message}>
+          <Field label="Amount Paid Now (optional)" error={errors.amountPaid?.message}>
             <input type="number" min={0} className={INPUT_CLS} {...register('amountPaid', { valueAsNumber: true })} />
           </Field>
         </div>
+
         <div className="grid grid-cols-2 gap-4">
           <Field label="Initial Payment Date (optional)">
             <input type="datetime-local" className={INPUT_CLS} {...register('paymentDate')} />
@@ -547,16 +602,38 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
 
         {amountPaid > 0 && paymentMode !== 'CASH' && (
           <Field label={getBookingReferenceLabel(paymentMode)} error={errors.referenceNumber?.message}>
-            <input 
-              placeholder={getBookingReferenceLabel(paymentMode)} 
-              className={INPUT_CLS} 
-              {...register('referenceNumber')} 
+            <input
+              placeholder={getBookingReferenceLabel(paymentMode)}
+              className={INPUT_CLS}
+              {...register('referenceNumber')}
             />
           </Field>
         )}
+
+        {amountPaid > 0 && (
+          <Field label="Payment Note">
+            <input placeholder="Optional note for payment receipt" className={INPUT_CLS} {...register('note')} />
+          </Field>
+        )}
+
         <Field label="Description (optional)">
           <textarea className={cn(INPUT_CLS, 'min-h-16 resize-none py-3')} {...register('description')} />
         </Field>
+
+        {expenseType === 'VENDOR' && (
+          <Field label="Invoice Attachment (optional)">
+            <label className="flex h-20 cursor-pointer items-center justify-center border border-dashed border-border bg-muted/20 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf,image/png,image/jpeg,image/webp"
+                onChange={(event) => setInvoiceFile(event.target.files?.[0] ?? null)}
+              />
+              {invoiceFile ? invoiceFile.name : 'Choose invoice PDF or image'}
+            </label>
+            <p className="mt-1 text-[9px] text-muted-foreground/50">The file will be stored as a vendor document and linked to the created bill.</p>
+          </Field>
+        )}
       </form>
     </FormShell>
   );
@@ -2641,7 +2718,7 @@ export default function CommandCenter() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedCategory = CATEGORIES[catIdx];
-  const actions = selectedCategory?.actions ?? [];
+  const actions = (selectedCategory?.actions ?? []).filter((action) => action.id !== 'manage-vendor-documents');
 
   // Data fetching: keep this at zero-or-one active list query so Navigator does not warm every entity API.
   const navigatorDataQueryConfig = useMemo<NavigatorDataQueryConfig | null>(() => {
@@ -2688,16 +2765,16 @@ export default function CommandCenter() {
       if (selectedCategory.id === 'vendors') {
         return {
           kind: 'vendors',
-          queryKey: ['vendors', undefined],
-          queryFn: () => vendorService.getVendors(undefined),
+          queryKey: ['vendors', { includeArchived: true, page: 1, size: 100 }],
+          queryFn: () => vendorService.getVendors({ includeArchived: true, page: 1, size: 100 }),
         };
       }
 
       if (selectedAction === 'vendor-transactions') {
         return {
           kind: 'vendors',
-          queryKey: ['vendors', undefined],
-          queryFn: () => vendorService.getVendors(undefined),
+          queryKey: ['vendors', { includeArchived: true, page: 1, size: 100 }],
+          queryFn: () => vendorService.getVendors({ includeArchived: true, page: 1, size: 100 }),
         };
       }
 
@@ -2767,7 +2844,7 @@ export default function CommandCenter() {
   const { mutate: deleteSiteMutate, isPending: isDeleteSitePending, error: deleteSiteError } = useDeleteSite();
   const { mutate: deletePartnerMutate, isPending: isDeletePartnerPending } = useDeletePartner();
   const { mutate: deleteInvestorMutate, isPending: isDeleteInvestorPending } = useDeleteInvestor();
-  const { mutate: deleteVendorMutate, isPending: isDeleteVendorPending } = useDeleteVendor();
+  const { mutate: patchVendorStatusMutate, isPending: isPatchVendorStatusPending } = usePatchVendorStatus();
   const { mutate: deleteEmployeeMutate, isPending: isDeleteEmployeePending } = useDeleteEmployee();
 
   const selectorItems = useMemo((): any[] => {
@@ -3059,6 +3136,28 @@ export default function CommandCenter() {
       return <ManageFundsForm {...props} site={selectedEntity} />;
     }
 
+    if (
+      selectedAction === 'view-vendor-profile'
+      || selectedAction === 'manage-vendor-sites'
+      || selectedAction === 'manage-vendor-documents'
+    ) {
+      const initialTab =
+        selectedAction === 'manage-vendor-sites'
+          ? 'sites'
+          : selectedAction === 'manage-vendor-documents'
+            ? 'documents'
+            : 'overview';
+
+      return (
+        <VendorProfile
+          vendorId={selectedEntity.id}
+          vendorName={selectedEntity.name}
+          initialTab={initialTab}
+          onClose={handleFormBack}
+        />
+      );
+    }
+
     // Site Actions Confirmations
     if (selectedAction === 'archive-site') {
       const isRestoringSite = selectedEntity?.isActive === false;
@@ -3123,16 +3222,21 @@ export default function CommandCenter() {
       );
     }
 
-    if (selectedAction === 'delete-vendor') {
+    if (selectedAction === 'archive-vendor') {
+      const isRestoringVendor = selectedEntity?.status === 'ARCHIVED';
+      const nextStatus = isRestoringVendor ? 'ACTIVE' : 'ARCHIVED';
       return (
         <ActionConfirmForm
           {...props}
-          title="Delete Vendor"
-          message={`Remove "${selectedEntity?.name}" from vendors list?`}
-          submitLabel="Delete Vendor"
-          destructive
-          isPending={isDeleteVendorPending}
-          onConfirm={() => deleteVendorMutate(selectedEntity.id, { onSuccess: () => { toast.success('Vendor deleted'); handleFormSuccess(); } })}
+          title={isRestoringVendor ? 'Restore Vendor' : 'Archive Vendor'}
+          message={
+            isRestoringVendor
+              ? `Restore "${selectedEntity?.name}" so it can be used again for new vendor bills?`
+              : `Archive "${selectedEntity?.name}"? Existing bills, payments, and receipts will remain available.`
+          }
+          submitLabel={isRestoringVendor ? 'Restore Vendor' : 'Archive Vendor'}
+          isPending={isPatchVendorStatusPending}
+          onConfirm={() => patchVendorStatusMutate({ id: selectedEntity.id, status: nextStatus }, { onSuccess: () => { toast.success(isRestoringVendor ? 'Vendor restored' : 'Vendor archived'); handleFormSuccess(); } })}
         />
       );
     }
@@ -3161,6 +3265,9 @@ export default function CommandCenter() {
       case 'edit-investor': return <EditInvestorForm {...props} entity={selectedEntity} />;
       case 'add-vendor': return <AddVendorForm {...props} />;
       case 'edit-vendor': return <EditVendorForm {...props} entity={selectedEntity} />;
+      case 'view-vendor-profile': return null;
+      case 'manage-vendor-sites': return null;
+      case 'manage-vendor-documents': return null;
       case 'edit-customer': return <EditCustomerForm {...props} entity={selectedEntity} />;
       case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} />;
       case 'cancel-deal': return <CancelDealForm {...props} entity={selectedEntity} />;

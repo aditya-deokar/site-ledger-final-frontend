@@ -116,11 +116,15 @@ export const createExpenseSchema = z.object({
   reason: z.string().optional(),
   vendorId: z.string().optional(),
   description: z.string().optional(),
+  billNumber: z.string().optional().or(z.literal('')),
+  billDate: z.string().optional(),
+  dueDate: z.string().optional(),
   amount: z.number().positive('Amount must be positive'),
   amountPaid: z.number().min(0).optional(),
   paymentDate: z.string().optional(),
   paymentMode: paymentModeSchema.optional(),
   referenceNumber: z.string().optional().or(z.literal('')),
+  note: z.string().optional().or(z.literal('')),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
@@ -132,6 +136,9 @@ export interface Expense {
   vendorName: string | null;
   vendorType: string | null;
   description: string | null;
+  billNumber: string | null;
+  billDate: string;
+  dueDate: string | null;
   amount: number;
   amountPaid: number;
   remaining: number;

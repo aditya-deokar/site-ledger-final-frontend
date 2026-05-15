@@ -62,7 +62,12 @@ export function ContextInsightPanel({
     .filter((exp) => focusedVendorId ? exp.vendorId === focusedVendorId : exp.type === 'GENERAL')
     .slice(0, 10);
 
-  const isVendorAction = action === 'edit-vendor' || action === 'delete-vendor';
+  const isVendorAction =
+    action === 'edit-vendor'
+    || action === 'view-vendor-profile'
+    || action === 'manage-vendor-sites'
+    || action === 'manage-vendor-documents'
+    || action === 'archive-vendor';
   if (!site && !isVendorAction) return null;
 
   const isSiteDrivenAction = !!action && ACTIONS_USING_SITE_SELECTOR.includes(action);
@@ -144,6 +149,16 @@ export function ContextInsightPanel({
                   <div className="mt-4 pt-3 border-t border-border/50 flex justify-between items-baseline">
                     <span className={LABEL_CLS}>Global Balance Due</span>
                     <span className="text-sm font-bold text-primary">{formatINR(Number(vendor.remainingBalance ?? vendor.totalOutstanding ?? 0))}</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
+                    <div>
+                      <p className={LABEL_CLS}>Status</p>
+                      <p className="mt-1 text-sm font-bold text-foreground">{vendor.status}</p>
+                    </div>
+                    <div>
+                      <p className={LABEL_CLS}>Overdue Bills</p>
+                      <p className="mt-1 text-sm font-bold text-amber-700">{Number(vendor.overdueBillCount ?? 0)}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -228,6 +243,9 @@ export function ContextInsightPanel({
                 <>
                   <p className="mt-2 text-sm font-bold uppercase tracking-widest">{vendor.name}</p>
                   <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{vendor.type}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {vendor.contactPersonName || vendor.phone || vendor.email || 'No primary contact'}
+                  </p>
                   <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border/60 pt-3">
                     <div>
                       <p className={LABEL_CLS}>Billed</p>
@@ -236,6 +254,14 @@ export function ContextInsightPanel({
                     <div>
                       <p className={LABEL_CLS}>Outstanding</p>
                       <p className="mt-1 text-sm font-bold text-primary">{formatINR(Number(vendor.totalOutstanding ?? 0))}</p>
+                    </div>
+                    <div>
+                      <p className={LABEL_CLS}>Assigned Sites</p>
+                      <p className="mt-1 text-sm font-bold text-foreground">{Number(vendor.siteCount ?? 0)}</p>
+                    </div>
+                    <div>
+                      <p className={LABEL_CLS}>Overdue Bills</p>
+                      <p className="mt-1 text-sm font-bold text-amber-700">{Number(vendor.overdueBillCount ?? 0)}</p>
                     </div>
                   </div>
                 </>

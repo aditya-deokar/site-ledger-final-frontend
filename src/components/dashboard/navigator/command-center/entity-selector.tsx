@@ -22,9 +22,16 @@ type EntityRecord = {
   dealStatus?: string | null;
   phone?: string | null;
   email?: string | null;
+  contactPersonName?: string | null;
   siteName?: string | null;
   type?: string | null;
   status?: string | null;
+  siteCount?: number | null;
+  documentCount?: number | null;
+  overdueBillCount?: number | null;
+  totalOutstanding?: number | null;
+  lastBillDate?: string | null;
+  lastPaymentDate?: string | null;
   isActive?: boolean | null;
   fixedRate?: number | null;
   fixedRateCadence?: 'YEARLY' | 'MONTHLY' | null;
@@ -71,8 +78,11 @@ function getInvestorMeta(item: EntityRecord) {
 }
 
 function getVendorMeta(item: EntityRecord) {
-  const contact = [item.phone, item.email].filter(Boolean).join(' / ');
-  return [contact, item.type].filter(Boolean);
+  const contact = [item.contactPersonName, item.phone, item.email].filter(Boolean).join(' / ');
+  const siteInfo = item.siteCount !== null && item.siteCount !== undefined ? `${item.siteCount} site${item.siteCount === 1 ? '' : 's'}` : null;
+  const outstanding = item.totalOutstanding !== null && item.totalOutstanding !== undefined ? `Due: Rs. ${Number(item.totalOutstanding).toLocaleString('en-IN')}` : null;
+  const overdue = item.overdueBillCount ? `${item.overdueBillCount} overdue` : null;
+  return [contact, item.type, item.status, siteInfo, outstanding, overdue].filter(Boolean);
 }
 
 function getCustomerMeta(item: EntityRecord) {

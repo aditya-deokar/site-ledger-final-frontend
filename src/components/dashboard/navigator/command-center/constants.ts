@@ -70,7 +70,10 @@ export const CATEGORIES: CategoryDef[] = [
     actions: [
       { id: 'add-vendor', label: 'Add Vendor', shortcut: '1', icon: Wrench },
       { id: 'edit-vendor', label: 'Edit Vendor', shortcut: '2', icon: Pencil },
-      { id: 'delete-vendor', label: 'Delete Vendor', shortcut: '3', icon: Hammer },
+      { id: 'view-vendor-profile', label: 'View Vendor Profile', shortcut: '3', icon: Eye },
+      { id: 'manage-vendor-sites', label: 'Manage Site Assignments', shortcut: '4', icon: Building2 },
+      { id: 'manage-vendor-documents', label: 'Manage Documents', shortcut: '5', icon: BriefcaseBusiness },
+      { id: 'archive-vendor', label: 'Archive/Restore Vendor', shortcut: '6', icon: Hammer },
     ],
   },
   {
@@ -101,7 +104,7 @@ export const ACTIONS_NEEDING_SELECTOR = [
   'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site',
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
-  'edit-vendor', 'delete-vendor',
+  'edit-vendor', 'view-vendor-profile', 'manage-vendor-sites', 'manage-vendor-documents', 'archive-vendor',
   'edit-customer', 'record-payment', 'cancel-deal',
   'view-employee-details', 'edit-employee', 'delete-employee',
   'mark-employee-attendance', 'pay-salary',
@@ -111,7 +114,7 @@ export const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
 export const ACTIONS_USING_SITE_SELECTOR = ['site-transactions', 'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site', 'record-payment'];
 export const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const;
 export const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const;
-export const COMMON_VENDOR_CATEGORIES = ['MATERIALS', 'LABOR', 'CONTRACTOR', 'TRANSPORT', 'ELECTRICAL', 'PLUMBING', 'MASONRY', 'CARPENTRY'] as const;
+export const COMMON_VENDOR_CATEGORIES = ['Materials', 'Labor', 'Contractor', 'Transport', 'Electrical', 'Plumbing', 'Masonry', 'Carpentry'] as const;
 export const BOOKING_AGREEMENT_LINE_TYPES = ['CHARGE', 'TAX', 'DISCOUNT', 'CREDIT'] as const;
 
 export const INPUT_CLS = 'h-12 w-full bg-muted border-2 border-transparent rounded-none px-4 text-sm font-bold tracking-widest text-foreground placeholder:text-muted-foreground/30 outline-none focus:bg-card focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all';

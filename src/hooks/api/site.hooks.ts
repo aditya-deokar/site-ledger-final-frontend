@@ -320,7 +320,19 @@ export const useWithdrawFund = (siteId: string, options?: { onSuccess?: () => vo
 export const useUpdateExpensePayment = (siteId: string, options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ expenseId, data }: { expenseId: string; data: { amount: number; note?: string } }) => {
+    mutationFn: async ({
+      expenseId,
+      data,
+    }: {
+      expenseId: string;
+      data: {
+        amount: number;
+        note?: string;
+        paymentMode?: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'UPI';
+        referenceNumber?: string;
+        paymentDate?: string;
+      };
+    }) => {
       const res = await siteService.updateExpensePayment(siteId, expenseId, data);
       return res;
     },

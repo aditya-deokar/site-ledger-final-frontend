@@ -39,6 +39,7 @@ export const recordPaymentSchema = z.object({
   note: optionalTextFieldSchema,
   paymentMode: paymentModeSchema,
   referenceNumber: optionalTextFieldSchema,
+  paymentDate: optionalTextFieldSchema,
 }).superRefine((data, ctx) => {
   if (data.paymentMode !== 'CASH' && !data.referenceNumber?.trim()) {
     ctx.addIssue({
@@ -52,6 +53,7 @@ export const recordPaymentSchema = z.object({
   note: data.note?.trim() || undefined,
   paymentMode: data.paymentMode,
   referenceNumber: data.paymentMode === 'CASH' ? undefined : data.referenceNumber?.trim() || undefined,
+  paymentDate: data.paymentDate?.trim() || undefined,
 }));
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 
@@ -135,6 +137,12 @@ export interface CustomerPaymentHistoryItem {
   paymentMode: PaymentMode | null;
   referenceNumber: string | null;
   note: string | null;
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversalPaymentId?: string | null;
+  receiptId?: string | null;
+  receiptNumber?: string | null;
+  receiptStatus?: 'ACTIVE' | 'VOIDED' | null;
   createdAt: string;
 }
 
