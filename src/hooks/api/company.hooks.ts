@@ -151,6 +151,41 @@ export const useRecordWithdrawalPayment = (options?: { onSuccess?: () => void })
   });
 };
 
+export const useUpdateWithdrawalNote = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { note?: string } }) =>
+      companyService.updateWithdrawalNote(id, data),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawal', variables.id] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useDeleteWithdrawal = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => companyService.deleteWithdrawal(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['company'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['activity'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const usePartnerLedger = (partnerId: string | null) => {
+  return useQuery({
+    queryKey: ['partner-ledger', partnerId],
+    queryFn: () => companyService.getPartnerLedger(partnerId!),
+    enabled: !!partnerId,
+    retry: false,
+  });
+};
+
 export const useWithdrawalPayments = (id: string) => {
   return useQuery({
     queryKey: ['company-withdrawal-payments', id],

@@ -172,6 +172,35 @@ export interface CompanyWithdrawalPaymentsResponse {
   };
 }
 
+export interface PartnerLedgerEntry {
+  id: string;
+  amount: number;
+  direction: 'IN' | 'OUT';
+  movementType: string;
+  note: string | null;
+  reversalOfPaymentId: string | null;
+  date: string;
+}
+
+export interface PartnerLedgerResponse {
+  ok: boolean;
+  data: {
+    partner: {
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      stakePercentage: number;
+    };
+    summary: {
+      totalIn: number;
+      totalOut: number;
+      netCapital: number;
+    };
+    entries: PartnerLedgerEntry[];
+  };
+}
+
 export interface CompanyActivityItem {
   id: string;
   type: 'withdrawal' | 'site_fund' | 'investor_tx' | 'expense';

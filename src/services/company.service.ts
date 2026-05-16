@@ -56,8 +56,20 @@ export const companyService = {
     return api.patch(`/company/withdrawals/${id}/payment`, data);
   },
 
+  updateWithdrawalNote: async (id: string, data: { note?: string }): Promise<CompanyWithdrawalResponse> => {
+    return api.patch(`/company/withdrawals/${id}`, data);
+  },
+
+  deleteWithdrawal: async (id: string): Promise<{ ok: boolean; data: { message: string } }> => {
+    return api.delete(`/company/withdrawals/${id}`);
+  },
+
   getWithdrawalPayments: async (id: string): Promise<CompanyWithdrawalPaymentsResponse> => {
     return api.get(`/company/withdrawals/${id}/payments`);
+  },
+
+  getPartnerLedger: async (partnerId: string) => {
+    return api.get(`/company/partners/${partnerId}/ledger`);
   },
 
   getActivity: async (cursor?: string, limit?: number): Promise<CompanyActivityResponse> => {
