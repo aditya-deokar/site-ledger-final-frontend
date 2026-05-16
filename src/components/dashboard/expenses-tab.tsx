@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { useRouter } from "next/navigation"
 import { useMemo, useRef, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -8,7 +9,6 @@ import { useExpenses, useAddExpense, useUpdateExpensePayment } from "@/hooks/api
 import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { useVendors } from "@/hooks/api/vendor.hooks"
 import { Vendor } from "@/schemas/vendor.schema"
-import { VendorProfile } from "@/components/dashboard/vendor-profile"
 import { SearchableSelect } from "@/components/dashboard/navigator/form-primitives"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { exportElementToPdf } from "@/lib/pdf-export"
+import { buildVendorWorkspacePath } from "@/lib/vendor-workspace"
 import { toast } from "sonner"
 import { Loader2, Plus, X, FileText, Users2, FileSpreadsheet, Eye, Search } from "lucide-react"
 
@@ -265,9 +266,9 @@ function AddExpensePanel({
 
 // â”€â”€ Main Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remainingFund: number }) {
+  const router = useRouter()
   const { data, isLoading } = useExpenses(siteId)
   const [addOpen, setAddOpen] = useState(false)
-  const [profileVendorId, setProfileVendorId] = useState<string | null>(null)
   const [payExpense, setPayExpense] = useState<Expense | null>(null)
   const [isPdfing, setIsPdfing] = useState(false)
   const [searchText, setSearchText] = useState("")
@@ -471,7 +472,7 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                 <div className="col-span-2">
                   {exp.vendorName ? (
                     <div>
-                      <button onClick={() => exp.vendorId && setProfileVendorId(exp.vendorId)} className="text-sm text-primary hover:underline text-left">{exp.vendorName}</button>
+                      <button onClick={() => exp.vendorId && router.push(buildVendorWorkspacePath(exp.vendorId))} className="text-sm text-primary hover:underline text-left">{exp.vendorName}</button>
                       <p className="text-[9px] font-bold tracking-widest text-muted-foreground/40">
                         {exp.vendorType}
                       </p>
@@ -534,10 +535,6 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
           remainingFund={remainingFund}
           onClose={() => setAddOpen(false)}
         />
-      )}
-
-      {profileVendorId && (
-        <VendorProfile vendorId={profileVendorId} onClose={() => setProfileVendorId(null)} />
       )}
 
       {payExpense && (

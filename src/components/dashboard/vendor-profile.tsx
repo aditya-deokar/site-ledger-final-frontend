@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, FileUp, Loader2, Printer, Trash2, X } from 'lucide-react';
+import { ChevronLeft, Download, Eye, FileUp, Loader2, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
   useCreateVendorDocument,
   useDeleteVendorDocument,
   usePatchVendorStatus,
-  useUpsertVendorAssignment,
   useVendor,
-  useVendorAssignments,
   useVendorBills,
   useVendorDocuments,
   useVendorPayments,
@@ -20,12 +18,10 @@ import {
 import { useSites, useUpdateExpensePayment } from '@/hooks/api/site.hooks';
 import { vendorService } from '@/services/vendor.service';
 import {
-  type VendorAssignment,
   type VendorBill,
   type VendorDocument,
   type VendorPayment,
   type VendorReceipt,
-  type VendorSiteAssignmentUpsertInput,
   type VendorStatus,
   type VendorSummary,
 } from '@/schemas/vendor.schema';
@@ -41,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import type { VendorWorkspaceTab } from '@/lib/vendor-workspace';
 import { cn } from '@/lib/utils';
 
 function formatINR(value: number) {
@@ -87,10 +84,10 @@ function SummaryCard({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-type VendorProfileTab = 'overview' | 'sites' | 'bills' | 'payments' | 'receipts' | 'documents' | 'statement';
+export type VendorProfileTab = VendorWorkspaceTab;
 
-function normalizeVendorProfileTab(tab: VendorProfileTab): VendorProfileTab {
-  return tab === 'documents' ? 'overview' : tab;
+function normalizeVendorProfileTab(tab?: VendorProfileTab | null): VendorProfileTab {
+  return tab ?? 'overview';
 }
 
 function PaymentBridge({
@@ -141,14 +138,6 @@ export function VendorProfile({
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<VendorProfileTab>(normalizeVendorProfileTab(initialTab));
-  const [editingAssignment, setEditingAssignment] = useState<VendorAssignment | null>(null);
-  const [assignmentForm, setAssignmentForm] = useState<VendorSiteAssignmentUpsertInput>({
-    status: 'ACTIVE',
-    isPreferred: false,
-    paymentTermsDaysOverride: null,
-    notes: '',
-  });
-  const [assignmentSiteId, setAssignmentSiteId] = useState('');
   const [documentType, setDocumentType] = useState('KYC');
   const [documentName, setDocumentName] = useState('');
   const [documentNote, setDocumentNote] = useState('');
@@ -166,11 +155,9 @@ export function VendorProfile({
   const { data: paymentsData, isLoading: paymentsLoading } = useVendorPayments(vendorId, { page: 1, size: 200 });
   const { data: receiptsData, isLoading: receiptsLoading } = useVendorReceipts(vendorId, { page: 1, size: 200 });
   const { data: statementData, isLoading: statementLoading } = useVendorStatement(vendorId, { page: 1, size: 500 });
-  const { data: assignmentsData, isLoading: assignmentsLoading } = useVendorAssignments(vendorId);
   const { data: documentsData, isLoading: documentsLoading } = useVendorDocuments(vendorId);
   const { data: sitesData } = useSites();
   const { mutate: patchVendorStatus, isPending: isPatchingStatus } = usePatchVendorStatus();
-  const { mutateAsync: upsertAssignment, isPending: isSavingAssignment } = useUpsertVendorAssignment();
   const { mutateAsync: createVendorDocument, isPending: isCreatingDocument } = useCreateVendorDocument();
   const { mutate: deleteVendorDocument, isPending: isDeletingDocument } = useDeleteVendorDocument();
 
@@ -179,32 +166,9 @@ export function VendorProfile({
   const payments = paymentsData?.data?.payments ?? [];
   const receipts = receiptsData?.data?.receipts ?? [];
   const statement = statementData?.data?.statement ?? [];
-  const assignments = assignmentsData?.data?.assignments ?? vendor?.assignments ?? [];
   const documents = documentsData?.data?.documents ?? [];
   const sites = sitesData?.data?.sites ?? [];
 
-  useEffect(() => {
-    if (!editingAssignment) {
-      setAssignmentForm({
-        status: 'ACTIVE',
-        isPreferred: false,
-        paymentTermsDaysOverride: null,
-        notes: '',
-      });
-      setAssignmentSiteId('');
-      return;
-    }
-
-    setAssignmentSiteId(editingAssignment.siteId);
-    setAssignmentForm({
-      status: editingAssignment.status,
-      isPreferred: editingAssignment.isPreferred,
-      paymentTermsDaysOverride: editingAssignment.paymentTermsDaysOverride,
-      notes: editingAssignment.notes ?? '',
-    });
-  }, [editingAssignment]);
-
-  const billsById = useMemo(() => new Map(bills.map((bill) => [bill.id, bill])), [bills]);
   const billOptions = useMemo(
     () => bills.map((bill) => ({ id: bill.id, label: `${bill.billNumber || bill.description || 'Vendor bill'} / ${bill.siteName}` })),
     [bills],
@@ -212,7 +176,6 @@ export function VendorProfile({
 
   const isLoadingCurrentTab =
     vendorLoading ||
-    (activeTab === 'sites' && assignmentsLoading) ||
     (activeTab === 'bills' && billsLoading) ||
     (activeTab === 'payments' && paymentsLoading) ||
     (activeTab === 'receipts' && receiptsLoading) ||
@@ -222,30 +185,6 @@ export function VendorProfile({
   useEffect(() => {
     setActiveTab(normalizeVendorProfileTab(initialTab));
   }, [initialTab, vendorId]);
-
-  const handleAssignmentSubmit = async () => {
-    if (!assignmentSiteId) {
-      toast.error('Select a site assignment.');
-      return;
-    }
-
-    try {
-      await upsertAssignment({
-        vendorId,
-        siteId: assignmentSiteId,
-        data: {
-          status: assignmentForm.status,
-          isPreferred: assignmentForm.isPreferred,
-          paymentTermsDaysOverride: assignmentForm.paymentTermsDaysOverride ?? null,
-          notes: assignmentForm.notes,
-        },
-      });
-      toast.success(editingAssignment ? 'Vendor assignment updated' : 'Vendor assigned to site');
-      setEditingAssignment(null);
-    } catch (error) {
-      toast.error((error as { error?: string })?.error || 'Failed to save assignment.');
-    }
-  };
 
   const handleDocumentUpload = async () => {
     if (!documentFile) {
@@ -290,48 +229,49 @@ export function VendorProfile({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-        <div className="absolute inset-0" onClick={onClose} />
-        <div className="relative flex h-full w-full max-w-6xl flex-col border-l border-border bg-background shadow-2xl animate-in slide-in-from-right duration-200">
-          <div className="flex items-start justify-between border-b border-border px-8 pb-5 pt-8">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Vendor Workspace</p>
-              <div className="mt-2 flex items-center gap-3">
-                <h3 className="text-2xl font-serif text-foreground">{displayVendorName}</h3>
-                {vendor && (
-                  <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
-                    {vendor.status}
-                  </span>
-                )}
-              </div>
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                Category: {vendor?.type || '-'}
-              </p>
+      <div className="space-y-6 animate-in fade-in duration-300">
+        <div className="border border-border bg-card p-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </button>
+
+          <div className="mt-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Vendor Workspace</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h3 className="text-3xl font-serif text-foreground">{displayVendorName}</h3>
+              {vendor && (
+                <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
+                  {vendor.status}
+                </span>
+              )}
             </div>
-            <button onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
-              <X className="h-5 w-5" />
-            </button>
+            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+              Category: {vendor?.type || '-'}
+            </p>
           </div>
+        </div>
 
-          {vendor && (
-            <div className="grid grid-cols-2 gap-4 border-b border-border px-8 py-4 lg:grid-cols-6">
-              <SummaryCard label="Outstanding" value={formatINR(vendor.totalOutstanding)} tone={vendor.totalOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600'} />
-              <SummaryCard label="Total Billed" value={formatINR(vendor.totalBilled)} />
-              <SummaryCard label="Total Paid" value={formatINR(vendor.totalPaid)} tone="text-emerald-700" />
-              <SummaryCard label="Overdue Bills" value={String(vendor.overdueBillCount)} tone={vendor.overdueBillCount > 0 ? 'text-amber-700' : undefined} />
-              <SummaryCard label="Assigned Sites" value={String(vendor.siteCount)} />
-              <div className="hidden" aria-hidden="true">
-                <SummaryCard label="Documents" value={String(vendor.documentCount)} />
-              </div>
-            </div>
-          )}
+        {vendor && (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <SummaryCard label="Outstanding" value={formatINR(vendor.totalOutstanding)} tone={vendor.totalOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600'} />
+            <SummaryCard label="Total Billed" value={formatINR(vendor.totalBilled)} />
+            <SummaryCard label="Total Paid" value={formatINR(vendor.totalPaid)} tone="text-emerald-700" />
+            <SummaryCard label="Overdue Bills" value={String(vendor.overdueBillCount)} tone={vendor.overdueBillCount > 0 ? 'text-amber-700' : undefined} />
+            <SummaryCard label="Documents" value={String(vendor.documentCount)} />
+          </div>
+        )}
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="min-h-0 flex-1">
-            <div className="border-b border-border px-8 py-3">
+        <div className="border border-border bg-card">
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="min-h-0">
+            <div className="border-b border-border px-6 py-3">
               <TabsList variant="line" className="flex-wrap gap-3">
                 {[
                   ['overview', 'Overview'],
-                  ['sites', 'Sites'],
                   ['bills', 'Bills'],
                   ['payments', 'Payments'],
                   ['receipts', 'Receipts'],
@@ -341,11 +281,7 @@ export function VendorProfile({
                   <TabsTrigger
                     key={key}
                     value={key}
-                    className={cn(
-                      'px-3 py-2 text-[11px] font-bold uppercase tracking-widest',
-                      key === 'documents' && 'hidden',
-                    )}
-                    aria-hidden={key === 'documents'}
+                    className="px-3 py-2 text-[11px] font-bold uppercase tracking-widest"
                   >
                     {label}
                   </TabsTrigger>
@@ -353,7 +289,7 @@ export function VendorProfile({
               </TabsList>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+            <div className="min-h-0 px-6 py-6">
               {isLoadingCurrentTab ? (
                 <div className="flex justify-center py-20">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -382,11 +318,9 @@ export function VendorProfile({
                             <h4 className="text-sm font-bold uppercase tracking-widest text-foreground">Finance & Terms</h4>
                             <div className="grid gap-3 sm:grid-cols-2">
                               <DetailPair label="Payment Terms" value={vendor.paymentTermsDays ? `${vendor.paymentTermsDays} days` : '-'} />
-                              <DetailPair label="Opening Balance" value={formatINR(vendor.openingBalanceAmount)} />
-                              <DetailPair label="Opening Balance Date" value={formatDate(vendor.openingBalanceDate)} />
                               <DetailPair label="Last Bill Date" value={formatDate(vendor.lastBillDate)} />
                               <DetailPair label="Last Payment Date" value={formatDate(vendor.lastPaymentDate)} />
-                              <DetailPair label="Preferred Sites" value={assignments.filter((assignment) => assignment.isPreferred).length} />
+                              <DetailPair label="Current Status" value={vendor.status} />
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2">
                               <DetailPair label="Bank Name" value={vendor.bankName} />
@@ -394,7 +328,7 @@ export function VendorProfile({
                               <DetailPair label="Account Number" value={vendor.accountNumber} />
                               <DetailPair label="IFSC Code" value={vendor.ifscCode} />
                               <DetailPair label="UPI ID" value={vendor.upiId} />
-                              <DetailPair label="Current Status" value={vendor.status} />
+                              <DetailPair label="Documents" value={vendor.documentCount} />
                             </div>
                           </div>
                         </div>
@@ -430,136 +364,6 @@ export function VendorProfile({
                     ) : (
                       <p className="text-sm text-muted-foreground">Vendor details are unavailable.</p>
                     )}
-                  </TabsContent>
-
-                  <TabsContent value="sites" className="space-y-6">
-                    <div className="grid gap-6 lg:grid-cols-[24rem_minmax(0,1fr)]">
-                      <div className="space-y-4 border border-border bg-muted/20 p-4">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-                            {editingAssignment ? 'Edit Assignment' : 'Assign Vendor to Site'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Manage where this vendor is active and optionally override payment terms per site.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Site</Label>
-                          <select value={assignmentSiteId} onChange={(event) => setAssignmentSiteId(event.target.value)} className="h-11 w-full border border-border bg-background px-3 text-sm text-foreground">
-                            <option value="">Select site</option>
-                            {sites.map((site) => (
-                              <option key={site.id} value={site.id}>{site.name}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Status</Label>
-                            <select
-                              value={assignmentForm.status || 'ACTIVE'}
-                              onChange={(event) => setAssignmentForm((current) => ({ ...current, status: event.target.value as VendorSiteAssignmentUpsertInput['status'] }))}
-                              className="h-11 w-full border border-border bg-background px-3 text-sm text-foreground"
-                            >
-                              <option value="ACTIVE">ACTIVE</option>
-                              <option value="INACTIVE">INACTIVE</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Terms Override</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={assignmentForm.paymentTermsDaysOverride ?? ''}
-                              onChange={(event) => setAssignmentForm((current) => ({
-                                ...current,
-                                paymentTermsDaysOverride: event.target.value === '' ? null : Number(event.target.value),
-                              }))}
-                              className="h-11 rounded-none"
-                              placeholder="Optional days"
-                            />
-                          </div>
-                        </div>
-
-                        <label className="flex items-center gap-3 border border-border bg-background px-3 py-3 text-sm text-foreground">
-                          <input
-                            type="checkbox"
-                            checked={assignmentForm.isPreferred ?? false}
-                            onChange={(event) => setAssignmentForm((current) => ({ ...current, isPreferred: event.target.checked }))}
-                          />
-                          Mark as preferred vendor for this site
-                        </label>
-
-                        <div className="space-y-2">
-                          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</Label>
-                          <Textarea
-                            value={assignmentForm.notes || ''}
-                            onChange={(event) => setAssignmentForm((current) => ({ ...current, notes: event.target.value }))}
-                            className="min-h-24 rounded-none"
-                            placeholder="Assignment notes or reminders"
-                          />
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            onClick={() => void handleAssignmentSubmit()}
-                            disabled={isSavingAssignment}
-                            className="h-10 flex-1 rounded-none text-[10px] font-bold uppercase tracking-widest"
-                          >
-                            {isSavingAssignment ? <Loader2 className="h-4 w-4 animate-spin" /> : editingAssignment ? 'Save Assignment' : 'Assign Site'}
-                          </Button>
-                          {editingAssignment && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setEditingAssignment(null)}
-                              className="h-10 rounded-none text-[10px] font-bold uppercase tracking-widest"
-                            >
-                              Reset
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {assignments.length === 0 ? (
-                          <div className="border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-                            No site assignments yet. Assign this vendor to one or more project sites.
-                          </div>
-                        ) : (
-                          assignments.map((assignment) => (
-                            <div key={assignment.id} className="border border-border bg-background p-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div>
-                                  <p className="text-sm font-bold uppercase tracking-widest text-foreground">{assignment.siteName}</p>
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', assignment.status === 'ACTIVE' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700' : 'border-slate-500/30 bg-slate-500/10 text-slate-700')}>
-                                      {assignment.status}
-                                    </span>
-                                    {assignment.isPreferred && (
-                                      <span className="border border-primary/30 bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-primary">
-                                        Preferred
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <Button type="button" variant="outline" onClick={() => setEditingAssignment(assignment)} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
-                                  Edit
-                                </Button>
-                              </div>
-                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                <DetailPair label="Terms Override" value={assignment.paymentTermsDaysOverride ? `${assignment.paymentTermsDaysOverride} days` : '-'} />
-                                <DetailPair label="Updated" value={formatDate(assignment.updatedAt)} />
-                              </div>
-                              <p className="mt-4 text-sm text-muted-foreground">{assignment.notes || 'No assignment notes.'}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
                   </TabsContent>
 
                   <TabsContent value="bills" className="space-y-4">

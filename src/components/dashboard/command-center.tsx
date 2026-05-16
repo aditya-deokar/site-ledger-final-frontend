@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useQueries } from '@tanstack/react-query';
@@ -60,7 +61,6 @@ import { EntitySelector } from '@/components/dashboard/navigator/command-center/
 import { KeyList } from '@/components/dashboard/navigator/command-center/key-list';
 import { SiteQuickPickerSelector } from '@/components/dashboard/navigator/command-center/site-quick-picker-selector';
 import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
-import { VendorProfile } from '@/components/dashboard/vendor-profile';
 import type { Phase, TransactionHistoryAction } from '@/components/dashboard/navigator/command-center/types';
 import {
   employeeStatusLabel,
@@ -77,6 +77,7 @@ import {
 } from '@/components/dashboard/navigator/command-center/utils';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { getFixedRateInputLabel } from '@/lib/investors';
+import { buildVendorWorkspacePath, type VendorWorkspaceTab } from '@/lib/vendor-workspace';
 import { cn } from '@/lib/utils';
 import { groupCustomerDeals } from '@/lib/customer-grouping';
 import type { CustomerWithSite } from '@/schemas/customer.schema';
@@ -98,6 +99,27 @@ function buildVendorTypeOptions(vendors: Array<{ type?: string | null }>) {
   return Array.from(types.values())
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
     .map((type) => ({ value: type, label: type }));
+}
+
+function VendorWorkspaceLauncher({
+  vendorId,
+  initialTab = 'overview',
+}: {
+  vendorId: string;
+  initialTab?: VendorWorkspaceTab;
+}) {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push(buildVendorWorkspacePath(vendorId, initialTab));
+  }, [initialTab, router, vendorId]);
+
+  return (
+    <div className="flex items-center gap-3 border border-border bg-card p-5 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+      Opening vendor workspace...
+    </div>
+  );
 }
 
 type NavigatorDataQueryKind =
@@ -3138,22 +3160,12 @@ export default function CommandCenter() {
 
     if (
       selectedAction === 'view-vendor-profile'
-      || selectedAction === 'manage-vendor-sites'
       || selectedAction === 'manage-vendor-documents'
     ) {
-      const initialTab =
-        selectedAction === 'manage-vendor-sites'
-          ? 'sites'
-          : selectedAction === 'manage-vendor-documents'
-            ? 'documents'
-            : 'overview';
-
       return (
-        <VendorProfile
+        <VendorWorkspaceLauncher
           vendorId={selectedEntity.id}
-          vendorName={selectedEntity.name}
-          initialTab={initialTab}
-          onClose={handleFormBack}
+          initialTab={selectedAction === 'manage-vendor-documents' ? 'documents' : 'overview'}
         />
       );
     }
@@ -3266,7 +3278,6 @@ export default function CommandCenter() {
       case 'add-vendor': return <AddVendorForm {...props} />;
       case 'edit-vendor': return <EditVendorForm {...props} entity={selectedEntity} />;
       case 'view-vendor-profile': return null;
-      case 'manage-vendor-sites': return null;
       case 'manage-vendor-documents': return null;
       case 'edit-customer': return <EditCustomerForm {...props} entity={selectedEntity} />;
       case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} />;

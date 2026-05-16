@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Archive, Eye, Loader2, Pencil, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { VendorProfile } from '@/components/dashboard/vendor-profile';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import {
   type VendorListQuery,
   type VendorStatus,
 } from '@/schemas/vendor.schema';
+import { buildVendorWorkspacePath } from '@/lib/vendor-workspace';
 
 function formatINR(value: number) {
   return `Rs. ${value.toLocaleString('en-IN')}`;
@@ -111,8 +112,6 @@ function VendorEditorDialog({
       upiId: '',
       paymentTermsDays: undefined,
       notes: '',
-      openingBalanceAmount: 0,
-      openingBalanceDate: '',
     },
   });
 
@@ -136,8 +135,6 @@ function VendorEditorDialog({
       upiId: vendor?.upiId || '',
       paymentTermsDays: vendor?.paymentTermsDays ?? undefined,
       notes: vendor?.notes || '',
-      openingBalanceAmount: vendor?.openingBalanceAmount ?? 0,
-      openingBalanceDate: vendor?.openingBalanceDate ? vendor.openingBalanceDate.slice(0, 10) : '',
     });
   }, [open, reset, vendor]);
 
@@ -152,15 +149,10 @@ function VendorEditorDialog({
 
         <form
           onSubmit={handleSubmit((data) => {
-            const payload = {
-              ...data,
-              openingBalanceDate: data.openingBalanceDate ? `${data.openingBalanceDate}T00:00:00.000Z` : '',
-            };
-
             if (isEditing && vendor) {
-              updateVendor({ id: vendor.id, data: payload });
+              updateVendor({ id: vendor.id, data });
             } else {
-              createVendor(payload);
+              createVendor(data);
             }
           })}
           className="space-y-6"
@@ -221,25 +213,6 @@ function VendorEditorDialog({
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Opening Balance</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                className="rounded-none"
-                {...register('openingBalanceAmount', {
-                  setValueAs: (value) => (value === '' ? 0 : Number(value)),
-                })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Opening Balance Date</Label>
-              <Input type="date" {...register('openingBalanceDate')} className="rounded-none" />
-            </div>
-          </div>
-
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label>Bank Name</Label>
@@ -286,6 +259,7 @@ function VendorEditorDialog({
 }
 
 export default function VendorsPage() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<VendorStatus | 'ALL'>('ALL');
   const [siteFilter, setSiteFilter] = useState('ALL');
@@ -294,7 +268,6 @@ export default function VendorsPage() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [editorVendor, setEditorVendor] = useState<Vendor | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [profileVendor, setProfileVendor] = useState<Vendor | null>(null);
 
   const query: VendorListQuery = {
     search: search.trim() || undefined,
@@ -486,7 +459,7 @@ export default function VendorsPage() {
                   <TableCell>{formatDate(vendor.lastPaymentDate)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={() => setProfileVendor(vendor)}>
+                      <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
                         <Eye className="mr-1 h-4 w-4" />
                         Open
                       </Button>
@@ -514,14 +487,6 @@ export default function VendorsPage() {
       </div>
 
       <VendorEditorDialog vendor={editorVendor} open={editorOpen} onOpenChange={setEditorOpen} />
-
-      {profileVendor && (
-        <VendorProfile
-          vendorId={profileVendor.id}
-          vendorName={profileVendor.name}
-          onClose={() => setProfileVendor(null)}
-        />
-      )}
     </div>
   );
 }

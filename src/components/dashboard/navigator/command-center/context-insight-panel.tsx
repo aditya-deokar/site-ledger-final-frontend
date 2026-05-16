@@ -65,7 +65,6 @@ export function ContextInsightPanel({
   const isVendorAction =
     action === 'edit-vendor'
     || action === 'view-vendor-profile'
-    || action === 'manage-vendor-sites'
     || action === 'manage-vendor-documents'
     || action === 'archive-vendor';
   if (!site && !isVendorAction) return null;
