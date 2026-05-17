@@ -28,6 +28,25 @@ function formatINR(value: number) {
   return currencyFormatter.format(value || 0);
 }
 
+function trimTrailingZeros(value: string) {
+  return value.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+function formatCompactINR(value: number) {
+  const amount = Number(value || 0);
+  const absolute = Math.abs(amount);
+
+  if (absolute >= 10000000) {
+    return `₹${trimTrailingZeros((amount / 10000000).toFixed(2))} Cr`;
+  }
+
+  if (absolute >= 100000) {
+    return `₹${trimTrailingZeros((amount / 100000).toFixed(2))} L`;
+  }
+
+  return formatINR(amount);
+}
+
 function formatDate(value?: string | null) {
   if (!value) return '-';
   const date = new Date(value);
@@ -44,10 +63,14 @@ function percent(value: number, total: number) {
   return Math.max(0, Math.min(100, (value / total) * 100));
 }
 
+function formatPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
+
 function getSummaryValueClass(value: string) {
-  if (value.length >= 14) return 'text-[clamp(1.05rem,1.25vw,1.35rem)]';
-  if (value.length >= 10) return 'text-[clamp(1.25rem,1.5vw,1.65rem)]';
-  return 'text-[clamp(1.55rem,1.9vw,2rem)]';
+  if (value.length >= 14) return 'text-[clamp(0.95rem,1.05vw,1.15rem)]';
+  if (value.length >= 10) return 'text-[clamp(1.1rem,1.2vw,1.35rem)]';
+  return 'text-[clamp(1.3rem,1.45vw,1.6rem)]';
 }
 
 function ReportLoading() {
@@ -75,11 +98,13 @@ function SummaryCard({
   value,
   tone = 'default',
   hint,
+  valueTitle,
 }: {
   label: string;
   value: string;
   tone?: 'default' | 'primary' | 'success' | 'danger';
   hint?: string;
+  valueTitle?: string;
 }) {
   const toneClasses = {
     default: 'text-foreground',
@@ -92,15 +117,16 @@ function SummaryCard({
   return (
     <div
       className={cn(
-        'flex h-full min-w-0 flex-col overflow-hidden border border-border bg-white p-4 shadow-[0_1px_0_rgba(15,23,42,0.03)] sm:p-5',
-        hint ? 'min-h-[124px]' : 'min-h-[96px]',
+        'flex h-full min-w-0 flex-col overflow-hidden border border-border bg-white p-3.5 shadow-[0_1px_0_rgba(15,23,42,0.03)] sm:p-4 print:p-2.5',
+        hint ? 'min-h-[102px] print:min-h-[74px]' : 'min-h-[82px] print:min-h-[60px]',
       )}
     >
       <div className="min-w-0">
-        <p className="max-w-[14rem] text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground/55">{label}</p>
+        <p className="max-w-[14rem] text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">{label}</p>
         <p
+          title={valueTitle ?? value}
           className={cn(
-            'mt-2 min-w-0 whitespace-normal break-words leading-[1.05] tracking-tight [font-variant-numeric:tabular-nums] [overflow-wrap:anywhere]',
+            'mt-1.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-none tracking-tight [font-variant-numeric:tabular-nums]',
             valueClassName,
             toneClasses[tone],
           )}
@@ -108,7 +134,57 @@ function SummaryCard({
           {value}
         </p>
       </div>
-      {hint ? <p className="mt-auto pt-2 text-[11px] leading-snug text-muted-foreground/70">{hint}</p> : null}
+      {hint ? <p className="mt-auto pt-1 text-[10px] leading-snug text-muted-foreground/70 print:text-[9px]">{hint}</p> : null}
+    </div>
+  );
+}
+
+function RatioCard({
+  label,
+  value,
+  detail,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: 'default' | 'primary' | 'success' | 'danger';
+}) {
+  const toneClasses = {
+    default: 'text-foreground',
+    primary: 'text-primary',
+    success: 'text-emerald-600',
+    danger: 'text-red-500',
+  };
+
+  return (
+    <div className="border border-border bg-white p-3.5 print:p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/55">{label}</p>
+      <p className={cn('mt-1.5 text-xl font-semibold tracking-tight print:text-lg', toneClasses[tone])}>{value}</p>
+      <p className="mt-1 text-[10px] leading-snug text-muted-foreground/75 print:text-[9px]">{detail}</p>
+    </div>
+  );
+}
+
+function AlertCard({
+  title,
+  detail,
+  tone,
+}: {
+  title: string;
+  detail: string;
+  tone: 'danger' | 'warning' | 'success';
+}) {
+  const classes = {
+    danger: 'border-red-500/25 bg-red-500/5 text-red-700',
+    warning: 'border-amber-500/25 bg-amber-500/5 text-amber-700',
+    success: 'border-emerald-500/25 bg-emerald-500/5 text-emerald-700',
+  };
+
+  return (
+    <div className={cn('border p-3.5 print:p-2.5', classes[tone])}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.2em]">{title}</p>
+      <p className="mt-1 text-[13px] leading-relaxed print:text-[11px]">{detail}</p>
     </div>
   );
 }
@@ -126,12 +202,12 @@ function Section({
 }) {
   return (
     <section className="border border-border bg-white">
-      <div className="border-b border-border px-5 py-4">
+      <div className="border-b border-border px-4 py-3.5 print:px-3 print:py-2.5">
         <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground/50">{eyebrow}</p>
-        <h2 className="mt-2 text-[1.65rem] font-serif tracking-tight text-foreground">{title}</h2>
-        {subtitle ? <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-muted-foreground/75">{subtitle}</p> : null}
+        <h2 className="mt-1.5 text-[1.45rem] font-serif tracking-tight text-foreground print:text-[1.15rem]">{title}</h2>
+        {subtitle ? <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-muted-foreground/75 print:text-[10px]">{subtitle}</p> : null}
       </div>
-      <div className="px-5 py-5">{children}</div>
+      <div className="px-4 py-4 print:px-3 print:py-3">{children}</div>
     </section>
   );
 }
@@ -151,7 +227,7 @@ function InventoryBar({ report }: { report: SiteReport }) {
           <div className="bg-emerald-500" style={{ width: `${soldWidth}%` }} />
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 print:grid-cols-3 print:gap-2">
         <div className="border border-border bg-muted/30 p-3.5">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50">Available</p>
           <p className="mt-1.5 text-xl font-semibold text-foreground">{String(report.inventorySummary.availableUnits).padStart(2, '0')}</p>
@@ -200,7 +276,7 @@ function PaymentPill({ value }: { value: SiteReportExpenseRow['paymentStatus'] }
 }
 
 function TableShell({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto border border-border">{children}</div>;
+  return <div className="overflow-x-auto border border-border print:overflow-visible">{children}</div>;
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -444,7 +520,7 @@ function FloorRegister({ floors }: { floors: SiteReport['floors'] }) {
           </div>
 
           {floor.flats.length ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print:overflow-visible">
               <table className="min-w-full divide-y divide-border text-sm">
                 <thead className="bg-white">
                   <tr className="text-left">
@@ -517,9 +593,111 @@ export default function SiteReportPage() {
   }
 
   const report = data.data.report;
+  const collectionEfficiency = percent(
+    report.customerSummary.totalCollected,
+    report.customerSummary.netSaleValue || report.customerSummary.totalAgreementValue,
+  );
+  const inventoryAbsorption = percent(
+    report.inventorySummary.bookedUnits + report.inventorySummary.soldUnits,
+    report.inventorySummary.totalUnits,
+  );
+  const cashRealization = percent(
+    report.financialSummary.customerCollections,
+    report.financialSummary.totalAllocatedFund + report.financialSummary.customerCollections,
+  );
+  const expenseSettlement = percent(
+    report.expenseSummary.totalPaid,
+    report.expenseSummary.totalRecorded,
+  );
+  const totalCashIn =
+    report.financialSummary.partnerAllocatedFund
+    + report.financialSummary.investorAllocatedFund
+    + report.financialSummary.customerCollections;
+  const totalCashOut =
+    report.financialSummary.totalExpensesPaid
+    + report.financialSummary.totalWithdrawnFund
+    + report.investorSummary.totalReturned;
+  const alerts = [
+    report.customerSummary.totalOutstanding > 0
+      ? {
+          title: 'Receivables Watch',
+          detail: `${formatINR(report.customerSummary.totalOutstanding)} is still outstanding from customers and owners.`,
+          tone: 'warning' as const,
+        }
+      : null,
+    report.expenseSummary.totalOutstanding > 0
+      ? {
+          title: 'Payables Pending',
+          detail: `${formatINR(report.expenseSummary.totalOutstanding)} remains unpaid across ${report.expenseSummary.pendingCount + report.expenseSummary.partialCount} expense items.`,
+          tone: 'danger' as const,
+        }
+      : null,
+    report.investorSummary.outstandingPrincipal > 0
+      ? {
+          title: 'Investor Obligation',
+          detail: `${formatINR(report.investorSummary.outstandingPrincipal)} of investor principal is still open on this site.`,
+          tone: 'warning' as const,
+        }
+      : null,
+    report.financialSummary.remainingFund >= report.expenseSummary.totalOutstanding
+      ? {
+          title: 'Liquidity Position',
+          detail: 'Current site cash is sufficient to cover the recorded expense outstanding balance.',
+          tone: 'success' as const,
+        }
+      : {
+          title: 'Liquidity Position',
+          detail: 'Current site cash is below the recorded expense outstanding balance and needs attention.',
+          tone: 'danger' as const,
+        },
+  ].filter(Boolean) as Array<{ title: string; detail: string; tone: 'danger' | 'warning' | 'success' }>;
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f4f4f0_0%,#eef5f3_35%,#f8faf9_100%)]">
+    <div className="site-report-print-root min-h-screen bg-[linear-gradient(180deg,#f4f4f0_0%,#eef5f3_35%,#f8faf9_100%)] print:min-h-0 print:bg-white">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 12mm;
+          }
+
+          html,
+          body {
+            background: #ffffff !important;
+          }
+
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .site-report-print-root {
+            min-height: 0 !important;
+            background: #ffffff !important;
+          }
+
+          .site-report-print-root .overflow-x-auto,
+          .site-report-print-root .overflow-hidden {
+            overflow: visible !important;
+          }
+
+          .site-report-print-root table {
+            width: 100% !important;
+            page-break-inside: auto;
+          }
+
+          .site-report-print-root thead {
+            display: table-header-group;
+          }
+
+          .site-report-print-root tr,
+          .site-report-print-root img,
+          .site-report-print-root svg {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
       <div className="sticky top-0 z-20 border-b border-border/80 bg-white/90 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -540,86 +718,157 @@ export default function SiteReportPage() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-        <section className="overflow-hidden border border-border bg-white shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
-          <div className="grid gap-0 lg:grid-cols-[1.4fr_0.9fr]">
-            <div className="border-b border-border px-5 py-5 lg:border-b-0 lg:border-r">
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-6 print:max-w-none print:gap-3 print:px-0 print:py-0">
+        <section className="overflow-hidden border border-border bg-white shadow-[0_12px_34px_rgba(15,23,42,0.04)] print:break-inside-avoid print:shadow-none">
+          <div className="grid gap-0 lg:grid-cols-[1.4fr_0.9fr] print:grid-cols-[1.35fr_0.9fr]">
+            <div className="border-b border-border px-5 py-5 lg:border-b-0 lg:border-r print:px-3 print:py-3">
               <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-muted-foreground/55">SiteLedger Report</p>
-              <h1 className="mt-2.5 text-3xl font-serif tracking-tight text-foreground sm:text-4xl">{report.site.name}</h1>
-              <p className="mt-2.5 max-w-3xl text-[15px] leading-relaxed text-muted-foreground/75">
+              <h1 className="mt-2.5 text-3xl font-serif tracking-tight text-foreground sm:text-4xl print:mt-1.5 print:text-[2rem]">{report.site.name}</h1>
+              <p className="mt-2.5 max-w-3xl text-[15px] leading-relaxed text-muted-foreground/75 print:mt-1.5 print:text-[11px]">
                 A single view of project health across capital, receivables, expenses, inventory, investors, and floor-wise unit movement.
               </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 print:mt-3 print:gap-2">
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Address</p>
-                    <p className="mt-1 text-sm text-foreground">{report.site.address}</p>
+                    <p className="mt-1 text-sm text-foreground print:text-[11px]">{report.site.address}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Building2 className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Project Type</p>
-                    <p className="mt-1 text-sm text-foreground">{report.site.projectType.replaceAll('_', ' ')}</p>
+                    <p className="mt-1 text-sm text-foreground print:text-[11px]">{report.site.projectType.replaceAll('_', ' ')}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Layers className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Structure</p>
-                    <p className="mt-1 text-sm text-foreground">{report.site.totalFloors} floors / {report.site.totalFlats} units</p>
+                    <p className="mt-1 text-sm text-foreground print:text-[11px]">{report.site.totalFloors} floors / {report.site.totalFlats} units</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <CalendarDays className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Project Start</p>
-                    <p className="mt-1 text-sm text-foreground">{formatDate(report.site.createdAt)}</p>
+                    <p className="mt-1 text-sm text-foreground print:text-[11px]">{formatDate(report.site.createdAt)}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-[linear-gradient(180deg,rgba(15,23,42,0.015)_0%,rgba(20,184,166,0.03)_100%)] px-5 py-5">
+            <div className="bg-[linear-gradient(180deg,rgba(15,23,42,0.015)_0%,rgba(20,184,166,0.03)_100%)] px-5 py-5 print:px-3 print:py-3">
               <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-muted-foreground/55">Executive Summary</p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <SummaryCard label="Remaining Fund" value={formatINR(report.financialSummary.remainingFund)} tone="primary" />
-                <SummaryCard label="Projected Profit" value={formatINR(report.financialSummary.totalProfit)} tone="success" />
+              <div className="mt-4 grid grid-cols-2 gap-3 print:mt-3 print:gap-2">
+                <SummaryCard
+                  label="Remaining Fund"
+                  value={formatCompactINR(report.financialSummary.remainingFund)}
+                  valueTitle={formatINR(report.financialSummary.remainingFund)}
+                  tone="primary"
+                />
+                <SummaryCard
+                  label="Projected Profit"
+                  value={formatCompactINR(report.financialSummary.totalProfit)}
+                  valueTitle={formatINR(report.financialSummary.totalProfit)}
+                  tone="success"
+                />
                 <SummaryCard label="Booked Units" value={String(report.inventorySummary.bookedUnits).padStart(2, '0')} />
-                <SummaryCard label="Outstanding Due" value={formatINR(report.customerSummary.totalOutstanding)} tone="danger" />
+                <SummaryCard
+                  label="Outstanding Due"
+                  value={formatCompactINR(report.customerSummary.totalOutstanding)}
+                  valueTitle={formatINR(report.customerSummary.totalOutstanding)}
+                  tone="danger"
+                />
               </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Allocated Capital" value={formatINR(report.financialSummary.totalAllocatedFund)} hint="Partner and investor capital currently assigned to this project." />
-          <SummaryCard label="Customer Collections" value={formatINR(report.financialSummary.customerCollections)} tone="success" hint="Total money collected from bookings and follow-up customer payments." />
-          <SummaryCard label="Expense Burn" value={formatINR(report.financialSummary.totalExpensesPaid)} tone="danger" hint="Actual paid expense outflow from the site wallet." />
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2 print:break-inside-avoid">
+          <SummaryCard
+            label="Allocated Capital"
+            value={formatCompactINR(report.financialSummary.totalAllocatedFund)}
+            valueTitle={formatINR(report.financialSummary.totalAllocatedFund)}
+            hint="Partner and investor capital currently assigned to this project."
+          />
+          <SummaryCard
+            label="Customer Collections"
+            value={formatCompactINR(report.financialSummary.customerCollections)}
+            valueTitle={formatINR(report.financialSummary.customerCollections)}
+            tone="success"
+            hint="Total money collected from bookings and follow-up customer payments."
+          />
+          <SummaryCard
+            label="Expense Burn"
+            value={formatCompactINR(report.financialSummary.totalExpensesPaid)}
+            valueTitle={formatINR(report.financialSummary.totalExpensesPaid)}
+            tone="danger"
+            hint="Actual paid expense outflow from the site wallet."
+          />
           <SummaryCard label="Inventory Sold" value={String(report.inventorySummary.soldUnits).padStart(2, '0')} tone="primary" hint="Units fully paid and marked sold/registered." />
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] print:grid-cols-2 print:gap-3">
+          <Section eyebrow="Management Lens" title="Performance Ratios" subtitle="These ratios separate projected value from realized cash, and make it easier to judge execution quality rather than only raw totals.">
+            <div className="grid gap-3 md:grid-cols-2 print:grid-cols-2 print:gap-2">
+              <RatioCard
+                label="Collection Efficiency"
+                value={formatPercent(collectionEfficiency)}
+                detail={`${formatINR(report.customerSummary.totalCollected)} collected against ${formatINR(report.customerSummary.netSaleValue || report.customerSummary.totalAgreementValue)} of sale value.`}
+                tone={collectionEfficiency >= 70 ? 'success' : collectionEfficiency >= 40 ? 'primary' : 'danger'}
+              />
+              <RatioCard
+                label="Inventory Absorption"
+                value={formatPercent(inventoryAbsorption)}
+                detail={`${report.inventorySummary.bookedUnits + report.inventorySummary.soldUnits} of ${report.inventorySummary.totalUnits} units are booked or sold.`}
+                tone={inventoryAbsorption >= 70 ? 'success' : inventoryAbsorption >= 40 ? 'primary' : 'danger'}
+              />
+              <RatioCard
+                label="Cash Realization Mix"
+                value={formatPercent(cashRealization)}
+                detail="Share of total site cash inflow coming from customer collections instead of capital allocation."
+                tone={cashRealization >= 50 ? 'success' : cashRealization >= 25 ? 'primary' : 'danger'}
+              />
+              <RatioCard
+                label="Expense Settlement"
+                value={formatPercent(expenseSettlement)}
+                detail={`${formatINR(report.expenseSummary.totalPaid)} paid against ${formatINR(report.expenseSummary.totalRecorded)} of recorded expense.`}
+                tone={expenseSettlement >= 80 ? 'success' : expenseSettlement >= 50 ? 'primary' : 'danger'}
+              />
+            </div>
+          </Section>
+
+          <Section eyebrow="Attention Areas" title="Risk and Exceptions" subtitle="A professional project report should highlight what needs intervention, not only what has already happened.">
+            <div className="grid gap-3 print:gap-2">
+              {alerts.map((alert) => (
+                <AlertCard key={alert.title} title={alert.title} detail={alert.detail} tone={alert.tone} />
+              ))}
+            </div>
+          </Section>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr] print:grid-cols-[1.2fr_0.8fr] print:gap-3">
           <Section eyebrow="Project Health" title="Financial Position" subtitle="Read this first to understand how much capital has gone in, how much has been spent, what is still collectible, and how agreement value differs from profit-bearing sale value.">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <SummaryCard label="Partner Fund" value={formatINR(report.financialSummary.partnerAllocatedFund)} />
-              <SummaryCard label="Investor Fund" value={formatINR(report.financialSummary.investorAllocatedFund)} />
-              <SummaryCard label="Withdrawn Back" value={formatINR(report.financialSummary.totalWithdrawnFund)} />
-              <SummaryCard label="Agreement Total" value={formatINR(report.financialSummary.totalAgreementValue)} />
-              <SummaryCard label="Net Sale Value" value={formatINR(report.financialSummary.netSaleValue)} tone="success" />
-              <SummaryCard label="Tax / GST" value={formatINR(report.financialSummary.totalTaxAmount)} />
-              <SummaryCard label="Discounts / Credits" value={formatINR(report.financialSummary.totalDiscounts)} />
-              <SummaryCard label="Recorded Expenses" value={formatINR(report.financialSummary.totalExpensesRecorded)} tone="danger" />
-              <SummaryCard label="Expense Outstanding" value={formatINR(report.financialSummary.totalExpensesOutstanding)} tone="danger" />
-              <SummaryCard label="Projected Revenue" value={formatINR(report.financialSummary.totalProjectedRevenue)} tone="success" />
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 print:grid-cols-3 print:gap-2">
+               <SummaryCard label="Partner Fund" value={formatCompactINR(report.financialSummary.partnerAllocatedFund)} valueTitle={formatINR(report.financialSummary.partnerAllocatedFund)} />
+               <SummaryCard label="Investor Fund" value={formatCompactINR(report.financialSummary.investorAllocatedFund)} valueTitle={formatINR(report.financialSummary.investorAllocatedFund)} />
+               <SummaryCard label="Withdrawn Back" value={formatCompactINR(report.financialSummary.totalWithdrawnFund)} valueTitle={formatINR(report.financialSummary.totalWithdrawnFund)} />
+               <SummaryCard label="Agreement Total" value={formatCompactINR(report.financialSummary.totalAgreementValue)} valueTitle={formatINR(report.financialSummary.totalAgreementValue)} />
+               <SummaryCard label="Net Sale Value" value={formatCompactINR(report.financialSummary.netSaleValue)} valueTitle={formatINR(report.financialSummary.netSaleValue)} tone="success" />
+               <SummaryCard label="Tax / GST" value={formatCompactINR(report.financialSummary.totalTaxAmount)} valueTitle={formatINR(report.financialSummary.totalTaxAmount)} />
+               <SummaryCard label="Discounts / Credits" value={formatCompactINR(report.financialSummary.totalDiscounts)} valueTitle={formatINR(report.financialSummary.totalDiscounts)} />
+               <SummaryCard label="Recorded Expenses" value={formatCompactINR(report.financialSummary.totalExpensesRecorded)} valueTitle={formatINR(report.financialSummary.totalExpensesRecorded)} tone="danger" />
+               <SummaryCard label="Expense Outstanding" value={formatCompactINR(report.financialSummary.totalExpensesOutstanding)} valueTitle={formatINR(report.financialSummary.totalExpensesOutstanding)} tone="danger" />
+               <SummaryCard label="Projected Revenue" value={formatCompactINR(report.financialSummary.totalProjectedRevenue)} valueTitle={formatINR(report.financialSummary.totalProjectedRevenue)} tone="success" />
             </div>
           </Section>
 
           <Section eyebrow="Stock Position" title="Inventory Snapshot" subtitle="A quick count of what is free to sell, what is booked, and what has already closed.">
             <InventoryBar report={report} />
             {report.site.projectType === 'REDEVELOPMENT' ? (
-              <div className="mt-5 grid grid-cols-2 gap-3">
+               <div className="mt-5 grid grid-cols-2 gap-3 print:mt-3 print:gap-2">
                 <div className="border border-border bg-muted/20 p-3.5">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/55">Customer Flats</p>
                   <p className="mt-1.5 text-xl font-semibold text-foreground">{report.inventorySummary.customerFlats}</p>
@@ -633,32 +882,53 @@ export default function SiteReportPage() {
           </Section>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3">
+          <Section eyebrow="Cash Bridge" title="Sources of Cash" subtitle="Where the site wallet has been funded from so far. This is the best way to separate promoter capital from project-generated cash.">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 print:grid-cols-3 print:gap-2">
+               <SummaryCard label="Partner Capital In" value={formatCompactINR(report.financialSummary.partnerAllocatedFund)} valueTitle={formatINR(report.financialSummary.partnerAllocatedFund)} />
+               <SummaryCard label="Investor Capital In" value={formatCompactINR(report.financialSummary.investorAllocatedFund)} valueTitle={formatINR(report.financialSummary.investorAllocatedFund)} />
+               <SummaryCard label="Customer Collections In" value={formatCompactINR(report.financialSummary.customerCollections)} valueTitle={formatINR(report.financialSummary.customerCollections)} tone="success" />
+               <SummaryCard label="Total Cash In" value={formatCompactINR(totalCashIn)} valueTitle={formatINR(totalCashIn)} tone="primary" />
+            </div>
+          </Section>
+
+          <Section eyebrow="Cash Bridge" title="Uses of Cash" subtitle="How site cash has been consumed or moved out. This helps management understand whether collections are being converted into liquidity or absorbed elsewhere.">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 print:grid-cols-3 print:gap-2">
+               <SummaryCard label="Expenses Paid" value={formatCompactINR(report.financialSummary.totalExpensesPaid)} valueTitle={formatINR(report.financialSummary.totalExpensesPaid)} tone="danger" />
+               <SummaryCard label="Pulled Back" value={formatCompactINR(report.financialSummary.totalWithdrawnFund)} valueTitle={formatINR(report.financialSummary.totalWithdrawnFund)} />
+               <SummaryCard label="Investor Payouts" value={formatCompactINR(report.investorSummary.totalReturned)} valueTitle={formatINR(report.investorSummary.totalReturned)} />
+               <SummaryCard label="Total Cash Out" value={formatCompactINR(totalCashOut)} valueTitle={formatINR(totalCashOut)} tone="danger" />
+               <SummaryCard label="Net Cash Position" value={formatCompactINR(report.financialSummary.remainingFund)} valueTitle={formatINR(report.financialSummary.remainingFund)} tone="primary" />
+            </div>
+          </Section>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3">
           <Section eyebrow="Receivables" title="Customer and Booking Summary" subtitle="Agreement totals, taxes, discounts, booking collected so far, and the amount still outstanding across all booked and sold units.">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2">
               <SummaryCard label="Customers" value={String(report.customerSummary.totalCustomers).padStart(2, '0')} />
               <SummaryCard label="Booked" value={String(report.customerSummary.bookedCustomers).padStart(2, '0')} />
               <SummaryCard label="Sold" value={String(report.customerSummary.soldCustomers).padStart(2, '0')} tone="success" />
               <SummaryCard label="Existing Owners" value={String(report.customerSummary.existingOwners).padStart(2, '0')} />
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <SummaryCard label="Agreement Total" value={formatINR(report.customerSummary.totalAgreementValue)} />
-              <SummaryCard label="Net Sale Value" value={formatINR(report.customerSummary.netSaleValue)} tone="success" />
-              <SummaryCard label="Tax / GST" value={formatINR(report.customerSummary.totalTaxAmount)} />
-              <SummaryCard label="Discounts / Credits" value={formatINR(report.customerSummary.totalDiscounts)} />
-              <SummaryCard label="Collected" value={formatINR(report.customerSummary.totalCollected)} tone="success" />
-              <SummaryCard label="Outstanding" value={formatINR(report.customerSummary.totalOutstanding)} tone="danger" />
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 print:mt-3 print:grid-cols-3 print:gap-2">
+               <SummaryCard label="Agreement Total" value={formatCompactINR(report.customerSummary.totalAgreementValue)} valueTitle={formatINR(report.customerSummary.totalAgreementValue)} />
+               <SummaryCard label="Net Sale Value" value={formatCompactINR(report.customerSummary.netSaleValue)} valueTitle={formatINR(report.customerSummary.netSaleValue)} tone="success" />
+               <SummaryCard label="Tax / GST" value={formatCompactINR(report.customerSummary.totalTaxAmount)} valueTitle={formatINR(report.customerSummary.totalTaxAmount)} />
+               <SummaryCard label="Discounts / Credits" value={formatCompactINR(report.customerSummary.totalDiscounts)} valueTitle={formatINR(report.customerSummary.totalDiscounts)} />
+               <SummaryCard label="Collected" value={formatCompactINR(report.customerSummary.totalCollected)} valueTitle={formatINR(report.customerSummary.totalCollected)} tone="success" />
+               <SummaryCard label="Outstanding" value={formatCompactINR(report.customerSummary.totalOutstanding)} valueTitle={formatINR(report.customerSummary.totalOutstanding)} tone="danger" />
             </div>
           </Section>
 
           <Section eyebrow="Expense Control" title="Expense Summary" subtitle="Visibility into how much is recorded, what is already paid, and which expenses still need action.">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2">
               <SummaryCard label="Expense Items" value={String(report.expenseSummary.totalExpenseItems).padStart(2, '0')} />
               <SummaryCard label="General" value={String(report.expenseSummary.generalExpenseItems).padStart(2, '0')} />
               <SummaryCard label="Vendor" value={String(report.expenseSummary.vendorExpenseItems).padStart(2, '0')} />
-              <SummaryCard label="Outstanding" value={formatINR(report.expenseSummary.totalOutstanding)} tone="danger" />
+               <SummaryCard label="Outstanding" value={formatCompactINR(report.expenseSummary.totalOutstanding)} valueTitle={formatINR(report.expenseSummary.totalOutstanding)} tone="danger" />
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-3 print:mt-3 print:grid-cols-3 print:gap-2">
               <SummaryCard label="Pending" value={String(report.expenseSummary.pendingCount).padStart(2, '0')} tone="danger" />
               <SummaryCard label="Partial" value={String(report.expenseSummary.partialCount).padStart(2, '0')} />
               <SummaryCard label="Completed" value={String(report.expenseSummary.completedCount).padStart(2, '0')} tone="success" />
@@ -688,17 +958,15 @@ export default function SiteReportPage() {
           <InvestorTable rows={report.investors} />
         </Section>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Section eyebrow="Capital Movement" title="Fund History" subtitle="Transfers between company and site, with running balance to show how site liquidity changed over time.">
-            <FundHistoryTable rows={report.fundHistory} />
-          </Section>
+        <Section eyebrow="Capital Movement" title="Fund History" subtitle="Transfers between company and site, with running balance to show how site liquidity changed over time.">
+          <FundHistoryTable rows={report.fundHistory} />
+        </Section>
 
-          <Section eyebrow="Recent Movement" title="Recent Activity" subtitle="Latest inflows and outflows affecting the site wallet, including customer payments, fund movements, expenses, and investor activity.">
-            <ActivityTable rows={report.recentActivity} />
-          </Section>
-        </div>
+        <Section eyebrow="Recent Movement" title="Recent Activity" subtitle="Latest inflows and outflows affecting the site wallet, including customer payments, fund movements, expenses, and investor activity.">
+          <ActivityTable rows={report.recentActivity} />
+        </Section>
 
-        <div className="border border-border bg-white p-4 print:mt-10">
+        <div className="border border-border bg-white p-4 print:mt-4 print:p-3">
           <div className="flex items-start gap-3">
             <FileText className="mt-0.5 h-4 w-4 text-primary" />
             <div>

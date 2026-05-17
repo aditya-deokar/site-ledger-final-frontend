@@ -11,6 +11,7 @@ import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, Update
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getApiErrorMessage } from "@/lib/api-error"
 import { cn } from "@/lib/utils"
 import { Loader2, Plus, X, Phone, ArrowDownLeft, ArrowUpRight } from "lucide-react"
 
@@ -152,11 +153,11 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           {mode && (
             <form onSubmit={handleSubmit(d => {
               setApiError(null)
-              const onError = (err: any) => setApiError(err?.error || err?.message || "Request failed")
+              const onError = (err: unknown) => setApiError(getApiErrorMessage(err, "Request failed"))
               const payload = {
                 ...d,
                 amountPaid: isNaN(d.amountPaid as number) ? 0 : d.amountPaid,
-                paymentDate: d.paymentDate ? new Date(d.paymentDate).toISOString() : undefined,
+                paymentDate: d.paymentDate || undefined,
               }
               if (mode === "invest") addTx({ investorId: investor.id, data: payload }, { onError })
               else payProfit({ investorId: investor.id, data: payload }, { onError })
@@ -179,7 +180,16 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                     <div>
                       <span className="font-bold text-foreground">{equityPct}%</span> of projected site profit (<span className="font-bold text-foreground">{formatINR(siteProfit)}</span>) = <span className="font-bold text-primary">{formatINR(estimatedProfitShare)}</span>
                       {availableProfitShareToRecord > 0 && (
-                        <button type="button" onClick={() => setValue("amount", availableProfitShareToRecord)} className="ml-2 text-primary font-bold underline">Use available amount</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setValue("amount", availableProfitShareToRecord)
+                            setValue("amountPaid", availableProfitShareToRecord)
+                          }}
+                          className="ml-2 text-primary font-bold underline"
+                        >
+                          Use available amount
+                        </button>
                       )}
                     </div>
                   <div>

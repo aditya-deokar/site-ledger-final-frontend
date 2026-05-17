@@ -597,6 +597,7 @@ export default function SiteDetailPage() {
     { label: 'Total Allocated', value: site.allocatedFund },
     { label: 'Total Expenses', value: site.totalExpenses, red: true },
     { label: 'Remaining Fund', value: site.remainingFund, highlight: true },
+    { label: 'Total Received', value: site.customerPayments, green: true },
     { label: 'Projected Profit', value: Number.isFinite(site.totalProfit) ? site.totalProfit : null, green: true },
   ];
 
@@ -673,7 +674,7 @@ export default function SiteDetailPage() {
         </div>
 
         {/* Fund stats bar */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 divide-x divide-y lg:divide-y-0 divide-border border border-border bg-muted/20 mb-8 overflow-hidden">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 divide-x divide-y lg:divide-y-0 divide-border border border-border bg-muted/20 mb-8 overflow-hidden">
           {fundStats.map(({ label, value, red, highlight, green }: any) => (
             <div key={label} className="px-4 sm:px-5 py-5 flex flex-col gap-1.5 border-t md:border-t-0 first:border-t-0">
               <span className={cn(

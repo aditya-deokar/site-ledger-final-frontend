@@ -51,11 +51,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh overflow-hidden bg-gray-50 dark:bg-black font-sans">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-7">
+      <div className="flex min-h-dvh overflow-hidden bg-gray-50 font-sans dark:bg-black print:block print:min-h-0 print:overflow-visible print:bg-white">
+        <div className="print:hidden">
+          <Sidebar />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col print:block print:min-w-0">
+          <div className="print:hidden">
+            <Header />
+          </div>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-7 print:block print:overflow-visible print:px-0 print:pb-0 print:pt-0">
             {children}
           </main>
         </div>
