@@ -29,6 +29,12 @@ import { employeeService } from '@/services/employee.service';
 import { investorService } from '@/services/investor.service';
 import { siteService } from '@/services/site.service';
 import { vendorService } from '@/services/vendor.service';
+import { useEmployees } from '@/hooks/api/employee.hooks';
+import { useVendors } from '@/hooks/api/vendor.hooks';
+import { useAllCustomers } from '@/hooks/api/customer.hooks';
+import { useInvestors } from '@/hooks/api/investor.hooks';
+import { useSites } from '@/hooks/api/site.hooks';
+import { Field, SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -169,6 +175,42 @@ function badgeClasses(value: string) {
 
 
 export function TransactionHistoryView({ action, selectedEntity, onBack }: Props) {
+  const [currentEntity, setCurrentEntity] = useState<any>(selectedEntity);
+
+  useEffect(() => {
+    setCurrentEntity(selectedEntity);
+  }, [selectedEntity]);
+
+  // Fetch lists for switching selectors
+  const { data: employeesData } = useEmployees(undefined, { enabled: action === 'employee-transactions' });
+  const employees = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e: any) => ({ value: e.id, label: e.name, description: e.employeeId })), [employees]);
+
+  const { data: vendorsData } = useVendors({ includeArchived: true, page: 1, size: 100 }, { enabled: action === 'vendor-transactions' });
+  const vendors = useMemo(() => vendorsData?.data?.vendors ?? [], [vendorsData]);
+  const vendorOptions = useMemo(() => vendors.map((v: any) => ({ value: v.id, label: v.name, description: v.contactPersonName || v.type })), [vendors]);
+
+  const { data: allCustomersData } = useAllCustomers(undefined, { enabled: action === 'customer-transactions' });
+  const allCustomers = useMemo(() => allCustomersData?.data?.customers ?? [], [allCustomersData]);
+  const customerOptions = useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const c of allCustomers) {
+      const key = (c.phone || c.name).toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.set(key, c);
+      }
+    }
+    return Array.from(seen.values()).map((c: any) => ({ value: c.id, label: c.name, description: c.phone }));
+  }, [allCustomers]);
+
+  const { data: investorsData } = useInvestors(undefined, undefined, { enabled: action === 'investor-transactions' });
+  const investors = useMemo(() => investorsData?.data?.investors ?? [], [investorsData]);
+  const investorOptions = useMemo(() => investors.map((i: any) => ({ value: i.id, label: i.name, description: i.type })), [investors]);
+
+  const { data: sitesData } = useSites({ enabled: action === 'site-transactions' });
+  const sites = useMemo(() => sitesData?.data?.sites ?? [], [sitesData]);
+  const siteOptions = useMemo(() => sites.map((s: any) => ({ value: s.id, label: s.name, description: s.address })), [sites]);
+
   const [sortKey, setSortKey] = useState('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -181,11 +223,11 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!selectedEntity?.id && action !== 'all-transactions') {
+    if (!currentEntity?.id && action !== 'all-transactions') {
       toast.error('No entity selected. Redirecting...');
       onBack();
     }
-  }, [action, selectedEntity?.id, onBack]);
+  }, [action, currentEntity?.id, onBack]);
 
   const { ref: loadMoreRef, inView } = useInView();
 
@@ -198,43 +240,43 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
   });
 
   const siteActivityQuery = useInfiniteQuery({
-    queryKey: ['site-report-history', selectedEntity?.id],
-    queryFn: ({ pageParam }) => siteService.getSiteReport(selectedEntity.id, pageParam as number, 50),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => (lastPage.data?.recentActivity?.length === 50 || lastPage.data?.report?.recentActivity?.length === 50) ? allPages.length : undefined,
-    enabled: action === 'site-transactions' && !!selectedEntity?.id,
+    queryKey: ['site-report-history', currentEntity?.id],
+    queryFn: ({ pageParam }) => siteService.getSiteReport(currentEntity.id, pageParam as number, 50),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.data?.recentActivity?.length === 50 || lastPage.data?.report?.recentActivity?.length === 50) ? allPages.length + 1 : undefined,
+    enabled: action === 'site-transactions' && !!currentEntity?.id,
   });
 
   const investorTransactionsQuery = useInfiniteQuery({
-    queryKey: ['history-investor-transactions', selectedEntity?.id],
-    queryFn: ({ pageParam }) => investorService.getTransactions(selectedEntity.id, pageParam as number, 50),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => lastPage.data?.transactions?.length === 50 ? allPages.length : undefined,
-    enabled: action === 'investor-transactions' && !!selectedEntity?.id,
+    queryKey: ['history-investor-transactions', currentEntity?.id],
+    queryFn: ({ pageParam }) => investorService.getTransactions(currentEntity.id, pageParam as number, 50),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => lastPage.data?.transactions?.length === 50 ? allPages.length + 1 : undefined,
+    enabled: action === 'investor-transactions' && !!currentEntity?.id,
   });
 
   const vendorStatementQuery = useInfiniteQuery({
-    queryKey: ['history-vendor-statement', selectedEntity?.id],
-    queryFn: ({ pageParam }) => vendorService.getVendorStatement(selectedEntity.id, pageParam as number, 50),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => lastPage.data?.statement?.length === 50 ? allPages.length : undefined,
-    enabled: action === 'vendor-transactions' && !!selectedEntity?.id,
+    queryKey: ['history-vendor-statement', currentEntity?.id],
+    queryFn: ({ pageParam }) => vendorService.getVendorStatement(currentEntity.id, pageParam as number, 50),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => lastPage.data?.statement?.length === 50 ? allPages.length + 1 : undefined,
+    enabled: action === 'vendor-transactions' && !!currentEntity?.id,
   });
 
   const customerPaymentsQuery = useInfiniteQuery({
-    queryKey: ['history-customer-payments', selectedEntity?.id],
-    queryFn: ({ pageParam }) => customerService.getPayments(selectedEntity.id, pageParam as number, 50),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => lastPage.data?.payments?.length === 50 ? allPages.length : undefined,
-    enabled: action === 'customer-transactions' && !!selectedEntity?.id,
+    queryKey: ['history-customer-payments', currentEntity?.id],
+    queryFn: ({ pageParam }) => customerService.getPayments(currentEntity.id, pageParam as number, 50),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => lastPage.data?.payments?.length === 50 ? allPages.length + 1 : undefined,
+    enabled: action === 'customer-transactions' && !!currentEntity?.id,
   });
 
   const employeeTransactionsQuery = useInfiniteQuery({
-    queryKey: ['history-employee-transactions', selectedEntity?.id],
-    queryFn: ({ pageParam }) => employeeService.getTransactions(selectedEntity.id, undefined, pageParam as number, 50),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) => lastPage.data?.transactions?.length === 50 ? allPages.length : undefined,
-    enabled: action === 'employee-transactions' && !!selectedEntity?.id,
+    queryKey: ['history-employee-transactions', currentEntity?.id],
+    queryFn: ({ pageParam }) => employeeService.getTransactions(currentEntity.id, undefined, pageParam as number, 50),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => lastPage.data?.transactions?.length === 50 ? allPages.length + 1 : undefined,
+    enabled: action === 'employee-transactions' && !!currentEntity?.id,
   });
 
   const queryState = (
@@ -259,7 +301,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
 
   const title = useMemo(() => {
     if (action === 'site-transactions') return 'Transaction History';
-    if (selectedEntity?.name) return selectedEntity.name;
+    if (currentEntity?.name) return currentEntity.name;
 
     switch (action) {
       case 'all-transactions':
@@ -275,7 +317,7 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
       default:
         return 'Transaction History';
     }
-  }, [action, selectedEntity?.name]);
+  }, [action, currentEntity?.name]);
 
   const subLabel = useMemo(() => {
     switch (action) {
@@ -900,6 +942,54 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
 
   return (
     <div className="space-y-3">
+      {action !== 'all-transactions' && (
+        <div className="border border-border bg-muted/20 p-4 animate-in fade-in duration-300">
+          <Field
+            label={
+              action === 'site-transactions' ? 'Select Site' :
+              action === 'investor-transactions' ? 'Select Investor' :
+              action === 'vendor-transactions' ? 'Select Vendor' :
+              action === 'customer-transactions' ? 'Select Customer' :
+              action === 'employee-transactions' ? 'Select Employee' :
+              'Select Entity'
+            }
+          >
+            <SearchableSelect
+              options={
+                action === 'site-transactions' ? siteOptions :
+                action === 'investor-transactions' ? investorOptions :
+                action === 'vendor-transactions' ? vendorOptions :
+                action === 'customer-transactions' ? customerOptions :
+                action === 'employee-transactions' ? employeeOptions :
+                []
+              }
+              value={currentEntity?.id ?? ''}
+              onValueChange={(val) => {
+                const found = (
+                  action === 'site-transactions' ? sites :
+                  action === 'investor-transactions' ? investors :
+                  action === 'vendor-transactions' ? vendors :
+                  action === 'customer-transactions' ? allCustomers :
+                  action === 'employee-transactions' ? employees :
+                  []
+                ).find((x: any) => x.id === val);
+                if (found) {
+                  setCurrentEntity(found);
+                }
+              }}
+              placeholder="Search..."
+              searchPlaceholder={
+                action === 'site-transactions' ? 'Search sites...' :
+                action === 'investor-transactions' ? 'Search investors...' :
+                action === 'vendor-transactions' ? 'Search vendors...' :
+                action === 'customer-transactions' ? 'Search customers...' :
+                action === 'employee-transactions' ? 'Search employees...' :
+                'Search...'
+              }
+            />
+          </Field>
+        </div>
+      )}
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
           <div className="relative w-full min-w-[220px] lg:w-80">

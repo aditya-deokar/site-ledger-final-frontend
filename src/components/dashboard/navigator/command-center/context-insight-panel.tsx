@@ -104,7 +104,8 @@ export function ContextInsightPanel({
     action === 'edit-vendor'
     || action === 'view-vendor-profile'
     || action === 'manage-vendor-documents'
-    || action === 'archive-vendor';
+    || action === 'archive-vendor'
+    || action === 'vendor-transactions';
   const isCustomerPaymentAction = (action === 'record-payment' || action === 'cancel-deal') && !!customer;
   if (!site && !isVendorAction && !isCustomerPaymentAction) return null;
 

@@ -48,13 +48,23 @@ interface EntitySelectorProps {
   loading: boolean;
   title?: string;
 }
+function getTargetCategory(category: CategoryDef, action: string): string {
+  if (category.id === 'transaction-history') {
+    if (action.includes('employee') || action === 'pay-salary' || action === 'mark-employee-attendance') return 'employees';
+    if (action.includes('investor')) return 'investors';
+    if (action.includes('vendor')) return 'vendors';
+    if (action.includes('customer') || action === 'record-payment' || action === 'cancel-deal') return 'customers';
+  }
+  return category.id;
+}
 
-function getEntityTitle(category: CategoryDef, item: EntityRecord) {
-  if (category.id === 'investors') {
+function getEntityTitle(targetCategory: string, item: EntityRecord) {
+  if (targetCategory === 'investors') {
     const investorId = item.id ? ` · ${item.id}` : '';
     return `${item.name || 'Untitled'}${investorId}`;
   }
-  if (category.id === 'customers') return item.name || 'Untitled';
+  if (targetCategory === 'customers') return item.name || 'Untitled';
+  if (targetCategory === 'employees') return item.name || 'Untitled';
   if (item.customFlatId || item.flatNumber) return `Flat ${item.customFlatId || item.flatNumber}`;
   return item.name || 'Untitled';
 }
@@ -100,30 +110,37 @@ function getCustomerMeta(item: EntityRecord) {
   ].filter(Boolean);
 }
 
-function getEntityMeta(category: CategoryDef, item: EntityRecord) {
-  if (category.id === 'investors') return getInvestorMeta(item);
-  if (category.id === 'vendors') return getVendorMeta(item);
-  if (category.id === 'customers') return getCustomerMeta(item);
-  if (category.id === 'sites') return [item.isActive === false ? 'Archived' : 'Active', item.address].filter(Boolean);
+function getEmployeeMeta(item: EntityRecord) {
+  const contact = [item.phone, item.email].filter(Boolean).join(' / ');
+  return [contact, item.type, item.status].filter(Boolean);
+}
+
+function getEntityMeta(targetCategory: string, item: EntityRecord) {
+  if (targetCategory === 'investors') return getInvestorMeta(item);
+  if (targetCategory === 'vendors') return getVendorMeta(item);
+  if (targetCategory === 'customers') return getCustomerMeta(item);
+  if (targetCategory === 'employees') return getEmployeeMeta(item);
+  if (targetCategory === 'sites') return [item.isActive === false ? 'Archived' : 'Active', item.address].filter(Boolean);
   return [item.siteName || item.type || item.status].filter(Boolean);
 }
 
-function getSearchText(category: CategoryDef, item: EntityRecord) {
+function getSearchText(targetCategory: string, item: EntityRecord) {
   return [
-    getEntityTitle(category, item),
-    ...getEntityMeta(category, item),
+    getEntityTitle(targetCategory, item),
+    ...getEntityMeta(targetCategory, item),
     item.phone,
     item.email,
     item.id,
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
-function getEntityKeywords(category: CategoryDef, item: EntityRecord) {
+function getEntityKeywords(targetCategory: string, item: EntityRecord) {
   const baseKeywords = [
     item.id,
     item.name,
     item.phone,
     item.email,
+    item.contactPersonName,
     item.siteName,
     item.type,
     item.status,
@@ -138,16 +155,16 @@ function getEntityKeywords(category: CategoryDef, item: EntityRecord) {
     item.dealStatus,
   ].filter(Boolean).map((value) => String(value).toLowerCase());
 
-  if (category.id === 'investors') {
+  if (targetCategory === 'investors') {
     return [
       ...baseKeywords,
       String(item.fixedRate ?? ''),
       String(item.equityPercentage ?? ''),
-      getSearchText(category, item),
+      getSearchText(targetCategory, item),
     ].filter(Boolean);
   }
 
-  return [...baseKeywords, getSearchText(category, item)].filter(Boolean);
+  return [...baseKeywords, getSearchText(targetCategory, item)].filter(Boolean);
 }
 
 export function EntitySelector({
@@ -160,11 +177,13 @@ export function EntitySelector({
   loading,
   title,
 }: EntitySelectorProps) {
-  const isInvestorSelector = category.id === 'investors';
-  const isVendorSelector = category.id === 'vendors';
-  const isCustomerSelector = category.id === 'customers';
-  const isDropdownSelector = isInvestorSelector || isVendorSelector || isCustomerSelector;
-  const dropdownLabel = isInvestorSelector ? 'Investor' : isVendorSelector ? 'Vendor' : 'Customer';
+  const targetCategory = getTargetCategory(category, action);
+  const isInvestorSelector = targetCategory === 'investors';
+  const isVendorSelector = targetCategory === 'vendors';
+  const isCustomerSelector = targetCategory === 'customers';
+  const isEmployeeSelector = targetCategory === 'employees';
+  const isDropdownSelector = isInvestorSelector || isVendorSelector || isCustomerSelector || isEmployeeSelector;
+  const dropdownLabel = isInvestorSelector ? 'Investor' : isVendorSelector ? 'Vendor' : isCustomerSelector ? 'Customer' : 'Employee';
 
   if (loading) return (
     <div className="flex flex-col gap-6">
@@ -208,9 +227,9 @@ export function EntitySelector({
           <SearchableSelect
             options={items.map((item) => ({
               value: item.id ?? '',
-              label: getEntityTitle(category, item),
-              description: getEntityMeta(category, item).join(' • '),
-              keywords: getEntityKeywords(category, item),
+              label: getEntityTitle(targetCategory, item),
+              description: getEntityMeta(targetCategory, item).join(' • '),
+              keywords: getEntityKeywords(targetCategory, item),
             }))}
             value=""
             onValueChange={(id) => {
@@ -223,7 +242,9 @@ export function EntitySelector({
                 ? 'Search name, phone, site, flat, floor, unit...'
                 : isInvestorSelector
                   ? 'Search name, number, email, site, type, or ID...'
-                  : 'Search name, phone, email, site, or type...'
+                  : isEmployeeSelector
+                    ? 'Search name, phone, department, status, or ID...'
+                    : 'Search name, phone, email, site, or type...'
             }
             emptyText={`No ${dropdownLabel.toLowerCase()} matches your search.`}
             autoFocus
@@ -233,7 +254,9 @@ export function EntitySelector({
               ? 'Search by name, number, email, site, type, rate, or ID'
               : isVendorSelector
                 ? 'Search by name, phone, email, site, or type'
-                : 'Search by name, phone, site, wing, floor, flat, or unit type'}
+                : isEmployeeSelector
+                  ? 'Search by name, phone, email, department, status, or ID'
+                  : 'Search by name, phone, site, wing, floor, flat, or unit type'}
           </p>
         </div>
       )}
@@ -252,11 +275,11 @@ export function EntitySelector({
             )}>
               <div className="flex-1">
                 <p className={cn('text-sm font-bold uppercase tracking-widest', focused ? 'text-foreground' : 'text-muted-foreground')}>
-                  {getEntityTitle(category, item)}
+                  {getEntityTitle(targetCategory, item)}
                 </p>
-                {getEntityMeta(category, item).length > 0 && (
+                {getEntityMeta(targetCategory, item).length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {getEntityMeta(category, item).map((meta) => (
+                    {getEntityMeta(targetCategory, item).map((meta) => (
                       <span key={meta} className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground/50">
                         {meta}
                       </span>

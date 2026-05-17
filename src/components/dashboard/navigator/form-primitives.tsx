@@ -67,11 +67,21 @@ export function SearchableSelect({
   allowCustom?: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(autoFocus || false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+        setIsOpen(true);
+      }, 50);
+    }
+  }, [autoFocus]);
   const selectedOption = options.find((option) => option.value === value) || null;
   const hasQuery = query.trim().length > 0;
 

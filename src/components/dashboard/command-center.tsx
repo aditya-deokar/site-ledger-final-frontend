@@ -2911,6 +2911,198 @@ function EmployeeDetailsForm({ entity, onSuccess, onBack }: { entity: any; onSuc
   );
 }
 
+function CustomerDetailsForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: allCustomersData } = useAllCustomers();
+  const allCustomers: any[] = useMemo(() =>
+    allCustomersData?.data?.customers ?? [],
+    [allCustomersData]
+  );
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(entity?.id ?? '');
+  const selectedCustomer = useMemo(() => allCustomers.find((c) => c.id === selectedCustomerId) ?? entity, [allCustomers, selectedCustomerId, entity]);
+
+  const customerOptions = useMemo(() => {
+    // Deduplicate by groupKey (phone ?? name) to show unique customers
+    const seen = new Map<string, any>();
+    for (const c of allCustomers) {
+      const key = (c.phone || c.name).toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.set(key, { ...c, _allDeals: [c] });
+      } else {
+        seen.get(key)!._allDeals.push(c);
+      }
+    }
+
+    return Array.from(seen.values()).map((c) => {
+      const dealDescs = c._allDeals.map((d: any) => {
+        const parts: string[] = [];
+        if (d.siteName) parts.push(d.siteName);
+        if (d.wingName) parts.push(d.wingName);
+        if (d.floorName) parts.push(d.floorName);
+        else if (d.floorNumber !== null && d.floorNumber !== undefined)
+          parts.push(d.floorNumber === 0 ? 'Ground Floor' : `Floor ${d.floorNumber}`);
+        if (d.customFlatId) parts.push(`Flat ${d.customFlatId}`);
+        else if (d.flatNumber !== null && d.flatNumber !== undefined) parts.push(`Flat #${d.flatNumber}`);
+        if (d.unitType) parts.push(d.unitType);
+        return parts.join(' · ');
+      }).filter(Boolean).join(' | ');
+
+      const keywords = [
+        c.phone,
+        c.email,
+        ...c._allDeals.flatMap((d: any) => [
+          d.customFlatId, d.flatNumber?.toString(),
+          d.floorName, d.floorNumber?.toString(),
+          d.wingName, d.siteName, d.unitType,
+        ]),
+      ].filter(Boolean) as string[];
+
+      return {
+        value: c.id,
+        label: c.name,
+        description: dealDescs,
+        keywords,
+      };
+    });
+  }, [allCustomers]);
+
+  const details = useMemo(() => {
+    if (!selectedCustomer) return [];
+
+    const flatInfo = [
+      selectedCustomer.wingName ? `${selectedCustomer.wingName} Wing` : null,
+      selectedCustomer.floorName || (selectedCustomer.floorNumber !== null && selectedCustomer.floorNumber !== undefined ? (selectedCustomer.floorNumber === 0 ? 'Ground Floor' : `Floor ${selectedCustomer.floorNumber}`) : null),
+      selectedCustomer.customFlatId ? `Flat ${selectedCustomer.customFlatId}` : (selectedCustomer.flatNumber !== null && selectedCustomer.flatNumber !== undefined ? `Flat #${selectedCustomer.flatNumber}` : null),
+      selectedCustomer.unitType ? `(${selectedCustomer.unitType})` : null,
+    ].filter(Boolean).join(' · ');
+
+    const res = [
+      { label: 'System ID', value: selectedCustomer.id || '-' },
+      { label: 'Name', value: selectedCustomer.name || '-' },
+      { label: 'Phone', value: selectedCustomer.phone || '-' },
+      { label: 'Email', value: selectedCustomer.email || '-' },
+      { label: 'Deal Status', value: selectedCustomer.dealStatus || '-' },
+      { label: 'Site Name', value: selectedCustomer.siteName || '-' },
+      { label: 'Flat Info', value: flatInfo || '-' },
+      { label: 'Selling Price', value: typeof selectedCustomer.sellingPrice === 'number' ? formatINR(selectedCustomer.sellingPrice) : '-' },
+      { label: 'Booking Amount', value: typeof selectedCustomer.bookingAmount === 'number' ? formatINR(selectedCustomer.bookingAmount) : '-' },
+      { label: 'Amount Paid', value: typeof selectedCustomer.amountPaid === 'number' ? formatINR(selectedCustomer.amountPaid) : '-' },
+      { label: 'Remaining Balance', value: typeof selectedCustomer.remaining === 'number' ? formatINR(selectedCustomer.remaining) : '-' },
+      { label: 'Created At', value: formatShortDate(selectedCustomer.createdAt) },
+    ];
+
+    if (selectedCustomer.dealStatus === 'CANCELLED') {
+      res.push({ label: 'Cancellation Reason', value: selectedCustomer.cancellationReason || 'Not specified' });
+      res.push({ label: 'Cancelled At', value: formatShortDate(selectedCustomer.cancelledAt) });
+    }
+
+    return res;
+  }, [selectedCustomer]);
+
+  return (
+    <FormShell title="Customer Details" onBack={onBack} isPending={false} submitLabel="Done" formId="view-customer-details-form">
+      <form
+        id="view-customer-details-form"
+        onSubmit={(e) => { e.preventDefault(); onSuccess(); }}
+        className="flex flex-col gap-4"
+      >
+        <Field label="Select Customer">
+          <SearchableSelect
+            options={customerOptions}
+            value={selectedCustomerId}
+            onValueChange={(val) => setSelectedCustomerId(val)}
+            placeholder="Search customer..."
+            searchPlaceholder="Search name, phone, email, site, flat..."
+          />
+        </Field>
+
+        {selectedCustomer && (
+          <div className="border border-border bg-muted/20 divide-y divide-border/70 animate-in fade-in duration-300">
+            {details.map((item) => (
+              <div key={item.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 px-4 py-3">
+                <p className={LABEL_CLS}>{item.label}</p>
+                <p className="text-[11px] font-bold tracking-wide break-all">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </form>
+    </FormShell>
+  );
+}
+
+function VendorDetailsForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: vendorsData } = useVendors({ includeArchived: true, page: 1, size: 100 });
+  const vendors: any[] = useMemo(() => vendorsData?.data?.vendors ?? [], [vendorsData]);
+
+  const [selectedVendorId, setSelectedVendorId] = useState<string>(entity?.id ?? '');
+  const selectedVendor = useMemo(() => vendors.find((v) => v.id === selectedVendorId) ?? entity, [vendors, selectedVendorId, entity]);
+
+  const vendorOptions = useMemo(() => {
+    return vendors.map((v) => {
+      const contactInfo = [v.contactPersonName, v.phone, v.email].filter(Boolean).join(' · ');
+      return {
+        value: v.id,
+        label: v.name,
+        description: contactInfo,
+        keywords: [v.phone, v.email, v.contactPersonName, v.type, v.status].filter(Boolean),
+      };
+    });
+  }, [vendors]);
+
+  const details = useMemo(() => {
+    if (!selectedVendor) return [];
+
+    return [
+      { label: 'System ID', value: selectedVendor.id || '-' },
+      { label: 'Vendor Name', value: selectedVendor.name || '-' },
+      { label: 'Vendor Type', value: selectedVendor.type || '-' },
+      { label: 'Contact Person', value: selectedVendor.contactPersonName || '-' },
+      { label: 'Phone', value: selectedVendor.phone || '-' },
+      { label: 'Email', value: selectedVendor.email || '-' },
+      { label: 'Billed Amount', value: typeof selectedVendor.totalBilled === 'number' ? formatINR(selectedVendor.totalBilled) : '-' },
+      { label: 'Outstanding Balance', value: typeof selectedVendor.totalOutstanding === 'number' ? formatINR(selectedVendor.totalOutstanding) : '-' },
+      { label: 'Assigned Sites', value: typeof selectedVendor.siteCount === 'number' ? selectedVendor.siteCount.toString() : '-' },
+      { label: 'Overdue Bills', value: typeof selectedVendor.overdueBillCount === 'number' ? selectedVendor.overdueBillCount.toString() : '-' },
+      { label: 'Payment Terms Override', value: typeof selectedVendor.paymentTermsDaysOverride === 'number' ? `${selectedVendor.paymentTermsDaysOverride} Days` : '-' },
+      { label: 'Status', value: selectedVendor.status || '-' },
+      { label: 'Note', value: selectedVendor.notes || '-' },
+      { label: 'Created At', value: formatShortDate(selectedVendor.createdAt) },
+    ];
+  }, [selectedVendor]);
+
+  return (
+    <FormShell title="Vendor Details" onBack={onBack} isPending={false} submitLabel="Done" formId="view-vendor-details-form">
+      <form
+        id="view-vendor-details-form"
+        onSubmit={(e) => { e.preventDefault(); onSuccess(); }}
+        className="flex flex-col gap-4"
+      >
+        <Field label="Select Vendor">
+          <SearchableSelect
+            options={vendorOptions}
+            value={selectedVendorId}
+            onValueChange={(val) => setSelectedVendorId(val)}
+            placeholder="Search vendor..."
+            searchPlaceholder="Search name, phone, email, site, or type..."
+          />
+        </Field>
+
+        {selectedVendor && (
+          <div className="border border-border bg-muted/20 divide-y divide-border/70 animate-in fade-in duration-300">
+            {details.map((item) => (
+              <div key={item.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 px-4 py-3">
+                <p className={LABEL_CLS}>{item.label}</p>
+                <p className="text-[11px] font-bold tracking-wide break-all">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </form>
+    </FormShell>
+  );
+}
+
 function DeleteEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
   const { data: employeesData } = useEmployees();
   const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
@@ -3348,6 +3540,7 @@ export default function CommandCenter() {
   const isSiteSelectorPhase = phase === 'selector' && !!selectedAction && ACTIONS_USING_SITE_SELECTOR.includes(selectedAction);
   const contextSite = isSiteSelectorPhase || phase === 'sub-selector' || phase === 'form' ? selectedEntity : null;
   const isTransactionHistoryAction = !!selectedAction && TRANSACTION_HISTORY_ACTIONS.includes(selectedAction as TransactionHistoryAction);
+  const isSingleColumnForm = isTransactionHistoryAction && phase === 'form';
 
   // ──── Keyboard Navigation ────────────────────────────────────────────────
 
@@ -3613,14 +3806,11 @@ export default function CommandCenter() {
       return <ManageFundsForm {...props} site={selectedEntity} />;
     }
 
-    if (
-      selectedAction === 'view-vendor-profile'
-      || selectedAction === 'manage-vendor-documents'
-    ) {
+    if (selectedAction === 'manage-vendor-documents') {
       return (
         <VendorWorkspaceLauncher
           vendorId={selectedEntity.id}
-          initialTab={selectedAction === 'manage-vendor-documents' ? 'documents' : 'overview'}
+          initialTab="documents"
         />
       );
     }
@@ -3722,9 +3912,10 @@ export default function CommandCenter() {
       case 'edit-investor': return <EditInvestorForm {...props} entity={selectedEntity} />;
       case 'add-vendor': return <AddVendorForm {...props} />;
       case 'edit-vendor': return <EditVendorForm {...props} entity={selectedEntity} />;
-      case 'view-vendor-profile': return null;
+      case 'view-vendor-profile': return <VendorDetailsForm {...props} entity={selectedEntity} />;
       case 'manage-vendor-documents': return null;
       case 'edit-customer': return <EditCustomerForm {...props} entity={selectedEntity} />;
+      case 'view-customer-details': return <CustomerDetailsForm {...props} entity={selectedEntity} />;
       case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} onCustomerSelect={setSelectedSubEntity} />;
       case 'cancel-deal': return <CancelDealForm {...props} entity={selectedSubEntity} onCustomerSelect={setSelectedSubEntity} />;
       case 'add-employee': return <AddEmployeeForm {...props} />;
@@ -3770,8 +3961,8 @@ export default function CommandCenter() {
         </div>
 
         {/* Content area */}
-        <div className={cn('grid w-full gap-8', isTransactionHistoryAction && phase === 'form' ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,44rem)_minmax(0,1fr)]')}>
-          <div className={cn('w-full', isTransactionHistoryAction && phase === 'form' ? 'max-w-none' : 'max-w-2xl')}>
+        <div className={cn('grid w-full gap-8', isSingleColumnForm ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,44rem)_minmax(0,1fr)]')}>
+          <div className={cn('w-full', isSingleColumnForm ? 'max-w-none' : 'max-w-2xl')}>
 
           {/* â”€â”€ Phase: Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           {phase === 'categories' && (
@@ -3949,7 +4140,7 @@ export default function CommandCenter() {
                   onBack={() => setPhase('actions')}
                   onSelect={(entity) => {
                     setSelectedEntity(entity);
-                    if (selectedCategory.id === 'vendors') {
+                    if (selectedCategory.id === 'vendors' || selectedAction === 'vendor-transactions') {
                       setFocusedVendorId(entity.id ?? null);
                     }
                     if (selectedAction && ACTIONS_NEEDING_SUB_SELECTOR.includes(selectedAction)) {
@@ -3991,7 +4182,7 @@ export default function CommandCenter() {
           )}
           </div>
 
-          {!(isTransactionHistoryAction && phase === 'form') && (
+          {!isSingleColumnForm && (
             <ContextInsightPanel
               action={selectedAction}
               site={contextSite}

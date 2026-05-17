@@ -82,6 +82,7 @@ export const CATEGORIES: CategoryDef[] = [
       { id: 'edit-customer', label: 'Edit Customer', shortcut: '1', icon: Pencil },
       { id: 'record-payment', label: 'Record Payment', shortcut: '2', icon: IndianRupee },
       { id: 'cancel-deal', label: 'Cancel Deal', shortcut: '3', icon: Hammer },
+      { id: 'view-customer-details', label: 'View Customer Details', shortcut: '4', icon: Eye },
     ],
   },
   {
@@ -104,6 +105,7 @@ export const ACTIONS_NEEDING_SELECTOR = [
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
   'edit-vendor', 'view-vendor-profile', 'manage-vendor-documents', 'archive-vendor',
+  'view-customer-details',
 ];
 
 export const ACTIONS_NEEDING_SUB_SELECTOR: string[] = [];
