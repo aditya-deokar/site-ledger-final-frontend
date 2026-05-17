@@ -57,3 +57,4 @@ ts-output*.txt
 
 # Kiro specs and configuration
 .kiro/
+improvements.md

@@ -88,12 +88,12 @@ export const CATEGORIES: CategoryDef[] = [
     id: 'employees', label: 'Employees', shortcut: '7', icon: BriefcaseBusiness,
     color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30',
     actions: [
-      { id: 'add-employee', label: 'Add Employee', shortcut: '1', icon: UserPlus },
-      { id: 'view-employee-details', label: 'View Employee Details', shortcut: '2', icon: Eye },
-      { id: 'edit-employee', label: 'Edit Employee', shortcut: '3', icon: Pencil },
-      { id: 'delete-employee', label: 'Delete Employee', shortcut: '4', icon: Trash2 },
-      { id: 'mark-employee-attendance', label: 'Take Attendance', shortcut: '5', icon: CalendarDays },
-      { id: 'pay-salary', label: 'Pay Salary', shortcut: '6', icon: IndianRupee },
+      { id: 'mark-employee-attendance', label: 'Take Attendance', shortcut: '1', icon: CalendarDays },
+      { id: 'pay-salary', label: 'Pay Salary', shortcut: '2', icon: IndianRupee },
+      { id: 'add-employee', label: 'Add Employee', shortcut: '3', icon: UserPlus },
+      { id: 'view-employee-details', label: 'View Employee Details', shortcut: '4', icon: Eye },
+      { id: 'edit-employee', label: 'Edit Employee', shortcut: '5', icon: Pencil },
+      { id: 'delete-employee', label: 'Delete Employee', shortcut: '6', icon: Trash2 },
     ],
   },
 ];
@@ -104,13 +104,10 @@ export const ACTIONS_NEEDING_SELECTOR = [
   'edit-partner', 'delete-partner',
   'edit-investor', 'delete-investor',
   'edit-vendor', 'view-vendor-profile', 'manage-vendor-documents', 'archive-vendor',
-  'edit-customer', 'record-payment', 'cancel-deal',
-  'view-employee-details', 'edit-employee', 'delete-employee',
-  'mark-employee-attendance', 'pay-salary',
 ];
 
-export const ACTIONS_NEEDING_SUB_SELECTOR = ['record-payment'];
-export const ACTIONS_USING_SITE_SELECTOR = ['site-transactions', 'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site', 'record-payment'];
+export const ACTIONS_NEEDING_SUB_SELECTOR: string[] = [];
+export const ACTIONS_USING_SITE_SELECTOR = ['site-transactions', 'book-flat', 'add-site-expense', 'manage-funds', 'archive-site', 'delete-site'];
 export const COMMON_UNIT_TYPES = ['1RK', '1BHK', '2BHK', '2.5BHK', '3BHK', '4BHK', 'DUPLEX', 'PENTHOUSE'] as const;
 export const UNIT_TYPE_PICK_OPTIONS = [...COMMON_UNIT_TYPES, 'CUSTOM'] as const;
 export const COMMON_VENDOR_CATEGORIES = ['Materials', 'Labor', 'Contractor', 'Transport', 'Electrical', 'Plumbing', 'Masonry', 'Carpentry'] as const;

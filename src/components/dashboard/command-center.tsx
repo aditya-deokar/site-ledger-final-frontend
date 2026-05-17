@@ -32,6 +32,7 @@ import {
   employeeKeys,
   useCreateEmployee,
   useDeleteEmployee,
+  useEmployees,
   usePaySalary,
   useUpdateEmployee,
 } from '@/hooks/api/employee.hooks';
@@ -1365,38 +1366,193 @@ function EditVendorForm({ entity, onSuccess, onBack }: { entity: any; onSuccess:
 }
 
 function EditCustomerForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: allCustomersData } = useAllCustomers();
+  const allCustomers: any[] = useMemo(() =>
+    (allCustomersData?.data?.customers ?? []).filter((c: any) => c.dealStatus === 'ACTIVE'),
+    [allCustomersData]
+  );
+
+  // Deduplicate by groupKey (phone ?? name) — one option per unique person
+  // Keep the first deal's id for editing; show all deals' flat info in description
+  const customerOptions = useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const c of allCustomers) {
+      const key = (c.phone || c.name).toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.set(key, { ...c, _allDeals: [c] });
+      } else {
+        seen.get(key)!._allDeals.push(c);
+      }
+    }
+
+    return Array.from(seen.values()).map((c) => {
+      // Build flat info for each deal
+      const dealDescs = c._allDeals.map((d: any) => {
+        const parts: string[] = [];
+        if (d.siteName) parts.push(d.siteName);
+        if (d.wingName) parts.push(d.wingName);
+        if (d.floorName) parts.push(d.floorName);
+        else if (d.floorNumber !== null && d.floorNumber !== undefined)
+          parts.push(d.floorNumber === 0 ? 'Ground Floor' : `Floor ${d.floorNumber}`);
+        if (d.customFlatId) parts.push(`Flat ${d.customFlatId}`);
+        else if (d.flatNumber !== null && d.flatNumber !== undefined) parts.push(`Flat #${d.flatNumber}`);
+        if (d.unitType) parts.push(d.unitType);
+        return parts.join(' · ');
+      }).filter(Boolean).join(' | ');
+
+      // Collect all searchable keywords across all deals
+      const keywords = [
+        c.phone,
+        c.email,
+        ...c._allDeals.flatMap((d: any) => [
+          d.customFlatId, d.flatNumber?.toString(),
+          d.floorName, d.floorNumber?.toString(),
+          d.wingName, d.siteName, d.unitType,
+        ]),
+      ].filter(Boolean) as string[];
+
+      return {
+        value: c.id,
+        _allDeals: c._allDeals,
+        label: c.name,
+        keywords,
+      };
+    });
+  }, [allCustomers]);
+
+  const [selectedId, setSelectedId] = useState<string>(entity?.id ?? '');
+  // selectedId is the id of the first deal; find the actual customer record
+  const selectedCustomer = useMemo(() =>
+    allCustomers.find((c) => c.id === selectedId) ?? entity,
+    [allCustomers, selectedId, entity]
+  );
+
   const { mutate, isPending, error } = useUpdateCustomer({ onSuccess: () => { toast.success('Customer updated'); onSuccess(); } });
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<UpdateCustomerInput>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<UpdateCustomerInput>({
     resolver: zodResolver(updateCustomerSchema),
-    defaultValues: {
-      name: entity?.name || '',
-      phone: entity?.phone || '',
-      email: entity?.email || '',
-    },
+    defaultValues: { name: entity?.name || '', phone: entity?.phone || '', email: entity?.email || '' },
   });
-  useEffect(() => { setTimeout(() => setFocus('name'), 50); }, [setFocus]);
+
+  // Pre-fill fields when selection changes
+  useEffect(() => {
+    const customer = allCustomers.find((c) => c.id === selectedId);
+    if (customer) {
+      reset({ name: customer.name || '', phone: customer.phone || '', email: customer.email || '' });
+    } else {
+      reset({ name: '', phone: '', email: '' });
+    }
+  }, [selectedId, allCustomers, reset]);
 
   return (
-    <FormShell title={`Edit Customer: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Save Changes" formId="edit-customer-form">
-      <form id="edit-customer-form" onSubmit={handleSubmit((d) => mutate({ siteId: entity.siteId, flatId: entity.flatId, customerId: entity.id, data: d }))} className="flex flex-col gap-6">
+    <FormShell title="Edit Customer" onBack={onBack} isPending={isPending} submitLabel="Save Changes" formId="edit-customer-form">
+      <form id="edit-customer-form" onSubmit={handleSubmit((d) => {
+        if (!selectedCustomer?.id) { toast.error('Select a customer'); return; }
+        mutate({ siteId: selectedCustomer.siteId, flatId: selectedCustomer.flatId, customerId: selectedCustomer.id, data: d });
+      })} className="flex flex-col gap-6">
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to update customer')} />}
-        <Field label="Full Name" error={errors.name?.message}>
-          <input className={INPUT_CLS} {...register('name')} />
+        <Field label="Select Customer">
+          <SearchableSelect
+            options={customerOptions}
+            value={selectedId}
+            onValueChange={(val) => setSelectedId(val)}
+            placeholder="Search customer..."
+            searchPlaceholder="Search name, phone, email, flat, site, floor, wing..."
+          />
         </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Phone">
-            <input className={INPUT_CLS} {...register('phone')} />
-          </Field>
-          <Field label="Email" error={errors.email?.message}>
-            <input className={INPUT_CLS} {...register('email')} />
-          </Field>
-        </div>
+        {selectedCustomer?.id && (
+          <>
+            <Field label="Full Name" error={errors.name?.message}>
+              <input className={INPUT_CLS} {...register('name')} />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Phone">
+                <input className={INPUT_CLS} {...register('phone')} />
+              </Field>
+              <Field label="Email" error={errors.email?.message}>
+                <input className={INPUT_CLS} {...register('email')} />
+              </Field>
+            </div>
+          </>
+        )}
       </form>
     </FormShell>
   );
 }
 
-function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+function RecordPaymentForm({ entity, onSuccess, onBack, onCustomerSelect }: { entity: any; onSuccess: () => void; onBack: () => void; onCustomerSelect?: (customer: any) => void }) {
+  const { data: sitesData } = useSites();
+  const sites: any[] = useMemo(() => sitesData?.data?.sites ?? [], [sitesData]);
+  const siteOptions = useMemo(() => [
+    { value: '', label: 'All Sites', sub: '' },
+    ...sites.map((s) => ({ value: s.id, label: s.name, sub: s.address ?? '' })),
+  ], [sites]);
+
+  const { data: allCustomersData } = useAllCustomers();
+  const allCustomers: any[] = useMemo(() =>
+    (allCustomersData?.data?.customers ?? []).filter((c: any) => c.dealStatus === 'ACTIVE'),
+    [allCustomersData]
+  );
+
+  const [selectedSiteId, setSelectedSiteId] = useState<string>(entity?.siteId ?? '');
+  const [selectedId, setSelectedId] = useState<string>(entity?.id ?? '');
+
+  const filteredCustomers = useMemo(() =>
+    selectedSiteId
+      ? allCustomers.filter((c) => c.siteId === selectedSiteId)
+      : allCustomers,
+    [allCustomers, selectedSiteId]
+  );
+
+  const customerOptions = useMemo(() =>
+    filteredCustomers.map((c) => {
+      const flatParts: string[] = [];
+      if (c.wingName) flatParts.push(c.wingName);
+      if (c.floorName) flatParts.push(c.floorName);
+      else if (c.floorNumber !== null && c.floorNumber !== undefined) {
+        flatParts.push(c.floorNumber === 0 ? 'Ground Floor' : `Floor ${c.floorNumber}`);
+      }
+      if (c.customFlatId) flatParts.push(`Flat ${c.customFlatId}`);
+      else if (c.flatNumber !== null && c.flatNumber !== undefined) flatParts.push(`Flat #${c.flatNumber}`);
+      if (c.unitType) flatParts.push(c.unitType);
+
+      const descParts: string[] = [];
+      if (c.siteName) descParts.push(c.siteName);
+      if (flatParts.length) descParts.push(flatParts.join(' · '));
+      if (c.phone) descParts.push(c.phone);
+
+      return {
+        value: c.id,
+        label: c.name,
+        description: descParts.join(' — '),
+        keywords: [
+          c.phone,
+          c.customFlatId,
+          c.flatNumber?.toString(),
+          c.floorName,
+          c.floorNumber?.toString(),
+          c.wingName,
+          c.siteName,
+          c.unitType,
+        ].filter(Boolean) as string[],
+      };
+    }),
+    [filteredCustomers]
+  );
+
+  const selectedCustomer = useMemo(() => allCustomers.find((c) => c.id === selectedId) ?? entity, [allCustomers, selectedId, entity]);
+
+  // Bubble selected customer up to CommandCenter → ContextInsightPanel
+  useEffect(() => {
+    onCustomerSelect?.(selectedId ? allCustomers.find((c) => c.id === selectedId) ?? null : null);
+  }, [selectedId, allCustomers, onCustomerSelect]);
+
+  // Reset customer selection when site filter changes
+  useEffect(() => {
+    if (selectedSiteId && selectedCustomer && selectedCustomer.siteId !== selectedSiteId) {
+      setSelectedId('');
+    }
+  }, [selectedSiteId, selectedCustomer]);
+
   const { mutate, isPending, error } = useRecordCustomerPayment({ onSuccess: () => { toast.success('Payment recorded'); onSuccess(); } });
   type RecordPaymentFormValues = {
     amount: number;
@@ -1405,11 +1561,14 @@ function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSucce
     referenceNumber?: string;
   };
 
-  const { register, handleSubmit, setError, clearErrors, setFocus, setValue, watch, formState: { errors } } = useForm<RecordPaymentFormValues>({
+  const { register, handleSubmit, setError, clearErrors, setValue, watch, formState: { errors } } = useForm<RecordPaymentFormValues>({
     defaultValues: { amount: 0, note: '', paymentMode: 'CASH', referenceNumber: '' },
   });
-  useEffect(() => { setTimeout(() => setFocus('amount'), 50); }, [setFocus]);
   const paymentMode = watch('paymentMode') ?? 'CASH';
+
+  useEffect(() => {
+    register('paymentMode');
+  }, [register]);
 
   useEffect(() => {
     if (paymentMode === 'CASH') {
@@ -1419,10 +1578,11 @@ function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSucce
   }, [clearErrors, paymentMode, setValue]);
 
   return (
-    <FormShell title={`Record Payment: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Record Payment" formId="record-payment-form">
+    <FormShell title="Record Payment" onBack={onBack} isPending={isPending} submitLabel="Record Payment" formId="record-payment-form">
       <form
         id="record-payment-form"
         onSubmit={handleSubmit((values) => {
+          if (!selectedCustomer?.id) { toast.error('Select a customer'); return; }
           const parsed = recordPaymentSchema.safeParse(values);
           if (!parsed.success) {
             const issue = parsed.error.issues[0];
@@ -1432,23 +1592,51 @@ function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSucce
             }
             return;
           }
-
           clearErrors();
-          mutate({ customerId: entity.id, siteId: entity.siteId, data: parsed.data });
+          mutate({ customerId: selectedCustomer.id, siteId: selectedCustomer.siteId, data: parsed.data });
         })}
         className="flex flex-col gap-6"
       >
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to record payment')} />}
+
+        {/* Step 1 — Filter by site */}
+        <Field label="Filter by Site (optional)">
+          <SearchableSelect
+            options={siteOptions}
+            value={selectedSiteId}
+            onValueChange={(val) => setSelectedSiteId(val)}
+            placeholder="All sites..."
+          />
+        </Field>
+
+        {/* Step 2 — Pick customer */}
+        <Field label="Select Customer">
+          <SearchableSelect
+            options={customerOptions}
+            value={selectedId}
+            onValueChange={(val) => setSelectedId(val)}
+            placeholder="Search customer..."
+            searchPlaceholder="Search name, phone, flat..."
+          />
+        </Field>
+
+        {/* Customer info card removed — shown on right panel via ContextInsightPanel */}
+
         <Field label="Amount Paid (INR)" error={errors.amount?.message}>
           <input type="number" className={INPUT_CLS} {...register('amount', { valueAsNumber: true })} />
         </Field>
         <Field label="Payment Mode" error={errors.paymentMode?.message}>
-          <select className={INPUT_CLS} {...register('paymentMode')}>
-            <option value="CASH">Cash</option>
-            <option value="CHEQUE">Cheque</option>
-            <option value="BANK_TRANSFER">Bank Transfer</option>
-            <option value="UPI">UPI</option>
-          </select>
+          <SearchableSelect
+            options={[
+              { value: 'CASH', label: 'Cash' },
+              { value: 'CHEQUE', label: 'Cheque' },
+              { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+              { value: 'UPI', label: 'UPI' },
+            ]}
+            value={paymentMode}
+            onValueChange={(val) => setValue('paymentMode', val as any)}
+            placeholder="Select payment mode..."
+          />
         </Field>
         {paymentMode !== 'CASH' && (
           <Field label="Reference Number" error={errors.referenceNumber?.message}>
@@ -1467,27 +1655,186 @@ function RecordPaymentForm({ entity, onSuccess, onBack }: { entity: any; onSucce
   );
 }
 
-function CancelDealForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+function CancelDealForm({ entity, onSuccess, onBack, onCustomerSelect }: { entity: any; onSuccess: () => void; onBack: () => void; onCustomerSelect?: (customer: any) => void }) {
+  const { data: sitesData } = useSites();
+  const sites: any[] = useMemo(() => sitesData?.data?.sites ?? [], [sitesData]);
+  const siteOptions = useMemo(() => [
+    { value: '', label: 'All Sites', sub: '' },
+    ...sites.map((s) => ({ value: s.id, label: s.name, sub: s.address ?? '' })),
+  ], [sites]);
+
+  const { data: allCustomersData } = useAllCustomers();
+  const allCustomers: any[] = useMemo(() =>
+    (allCustomersData?.data?.customers ?? []).filter((c: any) => c.dealStatus === 'ACTIVE'),
+    [allCustomersData]
+  );
+
+  const [selectedSiteId, setSelectedSiteId] = useState<string>(entity?.siteId ?? '');
+  const [selectedId, setSelectedId] = useState<string>(entity?.id ?? '');
+
+  const filteredCustomers = useMemo(() =>
+    selectedSiteId
+      ? allCustomers.filter((c) => c.siteId === selectedSiteId)
+      : allCustomers,
+    [allCustomers, selectedSiteId]
+  );
+
+  const customerOptions = useMemo(() =>
+    filteredCustomers.map((c) => {
+      const flatParts: string[] = [];
+      if (c.wingName) flatParts.push(c.wingName);
+      if (c.floorName) flatParts.push(c.floorName);
+      else if (c.floorNumber !== null && c.floorNumber !== undefined) {
+        flatParts.push(c.floorNumber === 0 ? 'Ground Floor' : `Floor ${c.floorNumber}`);
+      }
+      if (c.customFlatId) flatParts.push(`Flat ${c.customFlatId}`);
+      else if (c.flatNumber !== null && c.flatNumber !== undefined) flatParts.push(`Flat #${c.flatNumber}`);
+      if (c.unitType) flatParts.push(c.unitType);
+
+      const descParts: string[] = [];
+      if (c.siteName) descParts.push(c.siteName);
+      if (flatParts.length) descParts.push(flatParts.join(' · '));
+      if (c.phone) descParts.push(c.phone);
+
+      return {
+        value: c.id,
+        label: c.name,
+        description: descParts.join(' — '),
+        keywords: [
+          c.phone,
+          c.customFlatId,
+          c.flatNumber?.toString(),
+          c.floorName,
+          c.floorNumber?.toString(),
+          c.wingName,
+          c.siteName,
+          c.unitType,
+        ].filter(Boolean) as string[],
+      };
+    }),
+    [filteredCustomers]
+  );
+
+  const selectedCustomer = useMemo(() => allCustomers.find((c) => c.id === selectedId) ?? entity, [allCustomers, selectedId, entity]);
+
+  // Bubble selected customer up to CommandCenter → ContextInsightPanel
+  useEffect(() => {
+    onCustomerSelect?.(selectedId ? allCustomers.find((c) => c.id === selectedId) ?? null : null);
+  }, [selectedId, allCustomers, onCustomerSelect]);
+
+  // Reset customer selection when site filter changes
+  useEffect(() => {
+    if (selectedSiteId && selectedCustomer && selectedCustomer.siteId !== selectedSiteId) {
+      setSelectedId('');
+    }
+  }, [selectedSiteId, selectedCustomer]);
+
   const { mutate, isPending, error } = useCancelDeal({ onSuccess: () => { toast.success('Deal cancelled'); onSuccess(); } });
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(cancelDealSchema),
     defaultValues: { reason: '', refundAmount: 0 },
   });
-  useEffect(() => { setTimeout(() => setFocus('reason'), 50); }, [setFocus]);
+
+  const [refundMode, setRefundMode] = useState<'TOTAL' | 'PERCENTAGE' | 'FIXED' | 'NONE'>('TOTAL');
+  const [refundPercentage, setRefundPercentage] = useState<number>(100);
+
+  // Sync refund amount automatically when customer or refund mode / percentage changes
+  useEffect(() => {
+    if (refundMode === 'TOTAL') {
+      setValue('refundAmount', Number(selectedCustomer?.amountPaid ?? 0));
+    } else if (refundMode === 'NONE') {
+      setValue('refundAmount', 0);
+    } else if (refundMode === 'PERCENTAGE') {
+      setValue('refundAmount', Math.round((refundPercentage / 100) * Number(selectedCustomer?.amountPaid ?? 0)));
+    }
+  }, [selectedCustomer, refundMode, refundPercentage, setValue]);
 
   return (
-    <FormShell title={`Cancel Deal: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Confirm Cancellation" formId="cancel-deal-form" destructive>
-      <form id="cancel-deal-form" onSubmit={handleSubmit((d) => mutate({ siteId: entity.siteId, flatId: entity.flatId, customerId: entity.id, data: d }))} className="flex flex-col gap-6">
+    <FormShell title="Cancel Deal" onBack={onBack} isPending={isPending} submitLabel="Confirm Cancellation" formId="cancel-deal-form" destructive>
+      <form id="cancel-deal-form" onSubmit={handleSubmit((d) => {
+        if (!selectedCustomer?.id) { toast.error('Select a customer'); return; }
+        mutate({ siteId: selectedCustomer.siteId, flatId: selectedCustomer.flatId, customerId: selectedCustomer.id, data: d });
+      })} className="flex flex-col gap-6">
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to cancel deal')} />}
-        <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest bg-red-500/10 p-3">
-          Warning: This will set the flat back to AVAILABLE and mark the deal as cancelled.
-        </p>
-        <Field label="Reason for Cancellation" error={errors.reason?.message}>
-          <input placeholder="e.g. Better option found, Financial issues" className={INPUT_CLS} {...register('reason')} />
+
+        {/* Step 1 — Filter by site */}
+        <Field label="Filter by Site (optional)">
+          <SearchableSelect
+            options={siteOptions}
+            value={selectedSiteId}
+            onValueChange={(val) => setSelectedSiteId(val)}
+            placeholder="All sites..."
+          />
         </Field>
-        <Field label="Refund Amount (INR)" error={errors.refundAmount?.message}>
-          <input type="number" className={INPUT_CLS} {...register('refundAmount', { valueAsNumber: true })} />
+
+        {/* Step 2 — Pick customer */}
+        <Field label="Select Customer">
+          <SearchableSelect
+            options={customerOptions}
+            value={selectedId}
+            onValueChange={(val) => setSelectedId(val)}
+            placeholder="Search customer..."
+            searchPlaceholder="Search name, phone, flat..."
+          />
         </Field>
+
+        {selectedCustomer?.id && (
+          <>
+            <p className="text-[10px] font-bold text-destructive uppercase tracking-widest bg-destructive/10 p-3.5 border border-destructive/20 leading-relaxed">
+              Warning: Cancelling this deal will instantly release Flat &quot;{selectedCustomer.customFlatId || `#${selectedCustomer.flatNumber}`}&quot; at &quot;{selectedCustomer.siteName}&quot; back to AVAILABLE and close this active active customer deal.
+            </p>
+
+            <Field label="Reason for Cancellation" error={errors.reason?.message}>
+              <input placeholder="e.g. Better option found, Financial issues, Relocating..." className={INPUT_CLS} {...register('reason')} />
+            </Field>
+
+            <div className="flex flex-col gap-2">
+              <label className={LABEL_CLS}>Refund Mode</label>
+              <KeyToggle
+                options={['TOTAL', 'PERCENTAGE', 'FIXED', 'NONE'] as const}
+                value={refundMode}
+                onChange={(val) => setRefundMode(val)}
+                renderOption={(opt, selected) => (
+                  <div className={cn(
+                    "border-2 py-3 px-4 text-center text-[10px] font-bold uppercase tracking-widest transition-all duration-200 cursor-pointer select-none",
+                    selected 
+                      ? "bg-destructive border-destructive text-destructive-foreground font-black shadow-md shadow-destructive/25" 
+                      : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50"
+                  )}>
+                    {opt === 'TOTAL' ? 'Total Paid' : opt === 'PERCENTAGE' ? '% of Paid' : opt === 'FIXED' ? 'Fixed Amount' : 'No Refund'}
+                  </div>
+                )}
+              />
+            </div>
+
+            {refundMode === 'PERCENTAGE' && (
+              <Field label="Refund Percentage (%)">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder="Enter percentage (e.g. 90)"
+                  className={INPUT_CLS}
+                  value={refundPercentage}
+                  onChange={(e) => {
+                    const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    setRefundPercentage(val);
+                    setValue('refundAmount', Math.round((val / 100) * (selectedCustomer?.amountPaid ?? 0)));
+                  }}
+                />
+              </Field>
+            )}
+
+            <Field label="Refund Amount (INR)" error={errors.refundAmount?.message}>
+              <input 
+                type="number" 
+                className={cn(INPUT_CLS, (refundMode === 'TOTAL' || refundMode === 'NONE' || refundMode === 'PERCENTAGE') && "opacity-50 pointer-events-none bg-muted/60")} 
+                readOnly={refundMode !== 'FIXED'}
+                {...register('refundAmount', { valueAsNumber: true })} 
+              />
+            </Field>
+          </>
+        )}
       </form>
     </FormShell>
   );
@@ -1644,9 +1991,12 @@ function BookFlatForm({
   const { data: floorsData, isLoading: floorsLoading, refetch: refetchFloors } = useFloors(site.id);
   const { data: wingsData, isLoading: wingsLoading } = useWings(site.id);
   const { data: allCustomersData } = useAllCustomers();
-  const floors: Floor[] = floorsData?.data?.floors ?? [];
-  const wings: any[] = wingsData?.data?.wings ?? [];
-  const availableCustomers = (allCustomersData?.data?.customers ?? []).filter((customer: any) => customer.dealStatus === 'ACTIVE');
+  const floors: Floor[] = useMemo(() => floorsData?.data?.floors ?? [], [floorsData]);
+  const wings: any[] = useMemo(() => wingsData?.data?.wings ?? [], [wingsData]);
+  const availableCustomers = useMemo(() => 
+    (allCustomersData?.data?.customers ?? []).filter((customer: any) => customer.dealStatus === 'ACTIVE'),
+    [allCustomersData]
+  );
   const groupedExistingCustomers = useMemo(
     () => groupCustomerDeals(availableCustomers as CustomerWithSite[]),
     [availableCustomers],
@@ -2393,6 +2743,13 @@ function AddEmployeeForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
 }
 
 function EditEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: employeesData } = useEmployees();
+  const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e) => ({ value: e.id, label: e.name, sub: e.employeeId })), [employees]);
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(entity?.id ?? '');
+  const selectedEmployee = useMemo(() => employees.find((e) => e.id === selectedEmployeeId) ?? entity, [employees, selectedEmployeeId, entity]);
+
   const { mutate, isPending, error } = useUpdateEmployee({
     onSuccess: () => {
       toast.success('Employee updated');
@@ -2400,7 +2757,7 @@ function EditEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSucces
     },
   });
 
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<CreateEmployeeInput>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateEmployeeInput>({
     resolver: zodResolver(createEmployeeSchema),
     defaultValues: {
       name: entity?.name ?? '',
@@ -2416,22 +2773,41 @@ function EditEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSucces
   });
 
   useEffect(() => {
-    setTimeout(() => setFocus('name'), 50);
-  }, [setFocus]);
+    if (selectedEmployee) {
+      reset({
+        name: selectedEmployee.name ?? '',
+        email: selectedEmployee.email ?? '',
+        phone: selectedEmployee.phone ?? '',
+        address: selectedEmployee.address ?? '',
+        designation: selectedEmployee.designation ?? '',
+        department: selectedEmployee.department ?? '',
+        dateOfJoining: toDateInputValue(selectedEmployee.dateOfJoining),
+        salary: selectedEmployee.salary ?? 0,
+        status: selectedEmployee.status ?? 'active',
+      });
+    }
+  }, [selectedEmployee, reset]);
 
   return (
-    <FormShell title={`Edit Employee: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Save Employee" formId="edit-employee-form">
+    <FormShell title="Edit Employee" onBack={onBack} isPending={isPending} submitLabel="Save Employee" formId="edit-employee-form">
       <form
         id="edit-employee-form"
-        onSubmit={handleSubmit((values) => mutate({ id: entity.id, data: values as UpdateEmployeeInput }))}
+        onSubmit={handleSubmit((values) => {
+          if (!selectedEmployee?.id) { toast.error('Select an employee'); return; }
+          mutate({ id: selectedEmployee.id, data: values as UpdateEmployeeInput });
+        })}
         className="flex flex-col gap-6"
       >
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to update employee')} />}
 
-        <div className="border border-border bg-muted/20 p-3">
-          <p className={LABEL_CLS}>Employee ID</p>
-          <p className="mt-1 text-sm font-bold uppercase tracking-widest">{entity?.employeeId || '-'}</p>
-        </div>
+        <Field label="Select Employee">
+          <SearchableSelect
+            options={employeeOptions}
+            value={selectedEmployeeId}
+            onValueChange={(val) => setSelectedEmployeeId(val)}
+            placeholder="Search employee..."
+          />
+        </Field>
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Employee Name" error={errors.name?.message}>
@@ -2482,41 +2858,98 @@ function EditEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSucces
 }
 
 function EmployeeDetailsForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: employeesData } = useEmployees();
+  const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e) => ({ value: e.id, label: e.name, sub: e.employeeId })), [employees]);
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(entity?.id ?? '');
+  const selectedEmployee = useMemo(() => employees.find((e) => e.id === selectedEmployeeId) ?? entity, [employees, selectedEmployeeId, entity]);
+
   const details = [
-    { label: 'System ID', value: entity?.id || '-' },
-    { label: 'Employee ID', value: entity?.employeeId || '-' },
-    { label: 'Name', value: entity?.name || '-' },
-    { label: 'Email', value: entity?.email || '-' },
-    { label: 'Phone', value: entity?.phone || '-' },
-    { label: 'Address', value: entity?.address || '-' },
-    { label: 'Designation', value: entity?.designation || '-' },
-    { label: 'Department', value: entity?.department || '-' },
-    { label: 'Date Of Joining', value: formatShortDate(entity?.dateOfJoining) },
-    { label: 'Salary', value: typeof entity?.salary === 'number' ? formatINR(entity.salary) : '-' },
-    { label: 'Status', value: employeeStatusLabel(entity?.status) },
-    { label: 'Photo URL', value: entity?.photo || '-' },
-    { label: 'Created At', value: formatShortDate(entity?.createdAt) },
-    { label: 'Updated At', value: formatShortDate(entity?.updatedAt) },
+    { label: 'System ID', value: selectedEmployee?.id || '-' },
+    { label: 'Employee ID', value: selectedEmployee?.employeeId || '-' },
+    { label: 'Name', value: selectedEmployee?.name || '-' },
+    { label: 'Email', value: selectedEmployee?.email || '-' },
+    { label: 'Phone', value: selectedEmployee?.phone || '-' },
+    { label: 'Address', value: selectedEmployee?.address || '-' },
+    { label: 'Designation', value: selectedEmployee?.designation || '-' },
+    { label: 'Department', value: selectedEmployee?.department || '-' },
+    { label: 'Date Of Joining', value: formatShortDate(selectedEmployee?.dateOfJoining) },
+    { label: 'Salary', value: typeof selectedEmployee?.salary === 'number' ? formatINR(selectedEmployee.salary) : '-' },
+    { label: 'Status', value: employeeStatusLabel(selectedEmployee?.status) },
+    { label: 'Created At', value: formatShortDate(selectedEmployee?.createdAt) },
   ];
 
   return (
-    <FormShell title={`Employee Details: ${entity?.name}`} onBack={onBack} isPending={false} submitLabel="Done" formId="view-employee-details-form">
+    <FormShell title="Employee Details" onBack={onBack} isPending={false} submitLabel="Done" formId="view-employee-details-form">
       <form
         id="view-employee-details-form"
+        onSubmit={(e) => { e.preventDefault(); onSuccess(); }}
+        className="flex flex-col gap-4"
+      >
+        <Field label="Select Employee">
+          <SearchableSelect
+            options={employeeOptions}
+            value={selectedEmployeeId}
+            onValueChange={(val) => setSelectedEmployeeId(val)}
+            placeholder="Search employee..."
+          />
+        </Field>
+
+        {selectedEmployee && (
+          <div className="border border-border bg-muted/20 divide-y divide-border/70">
+            {details.map((item) => (
+              <div key={item.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 px-4 py-3">
+                <p className={LABEL_CLS}>{item.label}</p>
+                <p className="text-[11px] font-bold tracking-wide break-all">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </form>
+    </FormShell>
+  );
+}
+
+function DeleteEmployeeForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: employeesData } = useEmployees();
+  const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e) => ({ value: e.id, label: e.name, sub: e.employeeId })), [employees]);
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(entity?.id ?? '');
+  const selectedEmployee = useMemo(() => employees.find((e) => e.id === selectedEmployeeId) ?? entity, [employees, selectedEmployeeId, entity]);
+
+  const { mutate, isPending } = useDeleteEmployee({
+    onSuccess: () => { toast.success('Employee deleted'); onSuccess(); },
+  });
+
+  return (
+    <FormShell title="Delete Employee" onBack={onBack} isPending={isPending} submitLabel="Delete Employee" formId="delete-employee-form" destructive>
+      <form
+        id="delete-employee-form"
         onSubmit={(e) => {
           e.preventDefault();
-          onSuccess();
+          if (!selectedEmployee?.id) { toast.error('Select an employee'); return; }
+          mutate(selectedEmployee.id);
         }}
-        className="flex flex-col gap-3"
+        className="flex flex-col gap-6"
       >
-        <div className="border border-border bg-muted/20 divide-y divide-border/70">
-          {details.map((item) => (
-            <div key={item.label} className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3 px-4 py-3">
-              <p className={LABEL_CLS}>{item.label}</p>
-              <p className="text-[11px] font-bold tracking-wide break-all">{item.value}</p>
-            </div>
-          ))}
-        </div>
+        <Field label="Select Employee">
+          <SearchableSelect
+            options={employeeOptions}
+            value={selectedEmployeeId}
+            onValueChange={(val) => setSelectedEmployeeId(val)}
+            placeholder="Search employee..."
+          />
+        </Field>
+
+        {selectedEmployee && (
+          <div className="border border-destructive/30 bg-destructive/5 p-4">
+            <p className={LABEL_CLS}>You are about to delete</p>
+            <p className="mt-1 text-sm font-bold uppercase tracking-widest">{selectedEmployee.name}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">This action cannot be undone.</p>
+          </div>
+        )}
       </form>
     </FormShell>
   );
@@ -2535,6 +2968,13 @@ type MarkEmployeeAttendanceInput = z.infer<typeof markEmployeeAttendanceSchema>;
 
 
 function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
+  const { data: employeesData } = useEmployees();
+  const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e) => ({ value: e.id, label: e.name, sub: e.employeeId })), [employees]);
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(entity?.id ?? '');
+  const selectedEmployee = useMemo(() => employees.find((e) => e.id === selectedEmployeeId) ?? entity, [employees, selectedEmployeeId, entity]);
+
   const { mutate, isPending, error } = useMarkAttendance({
     onSuccess: () => {
       toast.success('Attendance recorded');
@@ -2542,7 +2982,7 @@ function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any
     },
   });
 
-  const { register, handleSubmit, watch, setFocus, setValue, formState: { errors } } = useForm<MarkEmployeeAttendanceInput>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<MarkEmployeeAttendanceInput>({
     resolver: zodResolver(markEmployeeAttendanceSchema),
     defaultValues: {
       date: getTodayDateInputValue(),
@@ -2555,17 +2995,14 @@ function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any
 
   const status = watch('status') as AttendanceStatus;
 
-  useEffect(() => {
-    setTimeout(() => setFocus('date'), 50);
-  }, [setFocus]);
-
   return (
-    <FormShell title={`Take Attendance: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Mark Attendance" formId="mark-attendance-form">
+    <FormShell title="Take Attendance" onBack={onBack} isPending={isPending} submitLabel="Mark Attendance" formId="mark-attendance-form">
       <form
         id="mark-attendance-form"
         onSubmit={handleSubmit((data) => {
+          if (!selectedEmployee?.id) { toast.error('Select an employee'); return; }
           mutate({
-            employeeId: entity.id,
+            employeeId: selectedEmployee.id,
             date: toIsoDate(data.date),
             status: data.status,
             checkInTime: toIsoDateTime(data.date, data.checkInTime),
@@ -2577,11 +3014,14 @@ function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any
       >
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to mark attendance')} />}
 
-        <div className="border border-border bg-muted/20 p-3">
-          <p className={LABEL_CLS}>Employee</p>
-          <p className="mt-1 text-sm font-bold uppercase tracking-widest">{entity?.name}</p>
-          <p className="mt-1 text-[10px] text-muted-foreground">{entity?.employeeId}</p>
-        </div>
+        <Field label="Select Employee">
+          <SearchableSelect
+            options={employeeOptions}
+            value={selectedEmployeeId}
+            onValueChange={(val) => setSelectedEmployeeId(val)}
+            placeholder="Search employee..."
+          />
+        </Field>
 
         <Field label="Attendance Date" error={errors.date?.message}>
           <input type="date" className={INPUT_CLS} {...register('date')} />
@@ -2629,17 +3069,23 @@ function MarkEmployeeAttendanceForm({ entity, onSuccess, onBack }: { entity: any
 
 function PaySalaryForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: () => void; onBack: () => void }) {
   const { data: companyData } = useCompany();
+  const { data: employeesData } = useEmployees();
   const availableFund: number = (companyData?.data as { available_fund?: number } | undefined)?.available_fund ?? 0;
+  const employees: any[] = useMemo(() => employeesData?.data?.employees ?? [], [employeesData]);
+  const employeeOptions = useMemo(() => employees.map((e) => ({ value: e.id, label: e.name, sub: e.employeeId })), [employees]);
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(entity?.id ?? '');
+  const selectedEmployee = useMemo(() => employees.find((e) => e.id === selectedEmployeeId) ?? entity, [employees, selectedEmployeeId, entity]);
 
   const now = new Date();
   const { mutate, isPending, error } = usePaySalary({
     onSuccess: () => {
-      toast.success(`Salary paid to ${entity?.name}`);
+      toast.success(`Salary paid to ${selectedEmployee?.name ?? entity?.name}`);
       onSuccess();
     },
   });
 
-  const { register, handleSubmit, setFocus, formState: { errors } } = useForm<PaySalaryInput>({
+  const { register, handleSubmit, formState: { errors } } = useForm<PaySalaryInput>({
     resolver: zodResolver(paySalarySchema),
     defaultValues: {
       amount: entity?.salary ?? 0,
@@ -2650,24 +3096,33 @@ function PaySalaryForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: 
     },
   });
 
-  useEffect(() => {
-    setTimeout(() => setFocus('amount'), 50);
-  }, [setFocus]);
-
   return (
-    <FormShell title={`Pay Salary: ${entity?.name}`} onBack={onBack} isPending={isPending} submitLabel="Pay Salary" formId="pay-salary-form">
+    <FormShell title="Pay Salary" onBack={onBack} isPending={isPending} submitLabel="Pay Salary" formId="pay-salary-form">
       <form
         id="pay-salary-form"
-        onSubmit={handleSubmit((values) => mutate({ id: entity.id, data: values }))}
+        onSubmit={handleSubmit((values) => {
+          if (!selectedEmployee?.id) { toast.error('Select an employee'); return; }
+          mutate({ id: selectedEmployee.id, data: values });
+        })}
         className="flex flex-col gap-6"
       >
         {error && <FormError msg={getApiErrorMessage(error, 'Failed to process salary payment')} />}
 
-        <div className="border border-border bg-muted/20 p-3 space-y-1">
-          <p className={LABEL_CLS}>Employee</p>
-          <p className="text-sm font-bold uppercase tracking-widest">{entity?.name}</p>
-          <p className="text-[10px] text-muted-foreground">{entity?.employeeId} - Monthly Salary: {formatINR(entity?.salary ?? 0)}</p>
-        </div>
+        <Field label="Select Employee">
+          <SearchableSelect
+            options={employeeOptions}
+            value={selectedEmployeeId}
+            onValueChange={(val) => setSelectedEmployeeId(val)}
+            placeholder="Search employee..."
+          />
+        </Field>
+
+        {selectedEmployee && (
+          <div className="border border-border bg-muted/20 p-3 space-y-1">
+            <p className={LABEL_CLS}>Monthly Salary</p>
+            <p className="text-sm font-bold tracking-widest">{formatINR(selectedEmployee?.salary ?? 0)}</p>
+          </div>
+        )}
 
         <div className="border border-border bg-amber-500/5 p-3">
           <p className={LABEL_CLS}>Company Available Fund</p>
@@ -3254,17 +3709,7 @@ export default function CommandCenter() {
     }
 
     if (selectedAction === 'delete-employee') {
-      return (
-        <ActionConfirmForm
-          {...props}
-          title="Delete Employee"
-          message={`Remove "${selectedEntity?.name}" from employee records?`}
-          submitLabel="Delete Employee"
-          destructive
-          isPending={isDeleteEmployeePending}
-          onConfirm={() => deleteEmployeeMutate(selectedEntity.id, { onSuccess: () => { toast.success('Employee deleted'); handleFormSuccess(); } })}
-        />
-      );
+      return <DeleteEmployeeForm {...props} entity={selectedEntity} />;
     }
 
     switch (selectedAction) {
@@ -3280,8 +3725,8 @@ export default function CommandCenter() {
       case 'view-vendor-profile': return null;
       case 'manage-vendor-documents': return null;
       case 'edit-customer': return <EditCustomerForm {...props} entity={selectedEntity} />;
-      case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} />;
-      case 'cancel-deal': return <CancelDealForm {...props} entity={selectedEntity} />;
+      case 'record-payment': return <RecordPaymentForm {...props} entity={selectedSubEntity} onCustomerSelect={setSelectedSubEntity} />;
+      case 'cancel-deal': return <CancelDealForm {...props} entity={selectedSubEntity} onCustomerSelect={setSelectedSubEntity} />;
       case 'add-employee': return <AddEmployeeForm {...props} />;
       case 'view-employee-details': return <EmployeeDetailsForm {...props} entity={selectedEntity} />;
       case 'edit-employee': return <EditEmployeeForm {...props} entity={selectedEntity} />;

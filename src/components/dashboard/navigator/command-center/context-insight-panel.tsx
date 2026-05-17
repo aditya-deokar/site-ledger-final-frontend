@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useFloors, useWings, useExpenses } from '@/hooks/api/site.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
 import { useVendor, useVendorTransactions } from '@/hooks/api/vendor.hooks';
+import { useCustomerPayments } from '@/hooks/api/customer.hooks';
 import type { Flat, Floor } from '@/schemas/site.schema';
 
 import { ACTIONS_USING_SITE_SELECTOR, LABEL_CLS } from './constants';
@@ -27,6 +28,43 @@ type HistoryExpense = {
   createdAt?: string | null;
   amount: number;
 };
+
+function CustomerPaymentHistory({ customerId }: { customerId: string }) {
+  const { data, isLoading } = useCustomerPayments(customerId);
+  const payments = data?.data?.payments ?? [];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className={LABEL_CLS}>Payment History</p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Loading...</span>
+        </div>
+      ) : payments.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground italic">No payments recorded yet.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {payments.slice(0, 10).map((p: any) => (
+            <div key={p.id} className="border border-border/50 p-2.5 flex justify-between items-start gap-3 text-[10px]">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-bold uppercase tracking-widest text-foreground">
+                  {p.movementType === 'CUSTOMER_PAYMENT' ? 'Payment' : 'Refund'}
+                  {p.paymentMode ? ` · ${p.paymentMode.replace('_', ' ')}` : ''}
+                </span>
+                {p.note && <span className="text-muted-foreground/60 truncate">{p.note}</span>}
+                <span className="text-muted-foreground/50">{p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</span>
+              </div>
+              <span className={`shrink-0 font-bold text-xs ${p.direction === 'OUT' ? 'text-red-500' : 'text-emerald-600'}`}>
+                {p.direction === 'OUT' ? '−' : '+'}{formatINR(Number(p.amount ?? 0))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ContextInsightPanel({
   action,
@@ -67,7 +105,8 @@ export function ContextInsightPanel({
     || action === 'view-vendor-profile'
     || action === 'manage-vendor-documents'
     || action === 'archive-vendor';
-  if (!site && !isVendorAction) return null;
+  const isCustomerPaymentAction = (action === 'record-payment' || action === 'cancel-deal') && !!customer;
+  if (!site && !isVendorAction && !isCustomerPaymentAction) return null;
 
   const isSiteDrivenAction = !!action && ACTIONS_USING_SITE_SELECTOR.includes(action);
 
@@ -219,13 +258,36 @@ export function ContextInsightPanel({
           </div>
         )}
 
-        {action === 'record-payment' && customer && (
-          <div className="border border-border bg-muted/20 p-4">
-            <p className={LABEL_CLS}>Selected Customer</p>
-            <p className="mt-2 text-sm font-bold uppercase tracking-widest">{customer.name}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground font-medium">
-              Remaining Balance: <span className="text-primary">{formatINR(Number(customer.remaining ?? 0))}</span>
-            </p>
+        {(action === 'record-payment' || action === 'cancel-deal') && customer && (
+          <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-right-4 duration-500">
+            {/* Customer card */}
+            <div className="border border-border bg-muted/20 p-4 flex flex-col gap-3">
+              <p className={LABEL_CLS}>Selected Customer</p>
+              <p className="text-sm font-bold uppercase tracking-widest">{customer.name}</p>
+              {customer.siteName && (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                  {customer.siteName}
+                  {customer.customFlatId ? ` · Flat ${customer.customFlatId}` : ''}
+                </p>
+              )}
+              <div className="grid grid-cols-3 gap-3 border-t border-border/50 pt-3">
+                <div>
+                  <p className={LABEL_CLS}>Selling Price</p>
+                  <p className="mt-1 text-xs font-bold">{formatINR(Number(customer.sellingPrice ?? 0))}</p>
+                </div>
+                <div>
+                  <p className={LABEL_CLS}>Paid</p>
+                  <p className="mt-1 text-xs font-bold text-emerald-600">{formatINR(Number(customer.amountPaid ?? 0))}</p>
+                </div>
+                <div>
+                  <p className={LABEL_CLS}>Remaining</p>
+                  <p className="mt-1 text-xs font-bold text-primary">{formatINR(Number(customer.remaining ?? 0))}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment history */}
+            <CustomerPaymentHistory customerId={customer.id} />
           </div>
         )}
 

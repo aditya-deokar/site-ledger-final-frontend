@@ -198,12 +198,21 @@ export function SearchableSelect({
             return;
           }
           if (e.key === 'Enter') {
-            if (isOpen && visibleOptions.length > 0) {
+            if (isOpen) {
               e.preventDefault();
-              e.stopPropagation(); // Prevent FormShell from moving to next field
-              handleEnter();
+              e.stopPropagation();
+              if (visibleOptions.length > 0) {
+                handleEnter();
+              } else {
+                setIsOpen(false);
+              }
               return;
             }
+
+
+
+
+
             // If dropdown is closed, let Enter bubble up to FormShell for navigation
           }
           if (e.key === 'Tab') {
@@ -406,7 +415,7 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
     const active = document.activeElement as HTMLElement;
     const items = getFocusables();
     const idx = getIdx();
-    if (idx === -1) return;
+
 
     const tag = active?.tagName;
     const isBtn = !!active?.getAttribute('data-navbtn');
@@ -433,12 +442,17 @@ export function FormShell({ title, onBack, isPending, submitLabel, formId, destr
 
     if (e.key === 'Enter') {
       if (isBtn) return;
+      if (tag === 'SELECT') return; // let native select open/navigate freely
       if (tag === 'TEXTAREA' && !e.ctrlKey && !e.metaKey && !e.shiftKey) return;
       e.preventDefault();
       e.stopPropagation();
-      focusItem(items, idx + 1);
+      if (idx !== -1) {
+        focusItem(items, idx + 1);
+      }
       return;
     }
+
+    if (idx === -1) return;
 
     if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && isBtn)) {
       if (!isBtn && (tag === 'SELECT' || isRadioGroup)) return;
