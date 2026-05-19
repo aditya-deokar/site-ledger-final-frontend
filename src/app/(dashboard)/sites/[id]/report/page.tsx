@@ -194,14 +194,16 @@ function Section({
   title,
   subtitle,
   children,
+  className,
 }: {
   eyebrow: string;
   title: string;
   subtitle?: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="border border-border bg-white">
+    <section className={cn('border border-border bg-white pdf-keep', className)}>
       <div className="border-b border-border px-4 py-3.5 print:px-3 print:py-2.5">
         <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground/50">{eyebrow}</p>
         <h2 className="mt-1.5 text-[1.45rem] font-serif tracking-tight text-foreground print:text-[1.15rem]">{title}</h2>
@@ -315,8 +317,7 @@ function CustomerTable({ rows }: { rows: SiteReportCustomerRow[] }) {
                 {row.customerType || 'CUSTOMER'}
               </td>
               <td className="px-4 py-3">
-                <p className="font-medium text-foreground">{row.flatDisplayName}</p>
-                <p className="text-xs text-muted-foreground/70">{row.floorName || '-'}</p>
+                <p className="font-medium text-foreground whitespace-nowrap">{row.flatDisplayName}</p>
               </td>
               <td className="px-4 py-3">{row.flatStatus ? <StatusPill value={row.flatStatus} /> : '-'}</td>
               <td className="px-4 py-3 font-medium text-foreground">{formatINR(row.sellingPrice)}</td>
@@ -534,7 +535,7 @@ function FloorRegister({ floors }: { floors: SiteReport['floors'] }) {
                 <tbody className="divide-y divide-border bg-white">
                   {floor.flats.map((flat: SiteReportFlatRow) => (
                     <tr key={flat.id}>
-                      <td className="px-4 py-3 font-medium text-foreground">{flat.displayName}</td>
+                      <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{flat.displayName}</td>
                       <td className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/80">{flat.flatType}</td>
                       <td className="px-4 py-3"><StatusPill value={flat.status} /></td>
                       <td className="px-4 py-3 text-muted-foreground/85">{flat.customerName || '-'}</td>
@@ -696,6 +697,16 @@ export default function SiteReportPage() {
             break-inside: avoid;
             page-break-inside: avoid;
           }
+
+          .site-report-print-root .pdf-keep {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .site-report-print-root .pdf-new-page {
+            break-before: page;
+            page-break-before: always;
+          }
         }
       `}</style>
       <div className="sticky top-0 z-20 border-b border-border/80 bg-white/90 backdrop-blur print:hidden">
@@ -786,7 +797,7 @@ export default function SiteReportPage() {
           </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2 print:break-inside-avoid">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2 print:break-inside-avoid pdf-keep">
           <SummaryCard
             label="Allocated Capital"
             value={formatCompactINR(report.financialSummary.totalAllocatedFund)}
@@ -810,7 +821,7 @@ export default function SiteReportPage() {
           <SummaryCard label="Inventory Sold" value={String(report.inventorySummary.soldUnits).padStart(2, '0')} tone="primary" hint="Units fully paid and marked sold/registered." />
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] print:grid-cols-2 print:gap-3">
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] print:grid-cols-2 print:gap-3 pdf-keep">
           <Section eyebrow="Management Lens" title="Performance Ratios" subtitle="These ratios separate projected value from realized cash, and make it easier to judge execution quality rather than only raw totals.">
             <div className="grid gap-3 md:grid-cols-2 print:grid-cols-2 print:gap-2">
               <RatioCard
@@ -849,7 +860,7 @@ export default function SiteReportPage() {
           </Section>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr] print:grid-cols-[1.2fr_0.8fr] print:gap-3">
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr] print:grid-cols-[1.2fr_0.8fr] print:gap-3 pdf-keep">
           <Section eyebrow="Project Health" title="Financial Position" subtitle="Read this first to understand how much capital has gone in, how much has been spent, what is still collectible, and how agreement value differs from profit-bearing sale value.">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 print:grid-cols-3 print:gap-2">
                <SummaryCard label="Partner Fund" value={formatCompactINR(report.financialSummary.partnerAllocatedFund)} valueTitle={formatINR(report.financialSummary.partnerAllocatedFund)} />
@@ -882,7 +893,7 @@ export default function SiteReportPage() {
           </Section>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3">
+        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3 pdf-keep">
           <Section eyebrow="Cash Bridge" title="Sources of Cash" subtitle="Where the site wallet has been funded from so far. This is the best way to separate promoter capital from project-generated cash.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 print:grid-cols-3 print:gap-2">
                <SummaryCard label="Partner Capital In" value={formatCompactINR(report.financialSummary.partnerAllocatedFund)} valueTitle={formatINR(report.financialSummary.partnerAllocatedFund)} />
@@ -903,7 +914,7 @@ export default function SiteReportPage() {
           </Section>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3">
+        <div className="grid gap-6 xl:grid-cols-2 print:grid-cols-2 print:gap-3 pdf-keep">
           <Section eyebrow="Receivables" title="Customer and Booking Summary" subtitle="Agreement totals, taxes, discounts, booking collected so far, and the amount still outstanding across all booked and sold units.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 print:grid-cols-4 print:gap-2">
               <SummaryCard label="Customers" value={String(report.customerSummary.totalCustomers).padStart(2, '0')} />
@@ -936,33 +947,33 @@ export default function SiteReportPage() {
           </Section>
         </div>
 
-        <Section eyebrow="Detailed Register" title="Customer Register" subtitle="Every assigned unit in one readable list, including who owns it, the agreement value, what is already received, and what remains due.">
+        <Section className="pdf-new-page" eyebrow="Detailed Register" title="Customer Register" subtitle="Every assigned unit in one readable list, including who owns it, the agreement value, what is already received, and what remains due.">
           <CustomerTable rows={report.customers} />
         </Section>
 
         {report.existingOwners.length ? (
-          <Section eyebrow="Redevelopment" title="Existing Owner Register" subtitle="Owner-linked units tracked separately for redevelopment projects.">
+          <Section className="pdf-new-page" eyebrow="Redevelopment" title="Existing Owner Register" subtitle="Owner-linked units tracked separately for redevelopment projects.">
             <CustomerTable rows={report.existingOwners} />
           </Section>
         ) : null}
 
-        <Section eyebrow="Construction Structure" title="Floor and Flat Register" subtitle="Floor-wise inventory with unit-by-unit status, assignment, and collection visibility.">
+        <Section className="pdf-new-page" eyebrow="Construction Structure" title="Floor and Flat Register" subtitle="Floor-wise inventory with unit-by-unit status, assignment, and collection visibility.">
           <FloorRegister floors={report.floors} />
         </Section>
 
-        <Section eyebrow="Spend Analysis" title="Expense Register" subtitle="Detailed expense list with vendor information, payment progress, and remaining payable amount.">
+        <Section className="pdf-new-page" eyebrow="Spend Analysis" title="Expense Register" subtitle="Detailed expense list with vendor information, payment progress, and remaining payable amount.">
           <ExpenseTable rows={report.expenses} />
         </Section>
 
-        <Section eyebrow="Equity View" title="Investor Register" subtitle="Site-linked equity investors, capital committed to the project, and profit share paid out so far.">
+        <Section className="pdf-new-page" eyebrow="Equity View" title="Investor Register" subtitle="Site-linked equity investors, capital committed to the project, and profit share paid out so far.">
           <InvestorTable rows={report.investors} />
         </Section>
 
-        <Section eyebrow="Capital Movement" title="Fund History" subtitle="Transfers between company and site, with running balance to show how site liquidity changed over time.">
+        <Section className="pdf-new-page" eyebrow="Capital Movement" title="Fund History" subtitle="Transfers between company and site, with running balance to show how site liquidity changed over time.">
           <FundHistoryTable rows={report.fundHistory} />
         </Section>
 
-        <Section eyebrow="Recent Movement" title="Recent Activity" subtitle="Latest inflows and outflows affecting the site wallet, including customer payments, fund movements, expenses, and investor activity.">
+        <Section className="pdf-new-page" eyebrow="Recent Movement" title="Recent Activity" subtitle="Latest inflows and outflows affecting the site wallet, including customer payments, fund movements, expenses, and investor activity.">
           <ActivityTable rows={report.recentActivity} />
         </Section>
 

@@ -81,55 +81,6 @@ const nextConfig: NextConfig = {
     remotePatterns: buildImageRemotePatterns(),
   },
   
-  // Webpack configuration for bundle optimization
-  webpack: (config, { isServer }) => {
-    // Tree shaking - eliminate unused code
-    config.optimization = {
-      ...config.optimization,
-      usedExports: true,
-      sideEffects: true,
-    };
-    
-    // Chunk splitting for vendor libraries
-    if (!isServer) {
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        minSize: 20000,
-        maxSize: 244000,
-        cacheGroups: {
-          // Separate vendor libraries into their own chunks
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            chunks: 'all',
-            priority: 10,
-          },
-          // Separate heavy dependencies
-          recharts: {
-            test: /[\\/]node_modules[\\/](recharts|d3-.*)[\\/]/,
-            name: 'recharts',
-            chunks: 'all',
-            priority: 20,
-          },
-          pdf: {
-            test: /[\\/]node_modules[\\/](jspdf|html2canvas)[\\/]/,
-            name: 'pdf',
-            chunks: 'all',
-            priority: 20,
-          },
-          // Common chunks for shared code
-          common: {
-            minChunks: 2,
-            priority: 5,
-            reuseExistingChunk: true,
-          },
-        },
-      };
-    }
-    
-    return config;
-  },
-  
   // Performance budgets and warnings
   experimental: {
     // Optimize package imports

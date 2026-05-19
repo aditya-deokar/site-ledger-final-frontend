@@ -4,11 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Archive, Eye, Loader2, Pencil, Plus, Search } from 'lucide-react';
+import { Archive, Eye, Loader2, MoreHorizontal, Pencil, Plus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -56,13 +64,40 @@ function statusTone(status: VendorStatus) {
   }
 }
 
-function SummaryCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+function formatCategoryLabel(value?: string | null) {
+  if (!value) return '-';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'suplier') return 'Supplier';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function SummaryCard({
+  label,
+  value,
+  helper,
+  tone = 'default',
+  onClick,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone?: 'default' | 'warning';
+  onClick?: () => void;
+}) {
+  const warningClasses = tone === 'warning' ? 'border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/10' : 'border-border bg-muted/20';
   return (
-    <div className="border border-border bg-muted/20 p-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        warningClasses,
+      )}
+    >
       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</p>
       <p className="mt-2 text-3xl font-serif text-foreground">{value}</p>
       <p className="mt-2 text-sm text-muted-foreground">{helper}</p>
-    </div>
+    </button>
   );
 }
 
@@ -299,9 +334,25 @@ export default function VendorsPage() {
   const assignedVendors = vendors.filter((vendor) => vendor.siteCount > 0).length;
   const activeVendors = vendors.filter((vendor) => vendor.status === 'ACTIVE').length;
   const documentGaps = vendors.filter((vendor) => vendor.documentCount === 0).length;
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== 'ALL' ||
+    siteFilter !== 'ALL' ||
+    outstandingFilter !== 'ALL' ||
+    documentFilter !== 'ALL' ||
+    includeArchived;
+
+  function resetFilters() {
+    setSearch('');
+    setStatusFilter('ALL');
+    setSiteFilter('ALL');
+    setOutstandingFilter('ALL');
+    setDocumentFilter('ALL');
+    setIncludeArchived(false);
+  }
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-6 lg:px-8">
+    <div className="flex flex-col gap-4 px-3 py-4 lg:px-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-primary">Vendor Management</p>
@@ -324,25 +375,52 @@ export default function VendorsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <SummaryCard label="Total Vendors" value={String(vendors.length)} helper="Current filtered vendor count" />
-        <SummaryCard label="Active Vendors" value={String(activeVendors)} helper="Ready for new bills" />
-        <SummaryCard label="Assigned Vendors" value={String(assignedVendors)} helper="Mapped to one or more sites" />
-        <SummaryCard label="Outstanding" value={formatINR(totalOutstanding)} helper="Open due across filtered vendors" />
-        <SummaryCard label="Overdue Vendors" value={String(overdueVendors)} helper="Have at least one overdue bill" />
-        <SummaryCard label="Document Gaps" value={String(documentGaps)} helper="No KYC or invoice documents yet" />
+        <SummaryCard label="Total Vendors" value={String(vendors.length)} helper="Current filtered vendor count" onClick={resetFilters} />
+        <SummaryCard label="Active Vendors" value={String(activeVendors)} helper="Ready for new bills" onClick={() => setStatusFilter('ACTIVE')} />
+        <SummaryCard label="Assigned Vendors" value={String(assignedVendors)} helper="Mapped to one or more sites" onClick={() => setSiteFilter('ALL')} />
+        <SummaryCard
+          label="Outstanding"
+          value={formatINR(totalOutstanding)}
+          helper="Open due across filtered vendors"
+          tone={totalOutstanding > 0 ? 'warning' : 'default'}
+          onClick={() => setOutstandingFilter('OUTSTANDING_ONLY')}
+        />
+        <SummaryCard
+          label="Overdue Vendors"
+          value={String(overdueVendors)}
+          helper="Have at least one overdue bill"
+          tone={overdueVendors > 0 ? 'warning' : 'default'}
+          onClick={() => setOutstandingFilter('OUTSTANDING_ONLY')}
+        />
+        <SummaryCard
+          label="Document Gaps"
+          value={String(documentGaps)}
+          helper="No KYC or invoice documents yet"
+          tone={documentGaps > 0 ? 'warning' : 'default'}
+          onClick={() => setDocumentFilter('MISSING_DOCS')}
+        />
       </div>
 
-      <div className="grid gap-4 border border-border bg-card p-4 lg:grid-cols-[minmax(0,1.5fr)_13rem_13rem_13rem_auto]">
+      <div className="space-y-3 border border-border bg-card p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {hasActiveFilters && (
+            <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={resetFilters}>
+              <X className="mr-1 h-3.5 w-3.5" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_13rem_13rem]">
         <div className="space-y-2">
           <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="rounded-none pl-9"
-              placeholder="Search vendor, category, contact, tax details"
-            />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-9 rounded-none pl-9"
+                placeholder="Search vendor, category, contact, tax details"
+              />
           </div>
         </div>
 
@@ -366,10 +444,12 @@ export default function VendorsPage() {
             ))}
           </select>
         </div>
+        </div>
 
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Filters</Label>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Billing and Documents</Label>
+            <div className="grid grid-cols-2 gap-2">
             <select value={outstandingFilter} onChange={(event) => setOutstandingFilter(event.target.value as typeof outstandingFilter)} className="h-10 border border-border bg-background px-3 text-sm text-foreground">
               <option value="ALL">All dues</option>
               <option value="OUTSTANDING_ONLY">Outstanding</option>
@@ -382,13 +462,13 @@ export default function VendorsPage() {
             </select>
           </div>
         </div>
-
-        <div className="flex items-end justify-end">
-          <label className="flex items-center gap-3 border border-border px-4 py-2 text-sm text-foreground">
-            <input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />
+          <div className="flex items-end justify-start lg:justify-end">
+          <label className="flex h-9 items-center gap-3 border border-border px-3 text-sm text-foreground">
+            <Checkbox checked={includeArchived} onCheckedChange={(checked) => setIncludeArchived(Boolean(checked))} aria-label="Include archived vendors" />
             Include archived
           </label>
         </div>
+      </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -397,7 +477,12 @@ export default function VendorsPage() {
             key={category}
             type="button"
             onClick={() => setSearch(category)}
-            className="border border-border px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className={cn(
+              'border px-3 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors',
+              search.trim().toLowerCase() === category.toLowerCase()
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
           >
             {category}
           </button>
@@ -437,14 +522,14 @@ export default function VendorsPage() {
               </TableRow>
             ) : (
               vendors.map((vendor) => (
-                <TableRow key={vendor.id}>
+                <TableRow key={vendor.id} className="h-14">
                   <TableCell>
                     <div>
                       <p className="font-semibold text-foreground">{vendor.name}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{vendor.contactPersonName || vendor.phone || vendor.email || 'No contact details'}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium text-muted-foreground">{vendor.type}</TableCell>
+                  <TableCell className="font-medium text-muted-foreground">{formatCategoryLabel(vendor.type)}</TableCell>
                   <TableCell>
                     <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
                       {vendor.status}
@@ -456,7 +541,23 @@ export default function VendorsPage() {
                     {formatINR(vendor.totalOutstanding)}
                   </TableCell>
                   <TableCell>{vendor.overdueBillCount}</TableCell>
-                  <TableCell>{formatDate(vendor.lastPaymentDate)}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <p>{formatDate(vendor.lastPaymentDate)}</p>
+                      {vendor.lastPaymentDate ? (
+                        <p className="text-xs text-muted-foreground">
+                          {Math.max(
+                            0,
+                            Math.floor(
+                              (Date.now() - new Date(vendor.lastPaymentDate).getTime()) /
+                                (1000 * 60 * 60 * 24),
+                            ),
+                          )}{' '}
+                          days ago
+                        </p>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
@@ -467,16 +568,32 @@ export default function VendorsPage() {
                         <Pencil className="mr-1 h-4 w-4" />
                         Edit
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={isPatchingStatus}
-                        className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest"
-                        onClick={() => patchVendorStatus({ id: vendor.id, status: vendor.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED' })}
-                      >
-                        <Archive className="mr-1 h-4 w-4" />
-                        {vendor.status === 'ARCHIVED' ? 'Restore' : 'Archive'}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <div role="button" className="inline-flex h-9 items-center justify-center border border-border bg-background px-2 text-foreground transition-colors hover:bg-muted" aria-label={`More actions for ${vendor.name}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44 rounded-none">
+                          <DropdownMenuItem onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            Open Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Vendor
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={isPatchingStatus}
+                            variant="destructive"
+                            onClick={() => patchVendorStatus({ id: vendor.id, status: vendor.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED' })}
+                          >
+                            <Archive className="mr-2 h-4 w-4" />
+                            {vendor.status === 'ARCHIVED' ? 'Restore Vendor' : 'Archive Vendor'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
