@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Settings2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { CompanyLogoUploader } from '@/components/dashboard/company-logo-uploader';
+import {
+  DashboardField,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardSection,
+} from '@/components/dashboard/dashboard-primitives';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { updateCompanySchema, UpdateCompanyInput } from '@/schemas/company.schema';
 import { useCompany, useUpdateCompany } from '@/hooks/api/company.hooks';
@@ -95,16 +100,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted/20">
-          <Settings2 className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-serif tracking-tight text-foreground">Settings</h1>
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/60">Company profile and receipt preferences</p>
-        </div>
-      </div>
+    <DashboardPage>
+      <DashboardPageHeader
+        eyebrow="Configuration"
+        title="Settings"
+        subtitle="Company profile and receipt preferences."
+        action={(
+          <div className="flex h-10 w-10 items-center justify-center border border-border bg-muted/20">
+            <Settings2 className="h-5 w-5 text-primary" />
+          </div>
+        )}
+      />
 
       <Dialog open={logoPreviewOpen} onOpenChange={setLogoPreviewOpen}>
         <DialogContent className="max-w-3xl rounded-none">
@@ -161,41 +167,42 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Field label="Legal Company Name"><Input {...register('name')} className="h-10 rounded-none" /></Field>
-            <Field label="Trade Name (DBA)"><Input {...register('tradeName')} className="h-10 rounded-none" /></Field>
-            <Field label="Corporate Address"><Input {...register('address')} className="h-10 rounded-none" /></Field>
-            <Field label="Support Contact"><Input {...register('phone')} className="h-10 rounded-none" /></Field>
-            <Field label="GSTIN"><Input {...register('gstin')} className="h-10 rounded-none" /></Field>
-            <Field label="PAN"><Input {...register('pan')} className="h-10 rounded-none" /></Field>
-            <Field label="TAN"><Input {...register('tan')} className="h-10 rounded-none" /></Field>
-            <Field label="CIN"><Input {...register('cin')} className="h-10 rounded-none" /></Field>
-            <Field label="RERA Number"><Input {...register('reraNumber')} className="h-10 rounded-none" /></Field>
-            <Field label="MSME / Udyam Number"><Input {...register('msmeUdyamNumber')} className="h-10 rounded-none" /></Field>
-            <Field label="EPF Number"><Input {...register('epfNumber')} className="h-10 rounded-none" /></Field>
-            <Field label="ESIC Number"><Input {...register('esicNumber')} className="h-10 rounded-none" /></Field>
-            <Field label="BOCW Number"><Input {...register('bocwNumber')} className="h-10 rounded-none" /></Field>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Company Logo</Label>
-              <CompanyLogoUploader value={watchedLogo || null} onChange={(url) => setValue('logo', url)} />
-            </div>
-              </div>
+              <DashboardSection title="Company Profile" description="Core legal, compliance, and branding details used across the dashboard." bodyClassName="space-y-0">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <DashboardField label="Legal Company Name"><Input {...register('name')} className="h-10" /></DashboardField>
+                  <DashboardField label="Trade Name (DBA)"><Input {...register('tradeName')} className="h-10" /></DashboardField>
+                  <DashboardField label="Corporate Address"><Input {...register('address')} className="h-10" /></DashboardField>
+                  <DashboardField label="Support Contact"><Input {...register('phone')} className="h-10" /></DashboardField>
+                  <DashboardField label="GSTIN"><Input {...register('gstin')} className="h-10" /></DashboardField>
+                  <DashboardField label="PAN"><Input {...register('pan')} className="h-10" /></DashboardField>
+                  <DashboardField label="TAN"><Input {...register('tan')} className="h-10" /></DashboardField>
+                  <DashboardField label="CIN"><Input {...register('cin')} className="h-10" /></DashboardField>
+                  <DashboardField label="RERA Number"><Input {...register('reraNumber')} className="h-10" /></DashboardField>
+                  <DashboardField label="MSME / Udyam Number"><Input {...register('msmeUdyamNumber')} className="h-10" /></DashboardField>
+                  <DashboardField label="EPF Number"><Input {...register('epfNumber')} className="h-10" /></DashboardField>
+                  <DashboardField label="ESIC Number"><Input {...register('esicNumber')} className="h-10" /></DashboardField>
+                  <DashboardField label="BOCW Number"><Input {...register('bocwNumber')} className="h-10" /></DashboardField>
+                  <DashboardField label="Company Logo">
+                    <CompanyLogoUploader value={watchedLogo || null} onChange={(url) => setValue('logo', url)} />
+                  </DashboardField>
+                </div>
+              </DashboardSection>
             </div>
           )}
 
           {tab === 'receipt' && (
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <div className="space-y-3 border border-border p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Receipt print options</p>
-              <Toggle label="Show Company Logo" checked={!!watchedReceipt.showCompanyLogo} onChange={(v) => setValue('receiptSettings.showCompanyLogo', v)} />
-              <Toggle label="Show GSTIN" checked={!!watchedReceipt.showGstin} onChange={(v) => setValue('receiptSettings.showGstin', v)} />
-              <Toggle label="Show PAN" checked={!!watchedReceipt.showPan} onChange={(v) => setValue('receiptSettings.showPan', v)} />
-              <Toggle label="Show RERA Number" checked={!!watchedReceipt.showReraNumber} onChange={(v) => setValue('receiptSettings.showReraNumber', v)} />
-              <Toggle label="Show Corporate Address" checked={!!watchedReceipt.showCorporateAddress} onChange={(v) => setValue('receiptSettings.showCorporateAddress', v)} />
-              <Toggle label="Show Support Contact" checked={!!watchedReceipt.showSupportContact} onChange={(v) => setValue('receiptSettings.showSupportContact', v)} />
-            </div>
-            <div className="border border-border bg-background p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Live Preview</p>
+            <DashboardSection title="Receipt Settings" description="Choose which company details appear on generated receipts." bodyClassName="space-y-3">
+               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Receipt print options</p>
+               <Toggle label="Show Company Logo" checked={!!watchedReceipt.showCompanyLogo} onChange={(v) => setValue('receiptSettings.showCompanyLogo', v)} />
+               <Toggle label="Show GSTIN" checked={!!watchedReceipt.showGstin} onChange={(v) => setValue('receiptSettings.showGstin', v)} />
+               <Toggle label="Show PAN" checked={!!watchedReceipt.showPan} onChange={(v) => setValue('receiptSettings.showPan', v)} />
+               <Toggle label="Show RERA Number" checked={!!watchedReceipt.showReraNumber} onChange={(v) => setValue('receiptSettings.showReraNumber', v)} />
+               <Toggle label="Show Corporate Address" checked={!!watchedReceipt.showCorporateAddress} onChange={(v) => setValue('receiptSettings.showCorporateAddress', v)} />
+               <Toggle label="Show Support Contact" checked={!!watchedReceipt.showSupportContact} onChange={(v) => setValue('receiptSettings.showSupportContact', v)} />
+            </DashboardSection>
+            <DashboardSection title="Receipt Preview" description="A live preview of the active receipt identity block.">
+               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Live Preview</p>
               <div className="border border-border bg-muted/10 p-4">
                 <div className="flex items-start justify-between gap-4 border-b border-border pb-3">
                   <div>
@@ -224,28 +231,19 @@ export default function SettingsPage() {
                   <p className="font-bold text-foreground mt-2">Amount: ₹50,000</p>
                 </div>
               </div>
-            </div>
+            </DashboardSection>
             </div>
           )}
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={isPending} className="h-10 rounded-none text-[10px] font-bold uppercase tracking-widest">
+            <Button type="submit" size="control" disabled={isPending}>
               <Save className="mr-2 h-4 w-4" />
               {isPending ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>
         </form>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</Label>
-      {children}
-    </div>
+    </DashboardPage>
   );
 }
 

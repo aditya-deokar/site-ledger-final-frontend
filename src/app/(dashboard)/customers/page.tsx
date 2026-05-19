@@ -10,6 +10,14 @@ import { Search, Phone, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import {
+  DashboardEmptyState,
+  DashboardFilterBar,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardStatCard,
+  DashboardStatsGrid,
+} from '@/components/dashboard/dashboard-primitives';
 
 function formatINR(n: number) { return '\u20B9' + n.toLocaleString('en-IN'); }
 
@@ -99,30 +107,27 @@ export default function CustomersPage() {
   ], []);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-4xl sm:text-5xl font-serif text-foreground tracking-tight">Customers</h1>
-            <p className="mt-2 text-base text-muted-foreground italic">
-              Track bookings, payments, and customer records across all sites.
-            </p>
-          </div>
-          <Button
-            onClick={() => router.push('/navigator')}
-            className="h-10 rounded-none px-4 text-[11px] font-bold uppercase tracking-[0.16em]"
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Customer
-          </Button>
-        </div>
+    <DashboardPage className="space-y-8">
+        <DashboardPageHeader
+          eyebrow="Customer Ledger"
+          title="Customers"
+          subtitle="Track bookings, payments, and customer records across all sites."
+          action={(
+            <Button onClick={() => router.push('/navigator')} size="cta">
+              <Plus className="h-4 w-4" />
+              Add Customer
+            </Button>
+          )}
+        />
 
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <DashboardFilterBar>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-1 border-b border-border overflow-x-auto pb-px">
             {tabs.map((t) => (
               <button
                 key={t.label}
                 onClick={() => setStatusFilter(t.key)}
-                className={cn(
+              className={cn(
                   'px-5 py-3 text-xs font-bold tracking-widest uppercase transition-colors border-b-2 -mb-px whitespace-nowrap',
                   statusFilter === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
@@ -137,39 +142,38 @@ export default function CustomersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search customers, flat, floor, site..."
-              className="pl-10 h-10 bg-muted border-none rounded-none text-sm"
+              className="h-10 border-none bg-muted pl-10 text-sm"
             />
           </div>
         </div>
+        </DashboardFilterBar>
 
         {isLoading ? (
           <div className="space-y-8">
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <DashboardStatsGrid className="lg:grid-cols-5">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="border border-border p-4 space-y-2">
                   <Skeleton className="h-3 w-16" />
                   <Skeleton className="h-8 w-32" />
                 </div>
               ))}
-            </div>
+            </DashboardStatsGrid>
             <CustomersListSkeleton />
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatCard label="Customers" value={String(filtered.length)} />
-              <StatCard label="Total Flats" value={String(stats.totalDeals)} />
-              <StatCard label="Total Receivable" value={formatINR(stats.totalReceivable)} />
-              <StatCard label="Received" value={formatINR(stats.totalReceived)} color="text-emerald-600" />
-              <StatCard label="Outstanding" value={formatINR(stats.totalRemaining)} color="text-red-500" />
-            </div>
+            <DashboardStatsGrid className="lg:grid-cols-5">
+              <DashboardStatCard label="Customers" value={String(filtered.length)} />
+              <DashboardStatCard label="Total Flats" value={String(stats.totalDeals)} />
+              <DashboardStatCard label="Total Receivable" value={formatINR(stats.totalReceivable)} />
+              <DashboardStatCard label="Received" value={formatINR(stats.totalReceived)} tone="success" />
+              <DashboardStatCard label="Outstanding" value={formatINR(stats.totalRemaining)} tone="danger" />
+            </DashboardStatsGrid>
 
-            {filtered.length === 0 ? (
-              <div className="border border-dashed border-border flex items-center justify-center py-20">
-                <p className="text-sm text-muted-foreground italic">
-                  {search ? 'No customers match your search.' : 'No customers found.'}
-                </p>
-              </div>
+             {filtered.length === 0 ? (
+              <DashboardEmptyState
+                description={search ? 'No customers match your search.' : 'No customers found.'}
+              />
             ) : (
               <div className="border border-border divide-y divide-border overflow-hidden">
                 <div className="hidden lg:grid grid-cols-12 gap-4 px-6 py-4 bg-muted/30">
@@ -246,15 +250,6 @@ export default function CustomersPage() {
             )}
           </>
         )}
-      </div>
-  );
-}
-
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="border border-border p-5 min-w-0">
-      <p className="text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 truncate">{label}</p>
-      <p className={cn('text-2xl sm:text-3xl font-sans font-bold tracking-tight mt-1.5 truncate', color ?? 'text-foreground')}>{value}</p>
-    </div>
+      </DashboardPage>
   );
 }

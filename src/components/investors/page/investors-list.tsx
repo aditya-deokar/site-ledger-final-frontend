@@ -1,11 +1,28 @@
 import {
   Eye,
+  MoreHorizontal,
   Pencil,
   Phone,
   Trash2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { DashboardEmptyState, DashboardStatusBadge } from '@/components/dashboard/dashboard-primitives';
 import { cn } from '@/lib/utils';
 import type { Investor } from '@/schemas/investor.schema';
 
@@ -29,140 +46,138 @@ export function InvestorsList({
 }) {
   if (investors.length === 0) {
     return (
-      <div className="flex items-center justify-center border border-dashed border-border py-20">
-        <p className="text-sm italic text-muted-foreground">No investors found.</p>
-      </div>
+      <DashboardEmptyState description="No investors found." />
     );
   }
 
   return (
-    <div className="overflow-hidden divide-y divide-border border border-border">
-      <div className="hidden grid-cols-12 gap-4 bg-muted/40 px-6 py-4 lg:grid">
-        <div className="col-span-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-          Investor Detail
-        </div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-          Type / Rate
-        </div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-          Site
-        </div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-          Totals
-        </div>
-        <div className="col-span-3 text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
-          Actions
-        </div>
-      </div>
-
-      {investors.map((investor) => (
-        <div
-          key={investor.id}
-          className="group grid grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-muted/20 sm:px-6 lg:grid-cols-12 lg:items-center"
-        >
-          <div className="flex items-center gap-3 lg:col-span-3">
-            <div
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center text-[10px] font-bold tracking-widest text-white',
-                avatarColor(investor.name),
-              )}
-            >
-              {initials(investor.name)}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate font-serif text-[22px] leading-none tracking-tight text-foreground sm:text-base">
-                {investor.name}
-              </p>
-              {investor.phone && (
-                <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Phone className="h-3 w-3" /> {investor.phone}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 lg:col-span-2">
-            <span
-              className={cn(
-                'inline-block border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest',
-                investor.type === 'EQUITY'
-                  ? 'border-primary/20 bg-primary/10 text-primary'
-                  : 'border-amber-500/20 bg-amber-500/10 text-amber-600',
-              )}
-              >
-                {investor.type === 'EQUITY'
-                  ? `${investor.equityPercentage ?? 0}%`
-                  : formatFixedRateTerms(investor.fixedRate, investor.fixedRateCadence)}
-              </span>
-            {investor.isClosed && (
-              <span className="bg-muted px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                Closed
-              </span>
-            )}
-          </div>
-
-          <div className="truncate text-sm font-medium text-muted-foreground lg:col-span-2">
-            {investor.siteName ?? '-'}
-          </div>
-
-          <div className="lg:col-span-2">
-            <p className="text-base font-bold tracking-tight text-foreground">
-              {formatINR(investor.totalInvested)}
-            </p>
-            <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-              Invested
-            </p>
-            {Math.max(investor.totalReturned - investor.interestPaid, 0) > 0 && (
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-red-500">
-                Principal Returned: {formatINR(Math.max(investor.totalReturned - investor.interestPaid, 0))}
-              </p>
-            )}
-            {investor.interestPaid > 0 && (
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-                {investor.type === 'EQUITY' ? 'Profit Paid' : 'Interest'}: {formatINR(investor.interestPaid)}
-              </p>
-            )}
-            {investor.type === 'FIXED_RATE' && investor.outstandingPrincipal > 0 && (
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-primary">
-                Outstanding: {formatINR(investor.outstandingPrincipal)}
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:col-span-3 lg:justify-end">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => onOpenLedger(investor)}
-              className="h-9 w-9 rounded-none border-border bg-background text-foreground hover:bg-muted hover:text-foreground"
-              title="Open Ledger"
-              aria-label={`Open ledger for ${investor.name}`}
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onEditInvestor(investor)}
-              className="h-9 w-9 rounded-none text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
-              title="Edit Investor"
-              aria-label={`Edit ${investor.name}`}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDeleteInvestor(investor)}
-              className="h-9 w-9 rounded-none text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-              title="Delete Investor"
-              aria-label={`Delete ${investor.name}`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      ))}
+    <div className="overflow-hidden border border-border bg-card">
+      <Table className="text-sm">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-[11px] tracking-[0.18em]">Investor</TableHead>
+            <TableHead className="text-[11px] tracking-[0.18em]">Type / Rate</TableHead>
+            <TableHead className="text-[11px] tracking-[0.18em]">Site</TableHead>
+            <TableHead className="text-[11px] tracking-[0.18em]">Invested</TableHead>
+            <TableHead className="text-[11px] tracking-[0.18em]">Returned / Paid</TableHead>
+            <TableHead className="text-[11px] tracking-[0.18em]">Outstanding</TableHead>
+            <TableHead className="text-right text-[11px] tracking-[0.18em]">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {investors.map((investor) => (
+            <TableRow key={investor.id} className="h-16">
+              <TableCell className="text-sm">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center text-[10px] font-bold tracking-widest text-white',
+                      avatarColor(investor.name),
+                    )}
+                  >
+                    {initials(investor.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold text-foreground">
+                      {investor.name}
+                    </p>
+                    {investor.phone && (
+                      <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Phone className="h-3 w-3" /> {investor.phone}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <DashboardStatusBadge
+                    className={cn(
+                      'text-[9px] tracking-widest',
+                      investor.type === 'EQUITY'
+                        ? 'border-primary/20 bg-primary/10 text-primary'
+                        : 'border-amber-500/20 bg-amber-500/10 text-amber-600',
+                    )}
+                  >
+                    {investor.type === 'EQUITY'
+                      ? `${investor.equityPercentage ?? 0}% Equity`
+                      : formatFixedRateTerms(investor.fixedRate, investor.fixedRateCadence)}
+                  </DashboardStatusBadge>
+                  {investor.isClosed ? (
+                    <DashboardStatusBadge className="text-[9px] tracking-widest" tone="default">
+                      Closed
+                    </DashboardStatusBadge>
+                  ) : null}
+                </div>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">{investor.siteName ?? '-'}</TableCell>
+              <TableCell className="text-sm font-semibold text-foreground">{formatINR(investor.totalInvested)}</TableCell>
+              <TableCell className="text-sm">
+                <div className="space-y-1">
+                  <p className="font-semibold text-red-500">
+                    {formatINR(Math.max(investor.totalReturned - investor.interestPaid, 0))}
+                  </p>
+                  <p className="text-xs text-amber-600">
+                    {investor.type === 'EQUITY' ? 'Profit Paid' : 'Interest'}: {formatINR(investor.interestPaid)}
+                  </p>
+                </div>
+              </TableCell>
+              <TableCell className="text-sm font-semibold text-primary">
+                {investor.type === 'FIXED_RATE' ? formatINR(investor.outstandingPrincipal) : '-'}
+              </TableCell>
+              <TableCell>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="control"
+                    onClick={() => onOpenLedger(investor)}
+                    title="Open Ledger"
+                    aria-label={`Open ledger for ${investor.name}`}
+                  >
+                    <Eye className="h-4 w-4" />
+                    Open
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="control"
+                    onClick={() => onEditInvestor(investor)}
+                    title="Edit Investor"
+                    aria-label={`Edit ${investor.name}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <Button type="button" size="icon-control" variant="outline" aria-label={`More actions for ${investor.name}`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44 rounded-none">
+                      <DropdownMenuItem onClick={() => onOpenLedger(investor)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Open Ledger
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onEditInvestor(investor)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit Investor
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => onDeleteInvestor(investor)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Investor
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

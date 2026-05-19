@@ -16,6 +16,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TransactionHistoryView } from '@/components/dashboard/navigator/command-center/transaction-history-view';
+import {
+  DashboardFilterBar,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardStatsGrid,
+} from '@/components/dashboard/dashboard-primitives';
 import { useCreateEmployee, useEmployees, useUpdateEmployee } from '@/hooks/api/employee.hooks';
 import { useSalaryReminders } from '@/hooks/api/salary-reminder.hooks';
 import type { Employee } from '@/schemas/employee.schema';
@@ -108,28 +114,20 @@ export function EmployeesPage() {
 
   return (
     <>
-      <div className="animate-in fade-in space-y-8 duration-700">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-4xl font-serif tracking-tight text-foreground sm:text-5xl">
-              Employees
-            </h1>
-            <p className="mt-2 text-base italic text-muted-foreground">
-              Manage your team roster, departments, and payroll details.
-            </p>
-          </div>
-
-          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-            <Button
-              onClick={() => setAddOpen(true)}
-              className="h-11 whitespace-nowrap gap-2 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest"
-            >
+      <DashboardPage className="space-y-8 duration-700">
+        <DashboardPageHeader
+          eyebrow="Workforce"
+          title="Employees"
+          subtitle="Manage your team roster, departments, payroll details, attendance, and salary reminders."
+          action={(
+            <Button onClick={() => setAddOpen(true)} size="cta" className="whitespace-nowrap">
               <Plus className="h-4 w-4" />
               Add Employee
             </Button>
-          </div>
-        </div>
+          )}
+        />
 
+        <DashboardFilterBar>
         <div className="flex w-full gap-2 lg:w-auto">
           <div className="relative w-full lg:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
@@ -150,10 +148,11 @@ export function EmployeesPage() {
               </button>
             )}
           </div>
-          <Button variant="outline" onClick={() => setFilterOpen(true)} className="h-10 rounded-none px-3">
+          <Button variant="outline" size="control" onClick={() => setFilterOpen(true)}>
             <Filter className="mr-2 h-4 w-4" /> Filters
           </Button>
         </div>
+        </DashboardFilterBar>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-1 overflow-x-auto border-b border-border pb-px">
@@ -175,12 +174,12 @@ export function EmployeesPage() {
 
         </div>
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <DashboardStatsGrid>
           <StatCard icon={Users} label="Total" value={String(total)} />
           <StatCard icon={BriefcaseBusiness} label="Active" value={String(summary.active)} color="text-emerald-600" />
           <StatCard icon={BriefcaseBusiness} label="Inactive" value={String(summary.inactive)} color="text-amber-600" />
           <StatCard icon={Wallet} label="Visible Payroll" value={formatCurrency(totalSalary)} />
-        </div>
+        </DashboardStatsGrid>
 
         {historyEmployee ? (
           <TransactionHistoryView
@@ -201,7 +200,7 @@ export function EmployeesPage() {
             onDeleteEmployee={setDeleteEmployee}
           />
         )}
-      </div>
+      </DashboardPage>
 
       {addOpen && (
         <EmployeeFormSheet

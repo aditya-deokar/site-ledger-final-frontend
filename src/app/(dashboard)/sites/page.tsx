@@ -48,6 +48,15 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  DashboardEmptyState,
+  DashboardFilterBar,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardStatCard,
+  DashboardStatsGrid,
+  DashboardStatusBadge,
+} from '@/components/dashboard/dashboard-primitives';
 import { cn } from '@/lib/utils';
 
 type ViewMode = 'active' | 'closed';
@@ -420,6 +429,15 @@ export default function SitesPage() {
     () => filteredSites.slice(0, visibleCount),
     [filteredSites, visibleCount],
   );
+  const portfolioStats = useMemo(() => {
+    return filteredSites.reduce((summary, site) => {
+      summary.totalSites += 1;
+      summary.available += site.flatsSummary?.available ?? site.totalFlats ?? 0;
+      summary.booked += site.flatsSummary?.booked ?? 0;
+      summary.remainingFund += site.remainingFund;
+      return summary;
+    }, { totalSites: 0, available: 0, booked: 0, remainingFund: 0 });
+  }, [filteredSites]);
 
   useEffect(() => {
     const sentinel = loadMoreRef.current;
@@ -444,16 +462,13 @@ export default function SitesPage() {
 
   return (
     <>
-      <div className="space-y-8 animate-in fade-in duration-700">
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <div className="max-w-xl">
-            <h1 className="text-3xl sm:text-4xl font-serif text-foreground tracking-tight">Site Management</h1>
-            <p className="mt-2 text-xs font-bold tracking-[0.2em] text-muted-foreground/50 uppercase">
-              Active Projects &amp; Portfolio Infrastructure
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <DashboardPage className="space-y-8">
+        <DashboardPageHeader
+          eyebrow="Project Portfolio"
+          title="Site Management"
+          subtitle="Active projects, closed projects, inventory status, and available site liquidity in one view."
+          action={(
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <div className="flex border border-border shrink-0">
               <button
                 onClick={() => setViewMode('active')}
@@ -470,20 +485,26 @@ export default function SitesPage() {
                   'flex-1 sm:flex-initial px-4 py-2.5 text-[10px] sm:text-[10px] font-bold tracking-widest uppercase transition-colors border-l border-border whitespace-nowrap',
                   view === 'closed' ? 'bg-primary text-black' : 'text-muted-foreground hover:text-foreground',
                 )}
+                >
+                  Closed Sites
+                </button>
+              </div>
+
+              <Button
+                onClick={() => setCreateOpen(true)}
+                size="cta"
+                className="w-full sm:w-auto"
               >
-                Closed Sites
-              </button>
+                <Plus className="w-4 h-4" /> New Site
+              </Button>
             </div>
+          )}
+        />
 
-            <Button
-              onClick={() => setCreateOpen(true)}
-              className="h-11 sm:h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-5 w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4" /> New Site
-            </Button>
-          </div>
-        </div>
-
+        <DashboardFilterBar
+          title={`Showing ${visibleSites.length} of ${filteredSites.length} sites`}
+          action={hasFilters ? <DashboardStatusBadge tone="primary">Filters Active</DashboardStatusBadge> : undefined}
+        >
         <div className="flex w-full gap-2 lg:w-auto">
           <div className="relative w-full lg:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
@@ -504,42 +525,37 @@ export default function SitesPage() {
               </button>
             )}
           </div>
-          <Button variant="outline" onClick={() => setFilterOpen(true)} className="h-10 rounded-none px-3">
+          <Button variant="outline" size="control" onClick={() => setFilterOpen(true)}>
             <Filter className="mr-2 h-4 w-4" /> Filters
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-            Showing {visibleSites.length} of {filteredSites.length} sites
-          </span>
-          {hasFilters && (
-            <span className="px-2 py-1 text-[10px] font-bold tracking-widest uppercase bg-primary/10 text-primary">
-              Filters Active
-            </span>
-          )}
-        </div>
+        </DashboardFilterBar>
+
+        <DashboardStatsGrid>
+          <DashboardStatCard label="Visible Sites" value={String(portfolioStats.totalSites)} />
+          <DashboardStatCard label="Available Units" value={String(portfolioStats.available).padStart(2, '0')} />
+          <DashboardStatCard label="Booked Units" value={String(portfolioStats.booked).padStart(2, '0')} tone="warning" />
+          <DashboardStatCard label="Net Site Balance" value={formatINR(portfolioStats.remainingFund)} tone="primary" />
+        </DashboardStatsGrid>
 
         {filteredSites.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <div className="w-16 h-16 bg-muted flex items-center justify-center">
-              <Layers className="w-8 h-8 text-muted-foreground/30" />
-            </div>
-            <p className="text-sm text-muted-foreground italic">
-              {sites.length === 0
+          <DashboardEmptyState
+            icon={<Layers className="h-8 w-8" />}
+            description={
+              sites.length === 0
                 ? (view === 'active' ? 'No active sites. Create one to get started.' : 'No closed sites.')
-                : 'No sites matched these filters.'}
-            </p>
-            {sites.length > 0 && hasFilters && (
-              <Button onClick={resetFilters} variant="outline" className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-5 rounded-none">
+                : 'No sites matched these filters.'
+            }
+            action={sites.length > 0 && hasFilters ? (
+              <Button onClick={resetFilters} variant="outline" size="control">
                 Reset Filters
               </Button>
-            )}
-            {sites.length === 0 && view === 'active' && (
-              <Button onClick={() => setCreateOpen(true)} className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-5">
+            ) : sites.length === 0 && view === 'active' ? (
+              <Button onClick={() => setCreateOpen(true)} size="cta">
                 <Plus className="w-4 h-4" /> Create First Site
               </Button>
-            )}
-          </div>
+            ) : undefined}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {visibleSites.map((site) => (
@@ -565,7 +581,7 @@ export default function SitesPage() {
             )}
           </div>
         )}
-      </div>
+      </DashboardPage>
 
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
         <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">

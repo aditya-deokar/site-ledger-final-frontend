@@ -12,6 +12,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  DashboardFilterBar,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardStatusBadge,
+  DashboardStatsGrid,
+} from '@/components/dashboard/dashboard-primitives';
 import { useInvestors } from '@/hooks/api/investor.hooks';
 import type { Investor } from '@/schemas/investor.schema';
 
@@ -103,27 +110,19 @@ export function InvestorsPage() {
 
   return (
     <>
-      <div className="animate-in fade-in space-y-8 duration-700">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-4xl font-serif tracking-tight text-foreground sm:text-5xl">
-              Investors
-            </h1>
-            <p className="mt-2 text-base italic text-muted-foreground">
-              Manage equity and fixed-rate investors across your company.
-            </p>
-          </div>
-
-          <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-            <Button
-              onClick={() => setAddOpen(true)}
-              className="h-11 gap-2 px-8 text-xs font-bold uppercase tracking-widest"
-            >
+      <DashboardPage className="space-y-8 duration-700">
+        <DashboardPageHeader
+          eyebrow="Capital Partners"
+          title="Investors"
+          subtitle="Manage equity and fixed-rate investors across your company."
+          action={(
+            <Button onClick={() => setAddOpen(true)} size="cta">
               <Plus className="h-4 w-4" /> Add Investor
             </Button>
-          </div>
-        </div>
+          )}
+        />
 
+        <DashboardFilterBar>
         <div className="flex w-full gap-2 lg:w-auto">
           <div className="relative w-full lg:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
@@ -144,10 +143,11 @@ export function InvestorsPage() {
               </button>
             )}
           </div>
-          <Button variant="outline" onClick={() => setFilterOpen(true)} className="h-10 rounded-none px-3">
+          <Button variant="outline" size="control" onClick={() => setFilterOpen(true)}>
             <Filter className="mr-2 h-4 w-4" /> Filters
           </Button>
         </div>
+        </DashboardFilterBar>
 
         <div className="flex flex-wrap gap-2">
           {tabs.map((tab) => (
@@ -166,7 +166,13 @@ export function InvestorsPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+        {(statusFilter !== 'ALL' || siteFilter || typeModalFilter !== 'ALL' || minInvested || maxInvested || minOutstanding || maxOutstanding) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <DashboardStatusBadge tone="primary">Advanced Filters Active</DashboardStatusBadge>
+          </div>
+        )}
+
+        <DashboardStatsGrid>
           <InvestorStatCard
             label="Total Capital Committed"
             value={formatINR(stats.totalInvested)}
@@ -186,7 +192,7 @@ export function InvestorsPage() {
             value={formatINR(stats.totalOutstanding)}
             valueClassName="text-primary"
           />
-        </div>
+        </DashboardStatsGrid>
 
         <InvestorsList
           investors={investors}
@@ -194,7 +200,7 @@ export function InvestorsPage() {
           onEditInvestor={setEditInvestor}
           onDeleteInvestor={setDeleteInvestor}
         />
-      </div>
+      </DashboardPage>
 
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
         <DialogContent className="max-h-[90vh] w-[96vw] max-w-6xl overflow-y-auto rounded-none">

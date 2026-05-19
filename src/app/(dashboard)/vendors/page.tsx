@@ -21,6 +21,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  DashboardEmptyState,
+  DashboardField,
+  DashboardFilterBar,
+  DashboardPage,
+  DashboardPageHeader,
+  DashboardStatCard,
+  DashboardStatsGrid,
+  DashboardStatusBadge,
+} from '@/components/dashboard/dashboard-primitives';
 import { cn } from '@/lib/utils';
 import {
   useCreateVendor,
@@ -84,20 +94,15 @@ function SummaryCard({
   tone?: 'default' | 'warning';
   onClick?: () => void;
 }) {
-  const warningClasses = tone === 'warning' ? 'border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/10' : 'border-border bg-muted/20';
   return (
-    <button
-      type="button"
+    <DashboardStatCard
+      label={label}
+      value={value}
+      description={helper}
+      tone={tone === 'warning' ? 'warning' : 'default'}
       onClick={onClick}
-      className={cn(
-        'border p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        warningClasses,
-      )}
-    >
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</p>
-      <p className="mt-2 text-3xl font-serif text-foreground">{value}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{helper}</p>
-    </button>
+      className={tone === 'warning' ? 'bg-amber-50/60 dark:bg-amber-500/10' : 'bg-muted/20'}
+    />
   );
 }
 
@@ -177,9 +182,17 @@ function VendorEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-w-6xl rounded-none border-border p-0">
         <DialogHeader>
-          <DialogTitle>{isEditing ? `Edit Vendor: ${vendor?.name}` : 'Add Vendor'}</DialogTitle>
+          <div className="border-b border-border px-6 py-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/55">Vendor Profile</p>
+            <DialogTitle className="mt-2 text-2xl font-serif tracking-tight">
+              {isEditing ? `Edit ${vendor?.name}` : 'Add Vendor'}
+            </DialogTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Keep supplier details concise and searchable for bills, payouts, and reconciliation.
+            </p>
+          </div>
         </DialogHeader>
 
         <form
@@ -190,100 +203,77 @@ function VendorEditorDialog({
               createVendor(data);
             }
           })}
-          className="space-y-6"
+          className="space-y-5 px-6 pb-6"
         >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Vendor Name</Label>
-              <Input {...register('name')} className="rounded-none" />
-              {errors.name && <p className="text-sm text-rose-600">{errors.name.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Input {...register('type')} className="rounded-none" placeholder="Free text category" />
-              {errors.type && <p className="text-sm text-rose-600">{errors.type.message}</p>}
-            </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DashboardField label="Vendor Name" error={errors.name?.message}>
+              <Input {...register('name')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="Category" error={errors.type?.message}>
+              <Input {...register('type')} className="h-10" placeholder="Supplier, Electrical, Materials" />
+            </DashboardField>
+            <DashboardField label="Contact Person">
+              <Input {...register('contactPersonName')} className="h-10" />
+            </DashboardField>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Contact Person</Label>
-              <Input {...register('contactPersonName')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input {...register('phone')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input {...register('email')} className="rounded-none" />
-              {errors.email && <p className="text-sm text-rose-600">{errors.email.message}</p>}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Address</Label>
-            <Textarea {...register('address')} className="min-h-24 rounded-none" />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>GSTIN</Label>
-              <Input {...register('gstin')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>PAN</Label>
-              <Input {...register('pan')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Payment Terms (days)</Label>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DashboardField label="Phone">
+              <Input {...register('phone')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="Email" error={errors.email?.message}>
+              <Input {...register('email')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="Payment Terms (days)">
               <Input
                 type="number"
                 min={0}
-                className="rounded-none"
+                className="h-10"
                 {...register('paymentTermsDays', {
                   setValueAs: (value) => (value === '' ? undefined : Number(value)),
                 })}
               />
-            </div>
+            </DashboardField>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Bank Name</Label>
-              <Input {...register('bankName')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Bank Account Name</Label>
-              <Input {...register('bankAccountName')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Account Number</Label>
-              <Input {...register('accountNumber')} className="rounded-none" />
-            </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DashboardField label="GSTIN">
+              <Input {...register('gstin')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="PAN">
+              <Input {...register('pan')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="UPI ID">
+              <Input {...register('upiId')} className="h-10" />
+            </DashboardField>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>IFSC Code</Label>
-              <Input {...register('ifscCode')} className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>UPI ID</Label>
-              <Input {...register('upiId')} className="rounded-none" />
-            </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <DashboardField label="Bank Name">
+              <Input {...register('bankName')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="Account Number">
+              <Input {...register('accountNumber')} className="h-10" />
+            </DashboardField>
+            <DashboardField label="IFSC Code">
+              <Input {...register('ifscCode')} className="h-10" />
+            </DashboardField>
           </div>
 
-          <div className="space-y-2">
-            <Label>Notes</Label>
-            <Textarea {...register('notes')} className="min-h-24 rounded-none" />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DashboardField label="Address">
+              <Textarea {...register('address')} className="min-h-20" />
+            </DashboardField>
+            <DashboardField label="Notes">
+              <Textarea {...register('notes')} className="min-h-20" />
+            </DashboardField>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" className="rounded-none" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-3 border-t border-border pt-5">
+            <Button type="button" size="control" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" className="rounded-none" disabled={isPending}>
+            <Button type="submit" size="control" disabled={isPending}>
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isEditing ? 'Save Vendor' : 'Create Vendor'}
             </Button>
           </div>
@@ -352,29 +342,27 @@ export default function VendorsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 px-3 py-4 lg:px-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-primary">Vendor Management</p>
-          <h1 className="mt-2 text-4xl font-serif text-foreground">Company-wide vendor cockpit</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            Manage vendor profiles, site assignments, bills, payments, receipts, documents, and due tracking in one place.
-          </p>
-        </div>
-        <Button
-          type="button"
-          className="h-11 rounded-none px-5 text-[10px] font-bold uppercase tracking-widest"
-          onClick={() => {
-            setEditorVendor(null);
-            setEditorOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Vendor
-        </Button>
-      </div>
+    <DashboardPage className="space-y-4 px-3 py-4 lg:px-6">
+      <DashboardPageHeader
+        eyebrow="Vendor Management"
+        title="Company-wide vendor cockpit"
+        subtitle="Manage vendor profiles, site assignments, bills, payments, receipts, documents, and due tracking in one place."
+        action={(
+          <Button
+            type="button"
+            size="cta"
+            onClick={() => {
+              setEditorVendor(null);
+              setEditorOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add Vendor
+          </Button>
+        )}
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <DashboardStatsGrid className="md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <SummaryCard label="Total Vendors" value={String(vendors.length)} helper="Current filtered vendor count" onClick={resetFilters} />
         <SummaryCard label="Active Vendors" value={String(activeVendors)} helper="Ready for new bills" onClick={() => setStatusFilter('ACTIVE')} />
         <SummaryCard label="Assigned Vendors" value={String(assignedVendors)} helper="Mapped to one or more sites" onClick={() => setSiteFilter('ALL')} />
@@ -399,17 +387,17 @@ export default function VendorsPage() {
           tone={documentGaps > 0 ? 'warning' : 'default'}
           onClick={() => setDocumentFilter('MISSING_DOCS')}
         />
-      </div>
+      </DashboardStatsGrid>
 
-      <div className="space-y-3 border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {hasActiveFilters && (
-            <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={resetFilters}>
-              <X className="mr-1 h-3.5 w-3.5" />
-              Clear filters
-            </Button>
-          )}
-        </div>
+      <DashboardFilterBar
+        title="Find and Filter Vendors"
+        action={hasActiveFilters ? (
+          <Button type="button" size="control" variant="outline" onClick={resetFilters}>
+            <X className="h-3.5 w-3.5" />
+            Clear Filters
+          </Button>
+        ) : undefined}
+      >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_13rem_13rem]">
         <div className="space-y-2">
           <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search</Label>
@@ -469,7 +457,7 @@ export default function VendorsPage() {
           </label>
         </div>
       </div>
-      </div>
+      </DashboardFilterBar>
 
       <div className="flex flex-wrap gap-2">
         {categoryOptions.map((category) => (
@@ -490,18 +478,18 @@ export default function VendorsPage() {
       </div>
 
       <div className="overflow-hidden border border-border bg-card">
-        <Table>
+        <Table className="text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead>Sites</TableHead>
-              <TableHead>Outstanding</TableHead>
-              <TableHead>Overdue</TableHead>
-              <TableHead>Last Payment</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Vendor</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Category</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Status</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Contact</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Sites</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Outstanding</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Overdue</TableHead>
+              <TableHead className="text-[11px] tracking-[0.18em]">Last Payment</TableHead>
+              <TableHead className="text-right text-[11px] tracking-[0.18em]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -516,32 +504,34 @@ export default function VendorsPage() {
               </TableRow>
             ) : vendors.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-16 text-center text-muted-foreground">
-                  No vendors matched the current filters.
+                <TableCell colSpan={9} className="py-0">
+                  <DashboardEmptyState
+                    className="border-0 py-16"
+                    description="No vendors matched the current filters."
+                  />
                 </TableCell>
               </TableRow>
             ) : (
               vendors.map((vendor) => (
-                <TableRow key={vendor.id} className="h-14">
-                  <TableCell>
+                <TableRow key={vendor.id} className="h-16">
+                  <TableCell className="text-sm">
                     <div>
-                      <p className="font-semibold text-foreground">{vendor.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{vendor.contactPersonName || vendor.phone || vendor.email || 'No contact details'}</p>
+                      <p className="text-[15px] font-semibold text-foreground">{vendor.name}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium text-muted-foreground">{formatCategoryLabel(vendor.type)}</TableCell>
-                  <TableCell>
-                    <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
+                  <TableCell className="text-sm font-medium text-muted-foreground">{formatCategoryLabel(vendor.type)}</TableCell>
+                  <TableCell className="text-sm">
+                    <DashboardStatusBadge className={cn('text-[9px] tracking-widest', statusTone(vendor.status))}>
                       {vendor.status}
-                    </span>
+                    </DashboardStatusBadge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{vendor.phone || vendor.email || '-'}</TableCell>
-                  <TableCell>{vendor.siteCount}</TableCell>
-                  <TableCell className={vendor.totalOutstanding > 0 ? 'font-semibold text-rose-600' : 'font-semibold text-emerald-700'}>
+                  <TableCell className="text-sm text-muted-foreground">{vendor.phone || vendor.email || '-'}</TableCell>
+                  <TableCell className="text-sm">{vendor.siteCount}</TableCell>
+                  <TableCell className={cn('text-sm', vendor.totalOutstanding > 0 ? 'font-semibold text-rose-600' : 'font-semibold text-emerald-700')}>
                     {formatINR(vendor.totalOutstanding)}
                   </TableCell>
-                  <TableCell>{vendor.overdueBillCount}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm">{vendor.overdueBillCount}</TableCell>
+                  <TableCell className="text-sm">
                     <div className="space-y-1">
                       <p>{formatDate(vendor.lastPaymentDate)}</p>
                       {vendor.lastPaymentDate ? (
@@ -560,19 +550,19 @@ export default function VendorsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
-                        <Eye className="mr-1 h-4 w-4" />
+                      <Button type="button" size="control" variant="outline" onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
+                        <Eye className="h-4 w-4" />
                         Open
                       </Button>
-                      <Button type="button" variant="outline" className="h-9 rounded-none px-3 text-[10px] font-bold uppercase tracking-widest" onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}>
-                        <Pencil className="mr-1 h-4 w-4" />
+                      <Button type="button" size="control" variant="outline" onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
                         Edit
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger>
-                          <div role="button" className="inline-flex h-9 items-center justify-center border border-border bg-background px-2 text-foreground transition-colors hover:bg-muted" aria-label={`More actions for ${vendor.name}`}>
+                          <Button type="button" size="icon-control" variant="outline" aria-label={`More actions for ${vendor.name}`}>
                             <MoreHorizontal className="h-4 w-4" />
-                          </div>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44 rounded-none">
                           <DropdownMenuItem onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
@@ -604,6 +594,6 @@ export default function VendorsPage() {
       </div>
 
       <VendorEditorDialog vendor={editorVendor} open={editorOpen} onOpenChange={setEditorOpen} />
-    </div>
+    </DashboardPage>
   );
 }
