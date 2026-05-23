@@ -41,17 +41,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 
-  // const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  const recaptchaKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
-  // if (!recaptchaKey) {
-  //   return content;
-  // }
+  if (!recaptchaKey) {
+    return content;
+  }
 
-  // return (
-  //   <GoogleReCaptchaProvider reCaptchaKey={recaptchaKey}>
-  //     {content}
-  //   </GoogleReCaptchaProvider>
-  // );
-
-  return content;
+  return (
+    <GoogleReCaptchaProvider reCaptchaKey={recaptchaKey}>
+      {content}
+    </GoogleReCaptchaProvider>
+  );
 }

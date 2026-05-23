@@ -15,7 +15,7 @@ import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export default function LoginPage() {
   const { mutate: signIn, isPending, error } = useSignIn();
-  // const { executeRecaptcha } = useGoogleReCaptcha();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   
   const {
     register,
@@ -25,25 +25,30 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      recaptchaToken: '',
+    },
   });
 
   const loginErrorMessage = error ? getApiErrorMessage(error, 'Authentication failed.') : null;
 
   const onSubmit = async (data: LoginInput) => {
-    // if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
-    //   if (!executeRecaptcha) {
-    //     // Recaptcha library not ready or failed to load -> Bypass gracefully
-    //     data.recaptchaToken = 'BYPASS';
-    //   } else {
-    //     try {
-    //       const token = await executeRecaptcha('login');
-    //       data.recaptchaToken = token;
-    //     } catch (err) {
-    //       // Execution failed -> bypass
-    //       data.recaptchaToken = 'BYPASS';
-    //     }
-    //   }
-    // }
+    if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      if (!executeRecaptcha) {
+        setError('recaptchaToken', { message: 'Captcha is still loading. Please try again.' });
+        return;
+      }
+
+      try {
+        data.recaptchaToken = await executeRecaptcha('login');
+      } catch {
+        setError('recaptchaToken', { message: 'Captcha verification failed. Please try again.' });
+        return;
+      }
+    }
+
     signIn(data);
   };
 

@@ -24,7 +24,7 @@ export default function RegisterPage() {
 
   const { mutate: signUp, isPending: isSignUpPending, error: signUpError } = useSignUp();
   const { mutate: verifySignUp, isPending: isVerifyPending } = useVerifySignUp();
-  // const { executeRecaptcha } = useGoogleReCaptcha();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   
   const {
     register,
@@ -43,6 +43,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
+      recaptchaToken: '',
     },
   });
 
@@ -63,18 +64,20 @@ export default function RegisterPage() {
   };
 
   const onSubmit = async (data: SignUpInput) => {
-    // if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
-    //   if (!executeRecaptcha) {
-    //     data.recaptchaToken = 'BYPASS';
-    //   } else {
-    //     try {
-    //       const token = await executeRecaptcha('signup');
-    //       data.recaptchaToken = token;
-    //     } catch (err) {
-    //       data.recaptchaToken = 'BYPASS';
-    //     }
-    //   }
-    // }
+    if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      if (!executeRecaptcha) {
+        setError('recaptchaToken', { message: 'Captcha is still loading. Please try again.' });
+        return;
+      }
+
+      try {
+        data.recaptchaToken = await executeRecaptcha('signup');
+      } catch {
+        setError('recaptchaToken', { message: 'Captcha verification failed. Please try again.' });
+        return;
+      }
+    }
+
     requestVerificationCode(data);
   };
 

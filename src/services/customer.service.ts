@@ -1,4 +1,5 @@
 import api from '@/lib/axios';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 import {
   AllCustomersResponse,
   CancelDealInput,
@@ -24,7 +25,10 @@ export const customerService = {
     api.put(`/sites/${siteId}/flats/${flatId}/customer/${customerId}`, data),
 
   recordPayment: (customerId: string, data: RecordPaymentInput) =>
-    api.patch(`/customers/${customerId}/payment`, data),
+    api.patch(`/customers/${customerId}/payment`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`customer-payment:${customerId}`),
+    }),
 
   getPayments: (customerId: string, page?: number, size?: number): Promise<CustomerPaymentsResponse> =>
     api.get(`/customers/${customerId}/payments`, { params: { page, size } }),
@@ -42,7 +46,10 @@ export const customerService = {
     api.delete(`/customers/${customerId}/agreement-lines/${lineId}`),
 
   cancelDeal: (siteId: string, flatId: string, customerId: string, data: CancelDealInput) =>
-    api.patch(`/sites/${siteId}/flats/${flatId}/customer/${customerId}/cancel`, data),
+    api.patch(`/sites/${siteId}/flats/${flatId}/customer/${customerId}/cancel`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`customer-cancel:${customerId}`),
+    }),
 
   deleteCustomer: (customerId: string) =>
     api.delete(`/customers/${customerId}`),

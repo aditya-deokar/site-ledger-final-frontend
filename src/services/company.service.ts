@@ -1,4 +1,5 @@
 import api from '@/lib/axios';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 import {
   CompanyActivityResponse,
   CompanyResponse,
@@ -29,11 +30,17 @@ export const companyService = {
   },
 
   addPartner: async (data: PartnerInput) => {
-    return api.post('/company/partners', data);
+    return api.post('/company/partners', {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey('partner-create'),
+    });
   },
 
   updatePartner: async (id: string, data: PartnerInput) => {
-    return api.put(`/company/partners/${id}`, data);
+    return api.put(`/company/partners/${id}`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`partner-update:${id}`),
+    });
   },
 
   deletePartner: async (id: string) => {
@@ -41,7 +48,10 @@ export const companyService = {
   },
 
   withdrawFund: async (data: { amount: number; note?: string }) => {
-    return api.post('/company/withdraw', data);
+    return api.post('/company/withdraw', {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey('company-withdraw'),
+    });
   },
 
   getWithdrawals: async (): Promise<CompanyWithdrawalsResponse> => {
@@ -53,7 +63,10 @@ export const companyService = {
   },
 
   recordWithdrawalPayment: async (id: string, data: { amount: number; note?: string }): Promise<CompanyWithdrawalResponse> => {
-    return api.patch(`/company/withdrawals/${id}/payment`, data);
+    return api.patch(`/company/withdrawals/${id}/payment`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`company-withdrawal-payment:${id}`),
+    });
   },
 
   updateWithdrawalNote: async (id: string, data: { note?: string }): Promise<CompanyWithdrawalResponse> => {

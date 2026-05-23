@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SiteLedger Frontend
 
-## Getting Started
+## Overview
 
-First, run the development server:
+This is the Next.js frontend for SiteLedger. It provides the authentication flow, dashboard, company setup, sites, vendors, customers, investors, expenses, and reporting interfaces.
+
+## Prerequisites
+
+- Node.js 20+
+- A running backend API
+
+## Environment
+
+Copy `.env.example` to `.env` and update the values:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Notes:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is optional for local development.
+- When reCAPTCHA v3 is enabled, it is invisible. You should not expect a visible checkbox.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+- `npm run dev`: start the development server
+- `npm run build`: create a production build
+- `npm run start`: run the production build
+- `npm run lint`: run ESLint
 
-To learn more about Next.js, take a look at the following resources:
+## Authentication
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- The frontend now uses secure cookie-based sessions.
+- Access and refresh tokens are managed by the backend and are not stored in browser `localStorage`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Important Gaps
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The test scripts in `package.json` currently reference Playwright specs that are not present in the repository.
+- The repository currently includes both `package-lock.json` and `pnpm-lock.yaml`; choose one package manager and standardize on it.

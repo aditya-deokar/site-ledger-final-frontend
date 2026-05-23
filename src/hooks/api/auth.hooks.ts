@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { storeTokens } from '@/lib/auth-session';
+import { markSessionActive } from '@/lib/auth-session';
 import { authService } from '@/services/auth.service';
-import { LoginInput, SignUpInput, ForgotPasswordInput, ResetPasswordInput, VerifySignUpInput } from '@/schemas/auth.schema';
+import { LoginInput, SignUpInput, ForgotPasswordInput, ResetPasswordInput, VerifyResetCodeInput, VerifySignUpInput } from '@/schemas/auth.schema';
 import { forgotPassword, resetPassword, verifyResetCode } from '@/services/auth.api';
 import { useRouter } from 'next/navigation';
 
@@ -11,11 +11,8 @@ export const useSignIn = () => {
 
   return useMutation({
     mutationFn: (data: LoginInput) => authService.login(data),
-    onSuccess: (response) => {
-      storeTokens({
-        accessToken: response.data.accessToken,
-        refreshToken: response.data.refreshToken,
-      });
+    onSuccess: () => {
+      markSessionActive();
       queryClient.invalidateQueries({ queryKey: ['me'] });
       router.push('/');
     },
@@ -34,11 +31,8 @@ export const useVerifySignUp = () => {
 
   return useMutation({
     mutationFn: (data: VerifySignUpInput) => authService.verifySignUp(data),
-    onSuccess: (response) => {
-      storeTokens({
-        accessToken: response.data.accessToken,
-        refreshToken: response.data.refreshToken,
-      });
+    onSuccess: () => {
+      markSessionActive();
       queryClient.invalidateQueries({ queryKey: ['me'] });
       router.push('/');
     },
@@ -62,7 +56,7 @@ export const useForgotPassword = () => {
 
 export const useVerifyResetCode = () => {
   return useMutation({
-    mutationFn: (data: { email: string; code: string }) => verifyResetCode(data),
+    mutationFn: (data: VerifyResetCodeInput) => verifyResetCode(data),
   });
 };
 

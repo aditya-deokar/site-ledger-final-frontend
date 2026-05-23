@@ -31,11 +31,9 @@ export const verifySignUpSchema = z.object({
 
 export type VerifySignUpInput = z.infer<typeof verifySignUpSchema>;
 
-export interface AuthResponse {
+export interface SessionResponse {
   ok: boolean;
   data: {
-    accessToken: string;
-    refreshToken: string;
     user: {
       id: string;
       email: string;
@@ -59,11 +57,14 @@ export interface UserResponse {
   };
 }
 
-export const forgotPasswordSchema = z.object({ email: z.string().email() });
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+  recaptchaToken: z.string().optional(),
+});
 
 export const resetPasswordSchema = z
   .object({
-    token: z.string().min(1, 'Reset token is required.'),
+    token: z.string().optional(),
     newPassword: strongPasswordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password.'),
   })
@@ -75,6 +76,7 @@ export const resetPasswordSchema = z
 export const verifyResetCodeSchema = z.object({
   email: z.string().email('Invalid email address'),
   code: z.string().length(6, 'Verification code must be 6 digits'),
+  recaptchaToken: z.string().optional(),
 });
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

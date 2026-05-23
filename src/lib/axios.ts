@@ -1,14 +1,13 @@
 import axios from 'axios';
 
 import {
-  clearStoredTokens,
-  ensureFreshAccessToken,
   redirectToLogin,
-  refreshAccessToken,
+  refreshSession,
 } from '@/lib/auth-session';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -41,29 +40,6 @@ const normalizeApiError = (error: any) => {
   };
 };
 
-api.interceptors.request.use(
-  async (config) => {
-    if (isPublicAuthRequest(config.url)) {
-      return config;
-    }
-
-    const accessToken = await ensureFreshAccessToken();
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
-      return config;
-    }
-
-    clearStoredTokens();
-    redirectToLogin();
-
-    return Promise.reject({
-      status: 401,
-      error: 'Authentication required',
-    });
-  },
-  (error) => Promise.reject(normalizeApiError(error))
-);
-
 api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
@@ -73,14 +49,11 @@ api.interceptors.response.use(
     if (isUnauthorized && !originalRequest._retry && !isPublicAuthRequest(originalRequest.url)) {
       originalRequest._retry = true;
 
-      const accessToken = await refreshAccessToken();
-      if (accessToken) {
-        originalRequest.headers = originalRequest.headers ?? {};
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+      const refreshed = await refreshSession();
+      if (refreshed) {
         return api(originalRequest);
       }
 
-      clearStoredTokens();
       redirectToLogin();
     }
 
