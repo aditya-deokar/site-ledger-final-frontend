@@ -182,7 +182,7 @@ function VendorEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl rounded-none border-border p-0">
+      <DialogContent className="max-h-none overflow-hidden sm:max-w-[64rem] max-w-6xl rounded-none border-border p-0">
         <DialogHeader>
           <div className="border-b border-border px-6 py-5">
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground/55">Vendor Profile</p>
