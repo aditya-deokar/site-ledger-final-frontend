@@ -778,11 +778,9 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
     headerLineY += 4
   })
 
-  // Receipt badge top-right - white background
+  // Receipt badge top-right - white background without border
   doc.setFillColor(245, 245, 245)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(badgeX, 2, 58, 14, 1, 1, "FD")
+  doc.roundedRect(badgeX, 2, 58, 14, 1, 1, "F")
   setFont("bold", 6.5, 80)
   doc.text("PAYMENT RECEIPT", badgeX + 29, 6.5, { align: "center" })
   setFont("bold", 7.5, 0)
@@ -808,15 +806,6 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   setFont("normal", 6.5, 100)
   doc.text(data.paymentAmountWords, ml, y + 14.5)
 
-  // Mode pill - white background
-  const modeW = 28
-  const modeX = pageWidth - mr - modeW
-  doc.setFillColor(240, 240, 240)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
-  setFont("bold", 7, 0)
-  doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
 
   y += 17
   doc.setFillColor(210, 210, 210)

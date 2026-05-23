@@ -149,10 +149,10 @@ function AgreementSummaryTile({
         tone === "default" && "border-border bg-muted/20",
       )}
     >
-      <p className={cn("font-bold uppercase tracking-[0.22em] text-muted-foreground/55", compact ? "text-[7px]" : "text-[9px]")}>
+      <p className={cn("font-bold uppercase tracking-[0.22em] text-muted-foreground/55", compact ? "text-[10px]" : "text-[11px]")}>
         {label}
       </p>
-      <p className={cn("font-serif text-foreground", compact ? "mt-1 text-[12px]" : "mt-2 text-sm")}>
+      <p className={cn("font-serif text-foreground", compact ? "mt-1 text-base" : "mt-2 text-lg")}>
         {value}
       </p>
     </div>
@@ -471,8 +471,8 @@ export function CustomerAgreementPanel({
           <>
             <div className="flex flex-col gap-1.5">
               <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Discount Type</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex w-full min-w-0 items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
                   <input
                     type="radio"
                     name="discountType"
@@ -486,9 +486,9 @@ export function CustomerAgreementPanel({
                     }))}
                     className="text-primary"
                   />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Percentage</span>
+                  <span className="truncate text-[10px] font-bold tracking-widest uppercase">Percentage</span>
                 </label>
-                <label className="flex items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
+                <label className="flex w-full min-w-0 items-center gap-2 border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/30">
                   <input
                     type="radio"
                     name="discountType"
@@ -502,7 +502,7 @@ export function CustomerAgreementPanel({
                     }))}
                     className="text-primary"
                   />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Fixed Amount</span>
+                  <span className="truncate text-[10px] font-bold tracking-widest uppercase">Fixed Amount</span>
                 </label>
               </div>
             </div>
@@ -657,7 +657,7 @@ export function CustomerAgreementPanel({
         </div>
       ) : totals ? (
         <>
-          <div className={cn("grid gap-2", compact ? "grid-cols-3" : "sm:grid-cols-2 xl:grid-cols-3")}>
+          <div className={cn("grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6")}> 
             <AgreementSummaryTile compact={compact} label="Base Price" value={formatINR(totals.basePrice)} />
             <AgreementSummaryTile compact={compact} label="Charges" value={formatINR(totals.charges)} />
             <AgreementSummaryTile compact={compact} label="Tax / GST" value={formatINR(totals.tax)} />
@@ -713,7 +713,7 @@ export function CustomerAgreementPanel({
 
       {compact ? (
         <Dialog open={formPanelOpen} onOpenChange={(open) => { if (!open) closeForm() }}>
-          <DialogContent className="max-h-[min(90vh,760px)] max-w-2xl overflow-y-auto rounded-none border-border p-0">
+          <DialogContent className="max-h-[min(90vh,760px)] max-w-[64rem] sm:max-w-[47rem] w-full overflow-y-auto rounded-none border-border p-0">
             <DialogHeader className="border-b border-border px-8 py-6">
               <DialogTitle className="text-2xl font-serif tracking-tight">
                 {editingLine?.type === "BASE_PRICE" ? "Edit Base Price" : formMode === "edit" ? "Edit Pricing Item" : "Add Pricing Item"}

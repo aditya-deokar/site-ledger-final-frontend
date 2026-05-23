@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { useQueries } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -100,6 +100,68 @@ function buildVendorTypeOptions(vendors: Array<{ type?: string | null }>) {
   return Array.from(types.values())
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
     .map((type) => ({ value: type, label: type }));
+}
+
+function parseCurrencyNumber(value: unknown) {
+  if (value === null || value === undefined) return undefined;
+  const normalized = String(value).replace(/,/g, '').trim();
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatIndianCurrencyInput(raw: string) {
+  const cleaned = raw.replace(/[^0-9.]/g, '');
+  const dotIndex = cleaned.indexOf('.');
+  const hasDot = dotIndex >= 0;
+  const integerPartRaw = hasDot ? cleaned.slice(0, dotIndex) : cleaned;
+  const decimalPartRaw = hasDot ? cleaned.slice(dotIndex + 1).replace(/\./g, '') : '';
+  const normalizedInteger = integerPartRaw ? String(Number(integerPartRaw)) : '0';
+  const formattedInteger = Number(normalizedInteger).toLocaleString('en-IN');
+
+  if (!hasDot) {
+    return cleaned ? formattedInteger : '';
+  }
+
+  return `${formattedInteger}.${decimalPartRaw}`;
+}
+
+function CurrencyInput({
+  registration,
+  className,
+  min,
+  max,
+  step,
+  placeholder,
+  readOnly,
+}: {
+  registration: UseFormRegisterReturn;
+  className?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholder?: string;
+  readOnly?: boolean;
+}) {
+  const { onChange, ...rest } = registration;
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      min={min}
+      max={max}
+      step={step}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      className={className ?? INPUT_CLS}
+      {...rest}
+      onChange={(event) => {
+        event.target.value = formatIndianCurrencyInput(event.target.value);
+        onChange(event);
+      }}
+    />
+  );
 }
 
 function VendorWorkspaceLauncher({
@@ -594,10 +656,10 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Amount (INR)" error={errors.amount?.message}>
-            <input type="number" min={0} className={INPUT_CLS} {...register('amount', { valueAsNumber: true })} />
+            <CurrencyInput className={INPUT_CLS} min={0} registration={register('amount', { setValueAs: parseCurrencyNumber })} />
           </Field>
           <Field label="Amount Paid Now (optional)" error={errors.amountPaid?.message}>
-            <input type="number" min={0} className={INPUT_CLS} {...register('amountPaid', { valueAsNumber: true })} />
+            <CurrencyInput className={INPUT_CLS} min={0} registration={register('amountPaid', { setValueAs: parseCurrencyNumber })} />
           </Field>
         </div>
 
@@ -740,13 +802,12 @@ function ManageFundsForm({ site, onSuccess, onBack }: { site: any; onSuccess: ()
         <Field label="Amount (INR)" error={errors.amount?.message as string}>
           <div className="relative">
              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/40 font-bold">₹</span>
-             <input
-              type="number"
+             <CurrencyInput
               min={1}
               className={cn(INPUT_CLS, 'pl-8')}
-              {...register('amount', { valueAsNumber: true, min: { value: 1, message: 'Amount must be greater than 0' } })}
-            />
-          </div>
+              registration={register('amount', { setValueAs: parseCurrencyNumber, min: { value: 1, message: 'Amount must be greater than 0' } })}
+             />
+           </div>
           <div className="mt-2 flex justify-between items-center">
             <p className="text-[9px] text-muted-foreground/50 italic font-bold uppercase tracking-widest">
               {mode === 'ADD' ? `Available: ${formatINR(maxAvailableToAdd)}` : `Remaning: ${formatINR(maxAvailableToPull)}`}
@@ -810,7 +871,7 @@ function AddPartnerForm({ onSuccess, onBack }: { onSuccess: () => void; onBack: 
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Investment (INR)" error={errors.investmentAmount?.message}>
-            <input type="number" min={0} placeholder="0" className={INPUT_CLS} {...register('investmentAmount', { valueAsNumber: true })} />
+            <CurrencyInput min={0} placeholder="0" className={INPUT_CLS} registration={register('investmentAmount', { setValueAs: parseCurrencyNumber })} />
           </Field>
           <Field label={`Equity % (max ${maxStake.toFixed(1)}%)`} error={errors.stakePercentage?.message}>
             <input type="number" min={0} max={100} step={0.01} placeholder="0" className={INPUT_CLS} {...register('stakePercentage', { valueAsNumber: true })} />
@@ -887,7 +948,7 @@ function WithdrawFundForm({ onSuccess, onBack }: { onSuccess: () => void; onBack
           <span className="text-xl font-bold text-primary tabular-nums">{formatINR(availableFund)}</span>
         </div>
         <Field label="Amount (INR)" error={errors.amount?.message}>
-          <input type="number" min={0} placeholder="0" className={INPUT_CLS} {...register('amount')} />
+          <CurrencyInput min={0} placeholder="0" className={INPUT_CLS} registration={register('amount', { setValueAs: parseCurrencyNumber })} />
           <button type="button" tabIndex={-1} onClick={() => setValue('amount', availableFund)}
             className="mt-1 self-end text-[10px] font-bold text-primary hover:underline">
             Withdraw all ({formatINR(availableFund)})
@@ -1093,12 +1154,11 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
         )}
 
         <Field label="Total Investment Amount (INR)" error={errors.investmentAmount?.message}>
-          <input
-            type="number"
+          <CurrencyInput
             min={0}
-            step="0.01"
+            step={0.01}
             className={INPUT_CLS}
-            {...register('investmentAmount', { valueAsNumber: true })}
+            registration={register('investmentAmount', { setValueAs: parseCurrencyNumber })}
             placeholder="e.g. 500000"
           />
         </Field>
@@ -1111,13 +1171,12 @@ function AddInvestorForm({ onSuccess, onBack }: { onSuccess: () => void; onBack:
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Amount Paid Now (INR)" error={errors.amountPaidNow?.message}>
-                <input
-                  type="number"
+                <CurrencyInput
                   min={0}
                   max={investmentAmount}
-                  step="0.01"
+                  step={0.01}
                   className={INPUT_CLS}
-                  {...register('amountPaidNow', { valueAsNumber: true })}
+                  registration={register('amountPaidNow', { setValueAs: parseCurrencyNumber })}
                   placeholder="0.00"
                 />
               </Field>
@@ -1249,7 +1308,7 @@ function EditPartnerForm({ entity, onSuccess, onBack }: { entity: any; onSuccess
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Investment (INR)" error={errors.investmentAmount?.message}>
-            <input type="number" className={INPUT_CLS} {...register('investmentAmount', { valueAsNumber: true })} />
+            <CurrencyInput className={INPUT_CLS} registration={register('investmentAmount', { setValueAs: parseCurrencyNumber })} />
           </Field>
           <Field label="Equity %" error={errors.stakePercentage?.message}>
             <input type="number" step={0.01} className={INPUT_CLS} {...register('stakePercentage', { valueAsNumber: true })} />
@@ -1623,7 +1682,7 @@ function RecordPaymentForm({ entity, onSuccess, onBack, onCustomerSelect }: { en
         {/* Customer info card removed — shown on right panel via ContextInsightPanel */}
 
         <Field label="Amount Paid (INR)" error={errors.amount?.message}>
-          <input type="number" className={INPUT_CLS} {...register('amount', { valueAsNumber: true })} />
+          <CurrencyInput className={INPUT_CLS} registration={register('amount', { setValueAs: parseCurrencyNumber })} />
         </Field>
         <Field label="Payment Mode" error={errors.paymentMode?.message}>
           <SearchableSelect
@@ -1826,11 +1885,12 @@ function CancelDealForm({ entity, onSuccess, onBack, onCustomerSelect }: { entit
             )}
 
             <Field label="Refund Amount (INR)" error={errors.refundAmount?.message}>
-              <input 
-                type="number" 
+              <CurrencyInput
                 className={cn(INPUT_CLS, (refundMode === 'TOTAL' || refundMode === 'NONE' || refundMode === 'PERCENTAGE') && "opacity-50 pointer-events-none bg-muted/60")} 
+                registration={register('refundAmount', { setValueAs: parseCurrencyNumber })} 
+                min={0}
+                step={0.01}
                 readOnly={refundMode !== 'FIXED'}
-                {...register('refundAmount', { valueAsNumber: true })} 
               />
             </Field>
           </>
@@ -2392,10 +2452,10 @@ function BookFlatForm({
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Selling Price (INR)" error={errors.sellingPrice?.message}>
-            <input type="number" min={0} className={INPUT_CLS} {...register('sellingPrice', { valueAsNumber: true })} />
+            <CurrencyInput min={0} className={INPUT_CLS} registration={register('sellingPrice', { setValueAs: parseCurrencyNumber })} />
           </Field>
           <Field label="Booking Amount (INR)" error={errors.bookingAmount?.message}>
-            <input type="number" min={0} className={INPUT_CLS} {...register('bookingAmount', { valueAsNumber: true })} />
+            <CurrencyInput min={0} className={INPUT_CLS} registration={register('bookingAmount', { setValueAs: parseCurrencyNumber })} />
           </Field>
         </div>
 
@@ -2531,12 +2591,7 @@ function BookFlatForm({
                         </Field>
                       ) : (
                         <Field label="Amount (INR)" error={errors.agreementLines?.[index]?.amount?.message}>
-                          <input
-                            type="number"
-                            min={0}
-                            className={INPUT_CLS}
-                            {...register(amountPath, { valueAsNumber: true })}
-                          />
+                          <CurrencyInput min={0} className={INPUT_CLS} registration={register(amountPath, { setValueAs: parseCurrencyNumber })} />
                         </Field>
                       )}
                     </div>
@@ -2564,12 +2619,11 @@ function BookFlatForm({
                     ) : lineType === 'DISCOUNT' ? (
                       <div className="mt-4">
                         <Field label="Discount Amount (INR)" error={errors.agreementLines?.[index]?.amount?.message}>
-                          <input
-                            type="number"
+                          <CurrencyInput
                             min={0}
-                            step="0.01"
+                            step={0.01}
                             className={INPUT_CLS}
-                            {...register(amountPath, { valueAsNumber: true })}
+                            registration={register(amountPath, { setValueAs: parseCurrencyNumber })}
                           />
                         </Field>
                       </div>
@@ -3324,12 +3378,11 @@ function PaySalaryForm({ entity, onSuccess, onBack }: { entity: any; onSuccess: 
         </div>
 
         <Field label="Amount (INR)" error={errors.amount?.message}>
-          <input
-            type="number"
+          <CurrencyInput
             min={0}
             step={0.01}
             className={INPUT_CLS}
-            {...register('amount', { valueAsNumber: true })}
+            registration={register('amount', { setValueAs: parseCurrencyNumber })}
           />
         </Field>
 

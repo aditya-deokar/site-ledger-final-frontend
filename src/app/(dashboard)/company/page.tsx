@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { BarChart, Bar, ResponsiveContainer, Tooltip, Cell } from 'recharts';
+import { BarChart, Bar, ResponsiveContainer, Tooltip, Cell, PieChart, Pie } from 'recharts';
 import { useCompany, useUpdateCompany, useWithdrawFund, useWithdrawals, useRecordWithdrawalPayment, useUpdateWithdrawalNote, useDeleteWithdrawal, usePartnerLedger } from '@/hooks/api/company.hooks';
 import { AddPartnerDrawer } from '@/components/dashboard/add-partner-drawer';
 import { EditPartnerDrawer } from '@/components/dashboard/edit-partner-drawer';
@@ -195,6 +195,35 @@ function EquityPanel({
   const [showReallocation, setShowReallocation] = useState(false);
   const totalStake = partners.reduce((s, p) => s + p.stakePercentage, 0);
   const isOverLimit = totalStake > 100;
+  const chartPalette = ['#14b8a6', '#3b82f6', '#6366f1', '#ec4899', '#f59e0b', '#eab308', '#22c55e', '#f97316'];
+
+  const donutRows = useMemo(() => {
+    const partnerRows = partners
+      .filter((partner) => partner.stakePercentage > 0)
+      .map((partner, index) => ({
+        key: partner.id,
+        label: partner.name,
+        value: partner.stakePercentage,
+        color: chartPalette[index % chartPalette.length],
+      }));
+
+    if (!isOverLimit && totalStake < 100) {
+      partnerRows.push({
+        key: 'company-reserve',
+        label: 'Company Reserve',
+        value: 100 - totalStake,
+        color: '#94a3b8',
+      });
+    }
+
+    return partnerRows;
+  }, [partners, totalStake, isOverLimit]);
+
+  const pieTotal = useMemo(
+    () => donutRows.reduce((sum, row) => sum + row.value, 0),
+    [donutRows],
+  );
+
   return (
     <div className="border border-border bg-card p-5 flex flex-col gap-5">
       <div className="flex items-center justify-between">
@@ -205,17 +234,60 @@ function EquityPanel({
           <SlidersHorizontal className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="relative flex items-center justify-center border border-border bg-muted/10 h-44">
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 176" preserveAspectRatio="none">
-          <line x1="30" y1="146" x2="170" y2="30" stroke="var(--primary)" strokeWidth="6" strokeLinecap="round" />
-        </svg>
-        <div className="relative z-10 text-center">
-          <p className={cn('text-4xl font-bold tabular-nums', isOverLimit ? 'text-destructive' : 'text-foreground')}>
-            {totalStake}%
-          </p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
-            {isOverLimit ? 'OVER LIMIT' : 'DISTRIBUTED'}
-          </p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
+        <div className="relative h-56 border border-border bg-muted/10">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={donutRows}
+                dataKey="value"
+                nameKey="label"
+                innerRadius={58}
+                outerRadius={86}
+                stroke="var(--card)"
+                strokeWidth={2}
+              >
+                {donutRows.map((entry) => (
+                  <Cell key={entry.key} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+              Total Stake
+            </p>
+            <p className={cn('text-3xl font-bold tabular-nums', isOverLimit ? 'text-destructive' : 'text-foreground')}>
+              {totalStake.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+        <div className="border border-border">
+          <div className="grid grid-cols-[1fr_72px_56px] border-b border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+            <span>Label</span>
+            <span className="text-right">Value</span>
+            <span className="text-right">%</span>
+          </div>
+          <div className="divide-y divide-border">
+            {donutRows.map((row) => {
+              const percent = pieTotal > 0 ? (row.value / pieTotal) * 100 : 0;
+              return (
+                <div key={row.key} className="grid grid-cols-[1fr_72px_56px] items-center px-3 py-2.5 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                    <span className="truncate text-foreground">{row.label}</span>
+                  </div>
+                  <span className="text-right font-semibold text-foreground tabular-nums">{row.value.toFixed(1)}</span>
+                  <span className="text-right font-semibold text-muted-foreground tabular-nums">{percent.toFixed(1)}%</span>
+                </div>
+              );
+            })}
+            {donutRows.length === 0 && (
+              <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+                Add partners to see equity breakdown.
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="flex flex-col gap-0">
