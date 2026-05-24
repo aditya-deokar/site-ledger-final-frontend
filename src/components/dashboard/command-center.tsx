@@ -26,7 +26,7 @@ import {
   useDeleteInvestor,
   useAddTransaction,
 } from '@/hooks/api/investor.hooks';
-import { useCreateVendor, useCreateVendorDocument, usePatchVendorStatus, useUpdateVendor, useVendors } from '@/hooks/api/vendor.hooks';
+import { useCreateVendor, usePatchVendorStatus, useUpdateVendor, useVendors } from '@/hooks/api/vendor.hooks';
 import { useAllCustomers, useUpdateCustomer, useRecordCustomerPayment, useCancelDeal } from '@/hooks/api/customer.hooks';
 import {
   employeeKeys,
@@ -418,16 +418,12 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
   const vendors = vendorsData?.data?.vendors ?? [];
   const vendorTypeOptions = useMemo(() => buildVendorTypeOptions(vendors), [vendors]);
   const { mutateAsync: createVendorQuick, isPending: isCreatingVendorQuick } = useCreateVendor();
-  const { mutateAsync: createVendorDocument } = useCreateVendorDocument();
   const [showQuickVendorCreate, setShowQuickVendorCreate] = useState(false);
   const [quickVendorName, setQuickVendorName] = useState('');
   const [quickVendorCategory, setQuickVendorCategory] = useState<string>(COMMON_VENDOR_CATEGORIES[0]);
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  const [isUploadingInvoice, setIsUploadingInvoice] = useState(false);
   const { mutateAsync: addExpense, isPending, error } = useAddExpense(site.id, {
     onSuccess: () => {
       reset();
-      setInvoiceFile(null);
       toast.success('Expense added');
       onSuccess();
     }
@@ -439,7 +435,6 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
       reason: '',
       vendorId: '',
       description: '',
-      billNumber: '',
       billDate: getTodayDateInputValue(),
       dueDate: getTodayDateInputValue(),
       amount: 0,
@@ -465,10 +460,9 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
       ...d,
       reason: d.type === 'GENERAL' ? d.reason || undefined : undefined,
       description: d.description || undefined,
-      billNumber: d.type === 'VENDOR' ? d.billNumber?.trim() || undefined : undefined,
       billDate: d.type === 'VENDOR' && d.billDate ? toIsoDate(d.billDate) : undefined,
       dueDate: d.type === 'VENDOR' && d.dueDate ? toIsoDate(d.dueDate) : undefined,
-      paymentDate: d.paymentDate ? toIsoDate(d.paymentDate) : undefined,
+      paymentDate: d.paymentDate || undefined,
       vendorId: d.type === 'VENDOR' ? d.vendorId || undefined : undefined,
       amountPaid: paidAmount === 0 ? undefined : paidAmount,
       paymentMode: paidAmount > 0 ? d.paymentMode : undefined,
@@ -482,30 +476,7 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
     }
 
     try {
-      const response = await addExpense(payload);
-
-      if (payload.type === 'VENDOR' && payload.vendorId && invoiceFile) {
-        const expenseId = response?.data?.expense?.id as string | undefined;
-        if (expenseId) {
-          setIsUploadingInvoice(true);
-          try {
-            const fileUrl = await vendorService.uploadVendorDocumentToS3(invoiceFile);
-            await createVendorDocument({
-              vendorId: payload.vendorId,
-              data: {
-                documentType: 'Invoice',
-                documentName: invoiceFile.name,
-                fileUrl,
-                siteId: site.id,
-                expenseId,
-                note: payload.description || payload.reason || undefined,
-              },
-            });
-          } finally {
-            setIsUploadingInvoice(false);
-          }
-        }
-      }
+      await addExpense(payload);
     } catch (submitError) {
       toast.error(getApiErrorMessage(submitError, 'Failed to add expense'));
     }
@@ -542,7 +513,7 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
     <FormShell 
       title={`Add Expense in ${site?.name}`} 
       onBack={onBack} 
-      isPending={isPending || isCreatingVendorQuick || isUploadingInvoice} 
+      isPending={isPending || isCreatingVendorQuick} 
       submitLabel="Save Expense" 
       formId="add-site-expense-form"
     >
@@ -636,10 +607,7 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
               )}
             </Field>
 
-            <div className="grid grid-cols-3 gap-4">
-              <Field label="Bill Number">
-                <input placeholder="Supplier invoice / bill no." className={INPUT_CLS} {...register('billNumber')} />
-              </Field>
+            <div className="grid grid-cols-2 gap-4">
               <Field label="Bill Date">
                 <input type="date" className={INPUT_CLS} {...register('billDate')} />
               </Field>
@@ -704,21 +672,6 @@ function AddSiteExpenseForm({ site, onSuccess, onBack, onVendorChange }: { site:
         <Field label="Description (optional)">
           <textarea className={cn(INPUT_CLS, 'min-h-16 resize-none py-3')} {...register('description')} />
         </Field>
-
-        {expenseType === 'VENDOR' && (
-          <Field label="Invoice Attachment (optional)">
-            <label className="flex h-20 cursor-pointer items-center justify-center border border-dashed border-border bg-muted/20 text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-              <input
-                type="file"
-                className="hidden"
-                accept=".pdf,image/png,image/jpeg,image/webp"
-                onChange={(event) => setInvoiceFile(event.target.files?.[0] ?? null)}
-              />
-              {invoiceFile ? invoiceFile.name : 'Choose invoice PDF or image'}
-            </label>
-            <p className="mt-1 text-[9px] text-muted-foreground/50">The file will be stored as a vendor document and linked to the created bill.</p>
-          </Field>
-        )}
       </form>
     </FormShell>
   );

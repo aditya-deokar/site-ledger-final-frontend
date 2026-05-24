@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { createExpenseSchema, CreateExpenseInput, Expense } from "@/schemas/site.schema"
 import { useExpenses, useAddExpense, useUpdateExpensePayment } from "@/hooks/api/site.hooks"
 import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
-import { useVendors } from "@/hooks/api/vendor.hooks"
+import { useCreateVendorDocument, useVendors } from "@/hooks/api/vendor.hooks"
 import { Vendor } from "@/schemas/vendor.schema"
 import { SearchableSelect } from "@/components/dashboard/navigator/form-primitives"
 import { Input } from "@/components/ui/input"
@@ -17,8 +17,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { exportElementToPdf } from "@/lib/pdf-export"
 import { buildVendorWorkspacePath } from "@/lib/vendor-workspace"
+import { vendorService } from "@/services/vendor.service"
 import { toast } from "sonner"
-import { Loader2, Plus, X, FileText, Users2, FileSpreadsheet, Eye, Search } from "lucide-react"
+import { Loader2, Plus, X, FileText, Users2, FileSpreadsheet, Eye, Search, Upload } from "lucide-react"
 
 function formatINR(n: number) {
   return "₹" + n.toLocaleString("en-IN")
@@ -48,9 +49,12 @@ function AddExpensePanel({
   remainingFund: number
   onClose: () => void
 }) {
-  const { mutate: addExpense, isPending, error } = useAddExpense(siteId, { onSuccess: onClose })
+  const { mutateAsync: addExpense, isPending, error } = useAddExpense(siteId)
+  const { mutateAsync: createVendorDocument } = useCreateVendorDocument()
   const { data: vendorData } = useVendors()
   const vendors: Vendor[] = vendorData?.data?.vendors ?? []
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
+  const [isUploadingInvoice, setIsUploadingInvoice] = useState(false)
 
   const { register, handleSubmit, watch, control, setValue, formState: { errors } } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
@@ -60,16 +64,44 @@ function AddExpensePanel({
   const expenseType = watch("type")
   const selectedVendorId = watch("vendorId") || ""
 
-  const onSubmit = (data: CreateExpenseInput) => {
+  const onSubmit = async (data: CreateExpenseInput) => {
     const payload: CreateExpenseInput = {
       ...data,
       vendorId: data.type === "VENDOR" ? data.vendorId : undefined,
       reason: data.reason || undefined,
       description: data.description || undefined,
       amountPaid: isNaN(data.amountPaid as number) ? 0 : data.amountPaid,
-      paymentDate: data.paymentDate ? new Date(data.paymentDate).toISOString() : undefined,
+      paymentDate: data.paymentDate || undefined,
     }
-    addExpense(payload)
+
+    try {
+      const response = await addExpense(payload)
+      const expenseId = response?.data?.expense?.id as string | undefined
+
+      if (payload.type === "VENDOR" && payload.vendorId && invoiceFile && expenseId) {
+        setIsUploadingInvoice(true)
+        try {
+          const fileUrl = await vendorService.uploadVendorDocumentToS3(invoiceFile)
+          await createVendorDocument({
+            vendorId: payload.vendorId,
+            data: {
+              documentType: "Invoice",
+              documentName: invoiceFile.name,
+              fileUrl,
+              siteId,
+              expenseId,
+              note: payload.description || payload.reason || undefined,
+            },
+          })
+        } finally {
+          setIsUploadingInvoice(false)
+        }
+      }
+
+      onClose()
+    } catch (submitError) {
+      console.error("Failed to add expense", submitError)
+    }
   }
 
   return (
@@ -188,37 +220,49 @@ function AddExpensePanel({
               />
             </div>
 
+            {expenseType === "VENDOR" && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
+                  Bill Attachment
+                </Label>
+                <label className="flex h-11 cursor-pointer items-center gap-2 border border-dashed border-border bg-muted px-3 text-sm text-foreground">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                  <span className="truncate">{invoiceFile ? invoiceFile.name : ""}</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                    onChange={(event) => setInvoiceFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
+            )}
+
             {/* Bill and initial payment row */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                  Bill Amount (â‚¹)
+                  Bill Amount
                 </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">â‚¹</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-11 pl-8 bg-muted border-none rounded-none text-sm"
-                    {...register("amount", { valueAsNumber: true })}
-                  />
-                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-11 bg-muted border-none rounded-none text-sm"
+                  {...register("amount", { valueAsNumber: true })}
+                />
                 {errors.amount && <p className="text-[10px] text-destructive">{errors.amount.message}</p>}
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
-                  Initial Payment (â‚¹)
+                  Initial Payment
                 </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">â‚¹</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-11 pl-8 bg-muted border-none rounded-none text-sm"
-                    {...register("amountPaid", { valueAsNumber: true })}
-                  />
-                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-11 bg-muted border-none rounded-none text-sm"
+                  {...register("amountPaid", { valueAsNumber: true })}
+                />
                 {errors.amountPaid && <p className="text-[10px] text-destructive">{errors.amountPaid.message}</p>}
               </div>
             </div>
@@ -252,10 +296,10 @@ function AddExpensePanel({
           <div className="px-8 py-6 border-t border-border">
             <Button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || isUploadingInvoice}
               className="w-full h-14 bg-primary text-black font-bold text-[11px] tracking-[0.2em] uppercase rounded-none gap-2"
             >
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Record Bill"}
+              {isPending || isUploadingInvoice ? <Loader2 className="w-4 h-4 animate-spin" /> : "Record Bill"}
             </Button>
           </div>
         </form>
@@ -313,7 +357,7 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
     const header = ["Type", "Bill", "Vendor", "Recorded", "Paid", "Due", "Status"]
     const body = expenses.map((exp) => [
       exp.type,
-      exp.reason || exp.description || "-",
+      exp.billNumber ? `Bill ${exp.billNumber}` : exp.reason || exp.description || "Bill",
       exp.vendorName || "-",
       formatDate(exp.createdAt),
       exp.amountPaid,
@@ -460,11 +504,15 @@ export function ExpensesTab({ siteId, remainingFund }: { siteId: string; remaini
                 {/* Bill */}
                 <div className="col-span-3">
                   <p className="text-sm font-serif text-foreground tracking-tight truncate">
-                    {exp.reason || exp.description || "â€”"}
+                    {exp.billNumber ? `Bill ${exp.billNumber}` : exp.reason || exp.description || "Bill"}
                   </p>
-                  {exp.reason && exp.description && (
+                  {exp.billNumber ? (
+                    <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                      {exp.reason || exp.description || "Expense entry"}
+                    </p>
+                  ) : exp.reason && exp.description ? (
                     <p className="text-[10px] text-muted-foreground truncate mt-0.5">{exp.description}</p>
-                  )}
+                  ) : null}
                   <p className="text-[10px] font-bold tracking-widest uppercase text-red-500 mt-1">{formatINR(exp.amount)}</p>
                 </div>
 

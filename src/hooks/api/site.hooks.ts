@@ -278,8 +278,11 @@ export const useAddExpense = (siteId: string, options?: { onSuccess?: () => void
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       queryClient.invalidateQueries({ queryKey: ['vendor'] });
       queryClient.invalidateQueries({ queryKey: ['vendorTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorBills'] });
       queryClient.invalidateQueries({ queryKey: ['vendorPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorReceipts'] });
       queryClient.invalidateQueries({ queryKey: ['vendorStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorDocuments'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
       queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
@@ -342,8 +345,11 @@ export const useUpdateExpensePayment = (siteId: string, options?: { onSuccess?: 
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       queryClient.invalidateQueries({ queryKey: ['vendor'] });
       queryClient.invalidateQueries({ queryKey: ['vendorTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorBills'] });
       queryClient.invalidateQueries({ queryKey: ['vendorPayments'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorReceipts'] });
       queryClient.invalidateQueries({ queryKey: ['vendorStatement'] });
+      queryClient.invalidateQueries({ queryKey: ['vendorDocuments'] });
       queryClient.invalidateQueries({ queryKey: siteKeys.detail(siteId) });
       queryClient.invalidateQueries({ queryKey: siteKeys.all });
       queryClient.invalidateQueries({ queryKey: ['company'] });

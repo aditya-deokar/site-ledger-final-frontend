@@ -25,7 +25,7 @@ export default function VendorWorkspaceRoute() {
   }
 
   return (
-    <div className="px-4 py-6 lg:px-8">
+    <div className="px-4  lg:px-8">
       <VendorProfile
         vendorId={vendorId}
         initialTab={initialTab}

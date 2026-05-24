@@ -23,6 +23,7 @@ import {
 import {
   DocumentModel,
   confirmDocumentUpload,
+  fetchDocumentBlob,
   deleteDocument,
   getEntityDocuments,
   requestPresignedUrl,
@@ -130,6 +131,22 @@ export function DocumentManager({
     }
   }
 
+  async function handleViewDocument(doc: DocumentModel) {
+    try {
+      setError(null)
+      const fileBlob = await fetchDocumentBlob(doc.fileUrl)
+      const previewBlob = doc.mimeType && fileBlob.type !== doc.mimeType
+        ? new Blob([fileBlob], { type: doc.mimeType })
+        : fileBlob
+      const objectUrl = URL.createObjectURL(previewBlob)
+      window.open(objectUrl, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (err) {
+      console.error('Failed to open document', err)
+      setError('Failed to open document preview.')
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -187,14 +204,13 @@ export function DocumentManager({
                     <div className="flex justify-end gap-1">
                       {(doc.mimeType?.startsWith('image/') || doc.mimeType === 'application/pdf') && (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="sm"
-                          asChild
                           title="View Document"
+                          onClick={() => handleViewDocument(doc)}
                         >
-                          <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                            <EyeIcon className="w-4 h-4" />
-                          </a>
+                          <EyeIcon className="w-4 h-4" />
                         </Button>
                       )}
                       <Button

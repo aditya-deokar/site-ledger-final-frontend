@@ -40,14 +40,6 @@ export const recordPaymentSchema = z.object({
   paymentMode: paymentModeSchema,
   referenceNumber: optionalTextFieldSchema,
   paymentDate: optionalTextFieldSchema,
-}).superRefine((data, ctx) => {
-  if (data.paymentMode !== 'CASH' && !data.referenceNumber?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Reference number is required for non-cash payments',
-      path: ['referenceNumber'],
-    });
-  }
 }).transform((data) => ({
   amount: data.amount,
   note: data.note?.trim() || undefined,

@@ -52,7 +52,7 @@ function getPaymentModeLabel(mode?: string | null) {
     case 'UPI':
       return 'UPI';
     default:
-      return 'Not recorded';
+      return '';
   }
 }
 
@@ -115,7 +115,7 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
     .filter(Boolean)
     .join(' • ');
   const paymentParticulars = [
-    `Paid via ${getPaymentModeLabel(receipt.paymentMode)}`,
+    receipt.paymentMode ? `Paid via ${getPaymentModeLabel(receipt.paymentMode)}` : null,
     receipt.referenceNumber ? `Ref ${receipt.referenceNumber}` : null,
     receipt.note,
   ]
@@ -140,7 +140,7 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
           </div>
         </div>
 
-        <div style="min-width:220px;border:1px solid #d4d4d4;border-radius:6px;background:#fafafa;padding:12px 16px;text-align:center;">
+        <div style="min-width:220px;padding:12px 16px;text-align:center;">
           <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;color:#4b5563;">Payment Receipt</p>
           <p style="margin:8px 0 0;font-size:20px;font-weight:800;color:#111827;">${escapeHtml(receipt.receiptNumber)}</p>
           <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(formatShortDate(receipt.date))}</p>
@@ -153,9 +153,7 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
           <p style="margin:8px 0 0;font-size:24px;font-weight:800;color:#111827;">${escapeHtml(formatINR(receipt.amount))}</p>
           <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">Payment issued to ${escapeHtml(receipt.vendorName)}</p>
         </div>
-        <div style="min-width:120px;border:1px solid #d4d4d4;border-radius:6px;background:#ffffff;padding:10px 16px;text-align:center;font-size:16px;font-weight:700;color:#111827;">
-          ${escapeHtml(getPaymentModeLabel(receipt.paymentMode))}
-        </div>
+        ${receipt.paymentMode ? `<div style="min-width:120px;border:1px solid #d4d4d4;border-radius:6px;background:#ffffff;padding:10px 16px;text-align:center;font-size:16px;font-weight:700;color:#111827;">${escapeHtml(getPaymentModeLabel(receipt.paymentMode))}</div>` : ''}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:20px;">
@@ -178,8 +176,8 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
         <div style="padding:0 0 0 14px;">
           <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #d4d4d4;padding-bottom:4px;">Transaction</p>
           ${buildInfoRow('Date', formatShortDate(receipt.date))}
-          ${buildInfoRow('Mode', getPaymentModeLabel(receipt.paymentMode))}
-          ${buildInfoRow('Reference', receipt.referenceNumber ?? 'Not recorded')}
+          ${receipt.paymentMode ? buildInfoRow('Mode', getPaymentModeLabel(receipt.paymentMode)) : ''}
+          ${receipt.referenceNumber ? buildInfoRow('Reference', receipt.referenceNumber) : ''}
           ${buildInfoRow('Note', receipt.note)}
         </div>
       </div>
@@ -221,9 +219,9 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
         </table>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:36px;">
-        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:8px;font-size:12px;color:#6b7280;">Vendor Signature</div>
-        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:8px;font-size:12px;color:#6b7280;text-align:right;">Authorised Signatory</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:48px;">
+        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:14px;font-size:12px;color:#6b7280;">Vendor Signature</div>
+        <div style="width:220px;border-top:1px solid #9ca3af;padding-top:14px;font-size:12px;color:#6b7280;text-align:right;">Authorised Signatory</div>
       </div>
 
       <p style="margin:20px 0 0;font-size:11px;color:#6b7280;text-align:center;">

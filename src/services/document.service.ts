@@ -39,6 +39,10 @@ export async function getEntityDocuments(entityType: string, entityId: string): 
   return data
 }
 
+export async function fetchDocumentBlob(fileUrl: string): Promise<Blob> {
+  return api.get(fileUrl, { responseType: 'blob' })
+}
+
 export async function deleteDocument(id: string): Promise<void> {
   await api.delete(`/global-documents/${id}`)
 }

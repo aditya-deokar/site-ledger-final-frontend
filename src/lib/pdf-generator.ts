@@ -950,14 +950,14 @@ export async function generateReceiptPDF(data: ReceiptData, filename: string) {
   }
 
   // ─── SIGNATURE + FOOTER ───────────────────────────────────────────────────
-  y += 5
+  y += 2
   doc.setDrawColor(180, 180, 180)
   doc.setLineWidth(0.3)
   doc.line(ml, y, ml + 45, y)
   doc.line(pageWidth - mr - 45, y, pageWidth - mr, y)
   setFont("normal", 6.5, 140)
-  doc.text("Customer Signature", ml, y + 4)
-  doc.text("Authorised Signatory", pageWidth - mr, y + 4, { align: "right" })
+  doc.text("Customer Signature", ml, y + 3.4)
+  doc.text("Authorised Signatory", pageWidth - mr, y + 3.4, { align: "right" })
 
   doc.setFillColor(255, 255, 255)
   doc.rect(0, pageHeight - 8, pageWidth, 8, "F")
@@ -1677,10 +1677,6 @@ export async function generateVendorReceiptPDF(data: VendorReceiptPdfData, filen
   })
 
   // Receipt badge top-right
-  doc.setFillColor(245, 245, 245)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(badgeX, 2, 58, 14, 1, 1, "FD")
   setFont("bold", 6.5, 80)
   doc.text("VENDOR PAYMENT RECEIPT", badgeX + 29, 6.5, { align: "center" })
   setFont("bold", 7.5, 0)
@@ -1768,7 +1764,7 @@ export async function generateVendorReceiptPDF(data: VendorReceiptPdfData, filen
   lh3 += 4
   lh3 += infoRow("DATE", data.receiptDate, c3, gridY + lh3, colInnerW)
   lh3 += infoRow("MODE", data.paymentMode, c3, gridY + lh3, colInnerW)
-  lh3 += infoRow("REFERENCE", data.referenceNumber || "—", c3, gridY + lh3, colInnerW)
+  lh3 += infoRow("REFERENCE", data.referenceNumber || undefined, c3, gridY + lh3, colInnerW)
   lh3 += infoRow("NOTE", data.note, c3, gridY + lh3, colInnerW)
 
   const maxLH = Math.max(lh1, lh2, lh3) + 2
@@ -1782,14 +1778,14 @@ export async function generateVendorReceiptPDF(data: VendorReceiptPdfData, filen
   y = gridY + maxLH + 4
 
   // ─── SIGNATURE + FOOTER ───────────────────────────────────────────────────
-  y += 5
+  y += 8
   doc.setDrawColor(180, 180, 180)
   doc.setLineWidth(0.3)
   doc.line(ml, y, ml + 45, y)
   doc.line(pageWidth - mr - 45, y, pageWidth - mr, y)
   setFont("normal", 6.5, 140)
-  doc.text("Vendor Acknowledgement", ml, y + 4)
-  doc.text("Authorised Signatory", pageWidth - mr, y + 4, { align: "right" })
+  doc.text("Vendor Acknowledgement", ml, y + 5.5)
+  doc.text("Authorised Signatory", pageWidth - mr, y + 5.5, { align: "right" })
 
   doc.setFillColor(255, 255, 255)
   doc.rect(0, pageHeight - 8, pageWidth, 8, "F")
@@ -1878,10 +1874,6 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
     headerLineY += 4
   })
 
-  doc.setFillColor(245, 245, 245)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(badgeX, 2, 58, 14, 1, 1, "FD")
   setFont("bold", 6.5, 80)
   doc.text("PAYMENT RECEIPT", badgeX + 29, 6.5, { align: "center" })
   setFont("bold", 7.5, 0)
@@ -1957,7 +1949,7 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
   lh3 += 4
   lh3 += infoRow("DATE", data.receiptDate, c3, gridY + lh3, colInnerW)
   lh3 += infoRow("MODE", data.paymentMode, c3, gridY + lh3, colInnerW)
-  lh3 += infoRow("REFERENCE", data.referenceNumber || "—", c3, gridY + lh3, colInnerW)
+  lh3 += infoRow("REFERENCE", data.referenceNumber || undefined, c3, gridY + lh3, colInnerW)
   lh3 += infoRow("NOTE", data.note, c3, gridY + lh3, colInnerW)
 
   const maxLH = Math.max(lh1, lh2, lh3) + 2
@@ -2004,7 +1996,7 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
     data.siteName ? `Site: ${data.siteName}` : null,
   ].filter(Boolean).join(" • ")
   const paymentParticulars = [
-    `Paid via ${data.paymentMode}`,
+    data.paymentMode ? `Paid via ${data.paymentMode}` : null,
     data.referenceNumber ? `Ref ${data.referenceNumber}` : null,
     data.note ?? null,
   ].filter(Boolean).join(" • ")
@@ -2060,14 +2052,14 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
     y += 5.5
   })
 
-  y += 8
+  y += 11
   doc.setDrawColor(180, 180, 180)
   doc.setLineWidth(0.3)
   doc.line(ml, y, ml + 45, y)
   doc.line(pageWidth - mr - 45, y, pageWidth - mr, y)
   setFont("normal", 6.5, 140)
-  doc.text("Vendor Signature", ml, y + 4)
-  doc.text("Authorised Signatory", pageWidth - mr, y + 4, { align: "right" })
+  doc.text("Vendor Signature", ml, y + 5.5)
+  doc.text("Authorised Signatory", pageWidth - mr, y + 5.5, { align: "right" })
 
   doc.setFillColor(255, 255, 255)
   doc.rect(0, pageHeight - 8, pageWidth, 8, "F")

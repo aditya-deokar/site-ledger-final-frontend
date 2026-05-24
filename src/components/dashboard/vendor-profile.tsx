@@ -1,7 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, Download, Eye, FileUp, Loader2, Printer, Trash2 } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  Building2,
+  ChevronLeft,
+  CircleDot,
+  Download,
+  Eye,
+  FileUp,
+  Landmark,
+  Loader2,
+  MapPin,
+  Printer,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -77,10 +89,52 @@ function DetailPair({ label, value }: { label: string; value: string | number | 
 
 function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="border border-border bg-muted/20 p-4">
+    <div className="border border-border bg-card p-4">
       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</p>
       <p className={cn('mt-2 text-2xl font-serif text-foreground', tone)}>{value}</p>
     </div>
+  );
+}
+
+function InfoPill({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Building2;
+  label: string;
+  value: string | number | null | undefined;
+}) {
+  return (
+    <div className="flex items-start gap-3 border border-border/60 bg-background/80 px-3 py-2">
+      <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-border/60 bg-muted/40 text-muted-foreground">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{value || '-'}</p>
+      </div>
+    </div>
+  );
+}
+
+function ProfileSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="border border-border bg-card">
+      <div className="border-b border-border px-5 py-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-foreground">{title}</p>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
   );
 }
 
@@ -88,6 +142,15 @@ export type VendorProfileTab = VendorWorkspaceTab;
 
 function normalizeVendorProfileTab(tab?: VendorProfileTab | null): VendorProfileTab {
   return tab ?? 'overview';
+}
+
+function downloadFile(url: string, fileName: string) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 function PaymentBridge({
@@ -168,6 +231,18 @@ export function VendorProfile({
   const statement = statementData?.data?.statement ?? [];
   const documents = documentsData?.data?.documents ?? [];
   const sites = sitesData?.data?.sites ?? [];
+  const documentsByExpenseId = useMemo(() => {
+    const map = new Map<string, VendorDocument[]>();
+
+    for (const document of documents) {
+      if (!document.expenseId) continue;
+      const group = map.get(document.expenseId) ?? [];
+      group.push(document);
+      map.set(document.expenseId, group);
+    }
+
+    return map;
+  }, [documents]);
 
   const billOptions = useMemo(
     () => bills.map((bill) => ({ id: bill.id, label: `${bill.billNumber || bill.description || 'Vendor bill'} / ${bill.siteName}` })),
@@ -226,43 +301,94 @@ export function VendorProfile({
   };
 
   const displayVendorName = vendor?.name || vendorName || 'Vendor';
+  const activeAssignments = vendor?.assignments?.filter((assignment) => assignment.status === 'ACTIVE') ?? [];
 
   return (
     <>
       <div className="space-y-6 animate-in fade-in duration-300">
-        <div className="border border-border bg-card p-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </button>
+        <div className="border border-border bg-card">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.5fr)_23rem]">
+            <div className="p-6">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 transition-colors hover:text-foreground"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </button>
 
-          <div className="mt-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Vendor Workspace</p>
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h3 className="text-3xl font-serif text-foreground">{displayVendorName}</h3>
-              {vendor && (
-                <span className={cn('border px-2 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
-                  {vendor.status}
-                </span>
-              )}
+              <div className="mt-5 space-y-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Vendor Workspace</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <h3 className="text-3xl font-serif leading-none text-foreground sm:text-4xl">{displayVendorName}</h3>
+                    {vendor && (
+                      <span className={cn('border px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest', statusTone(vendor.status))}>
+                        {vendor.status}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    {vendor?.notes?.trim()
+                      ? vendor.notes
+                      : 'A compact view of vendor identity, contact details, banking information, active sites, and payment health.'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                  <span className="border border-border bg-muted/30 px-2.5 py-1">{vendor?.type || 'Unclassified vendor'}</span>
+                  <span className="border border-border bg-muted/30 px-2.5 py-1">{vendor?.contactPersonName || 'No contact name'}</span>
+                  <span className="border border-border bg-muted/30 px-2.5 py-1">{vendor?.paymentTermsDays ? `${vendor.paymentTermsDays} day terms` : 'Terms not set'}</span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <InfoPill icon={CircleDot} label="Primary Contact" value={vendor?.contactPersonName || vendor?.phone} />
+                  <InfoPill icon={MapPin} label="Location" value={vendor?.address} />
+                  <InfoPill icon={Landmark} label="Banking" value={vendor?.bankName || vendor?.upiId} />
+                </div>
+              </div>
             </div>
-            <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-              Category: {vendor?.type || '-'}
-            </p>
+
+            <div className="border-t border-border bg-muted/20 p-6 lg:border-l lg:border-t-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground/60">Financial Snapshot</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="border border-border bg-background px-4 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Outstanding</p>
+                  <p className={cn('mt-2 text-3xl font-serif', vendor && vendor.totalOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600')}>
+                    {formatINR(vendor?.totalOutstanding ?? 0)}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-border bg-background px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Billed</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{formatINR(vendor?.totalBilled ?? 0)}</p>
+                  </div>
+                  <div className="border border-border bg-background px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Paid</p>
+                    <p className="mt-2 text-lg font-semibold text-emerald-700">{formatINR(vendor?.totalPaid ?? 0)}</p>
+                  </div>
+                  <div className="border border-border bg-background px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Overdue</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{vendor?.overdueBillCount ?? 0}</p>
+                  </div>
+                  <div className="border border-border bg-background px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Documents</p>
+                    <p className="mt-2 text-lg font-semibold text-foreground">{vendor?.documentCount ?? 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {vendor && (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <SummaryCard label="Outstanding" value={formatINR(vendor.totalOutstanding)} tone={vendor.totalOutstanding > 0 ? 'text-rose-600' : 'text-emerald-600'} />
-            <SummaryCard label="Total Billed" value={formatINR(vendor.totalBilled)} />
-            <SummaryCard label="Total Paid" value={formatINR(vendor.totalPaid)} tone="text-emerald-700" />
-            <SummaryCard label="Overdue Bills" value={String(vendor.overdueBillCount)} tone={vendor.overdueBillCount > 0 ? 'text-amber-700' : undefined} />
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+            <SummaryCard label="Active Sites" value={String(activeAssignments.length || vendor.siteCount || 0)} />
+            <SummaryCard label="Bills Logged" value={String(vendor.billCount)} />
+            <SummaryCard label="Payments Logged" value={String(vendor.paymentCount)} tone="text-emerald-700" />
             <SummaryCard label="Documents" value={String(vendor.documentCount)} />
+            <SummaryCard label="Total Billed" value={formatINR(vendor.totalBilled)} />
           </div>
         )}
 
@@ -299,37 +425,74 @@ export function VendorProfile({
                   <TabsContent value="overview" className="space-y-6">
                     {vendor ? (
                       <>
-                        <div className="grid gap-6 lg:grid-cols-2">
-                          <div className="space-y-4">
-                            <h4 className="text-sm font-bold uppercase tracking-widest text-foreground">Master Profile</h4>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <DetailPair label="Vendor Name" value={vendor.name} />
-                              <DetailPair label="Category" value={vendor.type} />
-                              <DetailPair label="Contact Person" value={vendor.contactPersonName} />
-                              <DetailPair label="Phone" value={vendor.phone} />
-                              <DetailPair label="Email" value={vendor.email} />
-                              <DetailPair label="Address" value={vendor.address} />
-                              <DetailPair label="GSTIN" value={vendor.gstin} />
-                              <DetailPair label="PAN" value={vendor.pan} />
-                            </div>
+                        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.9fr)]">
+                          <div className="space-y-6">
+                            <ProfileSection
+                              title="Identity & Contact"
+                              description="Core profile details for day-to-day communication."
+                            >
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <DetailPair label="Vendor Name" value={vendor.name} />
+                                <DetailPair label="Category" value={vendor.type} />
+                                <DetailPair label="Contact Person" value={vendor.contactPersonName} />
+                                <DetailPair label="Phone" value={vendor.phone} />
+                                <DetailPair label="Email" value={vendor.email} />
+                                <DetailPair label="Address" value={vendor.address} />
+                              </div>
+                            </ProfileSection>
+
+                            <ProfileSection
+                              title="Compliance & Payout"
+                              description="Tax and payment rails grouped together for faster verification."
+                            >
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <DetailPair label="GSTIN" value={vendor.gstin} />
+                                <DetailPair label="PAN" value={vendor.pan} />
+                                <DetailPair label="Bank Name" value={vendor.bankName} />
+                                <DetailPair label="Bank Account Name" value={vendor.bankAccountName} />
+                                <DetailPair label="Account Number" value={vendor.accountNumber} />
+                                <DetailPair label="IFSC Code" value={vendor.ifscCode} />
+                                <DetailPair label="UPI ID" value={vendor.upiId} />
+                                <DetailPair label="Payment Terms" value={vendor.paymentTermsDays ? `${vendor.paymentTermsDays} days` : '-'} />
+                              </div>
+                            </ProfileSection>
                           </div>
 
-                          <div className="space-y-4">
-                            <h4 className="text-sm font-bold uppercase tracking-widest text-foreground">Finance & Terms</h4>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <DetailPair label="Payment Terms" value={vendor.paymentTermsDays ? `${vendor.paymentTermsDays} days` : '-'} />
-                              <DetailPair label="Last Bill Date" value={formatDate(vendor.lastBillDate)} />
-                              <DetailPair label="Last Payment Date" value={formatDate(vendor.lastPaymentDate)} />
-                              <DetailPair label="Current Status" value={vendor.status} />
-                            </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <DetailPair label="Bank Name" value={vendor.bankName} />
-                              <DetailPair label="Bank Account Name" value={vendor.bankAccountName} />
-                              <DetailPair label="Account Number" value={vendor.accountNumber} />
-                              <DetailPair label="IFSC Code" value={vendor.ifscCode} />
-                              <DetailPair label="UPI ID" value={vendor.upiId} />
-                              <DetailPair label="Documents" value={vendor.documentCount} />
-                            </div>
+                          <div className="space-y-6">
+                            <ProfileSection
+                              title="Operational Snapshot"
+                              description="Current status, activity dates, and where this vendor is active."
+                            >
+                              <div className="grid gap-3">
+                                <DetailPair label="Current Status" value={vendor.status} />
+                                <DetailPair label="Last Bill Date" value={formatDate(vendor.lastBillDate)} />
+                                <DetailPair label="Last Payment Date" value={formatDate(vendor.lastPaymentDate)} />
+                                <DetailPair label="Documents on File" value={vendor.documentCount} />
+                                <DetailPair label="Assigned Sites" value={vendor.siteCount} />
+                              </div>
+
+                              <div className="mt-4 border-t border-border pt-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Active Site Coverage</p>
+                                {activeAssignments.length > 0 ? (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {activeAssignments.map((assignment) => (
+                                      <span key={assignment.id} className="border border-border bg-muted/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-foreground/70">
+                                        {assignment.siteName}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="mt-3 text-sm text-muted-foreground">No active site assignments recorded.</p>
+                                )}
+                              </div>
+                            </ProfileSection>
+
+                            <ProfileSection
+                              title="Notes"
+                              description="Operational reminders and context for this vendor."
+                            >
+                              <p className="text-sm leading-7 text-foreground">{vendor.notes || 'No vendor notes recorded yet.'}</p>
+                            </ProfileSection>
                           </div>
                         </div>
 
@@ -354,11 +517,6 @@ export function VendorProfile({
                               ))}
                             </div>
                           </div>
-                        </div>
-
-                        <div className="space-y-3 border border-border bg-muted/20 p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Notes</p>
-                          <p className="text-sm leading-7 text-foreground">{vendor.notes || 'No vendor notes recorded yet.'}</p>
                         </div>
                       </>
                     ) : (
@@ -390,13 +548,41 @@ export function VendorProfile({
                               <p className="mt-1 text-xs text-muted-foreground">
                                 Due {formatDate(bill.dueDate)} {bill.isOverdue ? '/ OVERDUE' : ''} / {bill.documentCount} docs
                               </p>
+                              {(() => {
+                                const billDocuments = documentsByExpenseId.get(bill.id) ?? [];
+                                if (billDocuments.length === 0) return null;
+
+                                const primaryDocument = billDocuments[0];
+                                return (
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => window.open(primaryDocument.fileUrl, '_blank', 'noopener,noreferrer')}
+                                      className="h-7 rounded-none px-2 text-[9px] font-bold uppercase tracking-widest"
+                                    >
+                                      <Eye className="mr-1 h-3.5 w-3.5" />
+                                      View Bill
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() => downloadFile(primaryDocument.fileUrl, primaryDocument.documentName)}
+                                      className="h-7 rounded-none px-2 text-[9px] font-bold uppercase tracking-widest"
+                                    >
+                                      <Download className="mr-1 h-3.5 w-3.5" />
+                                      Download Bill
+                                    </Button>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <span className="truncate text-muted-foreground">{bill.siteName}</span>
                             <span className="font-semibold text-foreground">{formatINR(bill.amount)}</span>
                             <span className="font-semibold text-emerald-700">{formatINR(bill.amountPaid)}</span>
                             <span className={cn('font-semibold', bill.remaining > 0 ? 'text-rose-600' : 'text-emerald-700')}>{formatINR(bill.remaining)}</span>
                             <div className="flex justify-end">
-                              {bill.paymentStatus === 'COMPLETED' ? (
+                              {bill.remaining <= 0 || bill.amountPaid >= bill.amount || bill.paymentStatus === 'COMPLETED' ? (
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Settled</span>
                               ) : (
                                 <Button type="button" onClick={() => setPayBill(bill)} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">
