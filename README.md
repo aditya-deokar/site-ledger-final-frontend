@@ -8,8 +8,8 @@ This is the Next.js frontend for SiteLedger. It provides the authentication flow
 
 - Node.js 20+
 - A running backend API
-
-## Environment
+  
+##    Environment
 
 Copy `.env.example` to `.env` and update the values:
 
