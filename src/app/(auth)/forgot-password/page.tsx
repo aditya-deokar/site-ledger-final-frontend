@@ -14,12 +14,14 @@ import { Loader2, ArrowLeft, KeyRound } from 'lucide-react';
 import Link from 'next/link';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [otpValue, setOtpValue] = useState('');
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const { mutate: forgotPassword, isPending: isRequestPending } = useForgotPassword();
   const { mutate: verifyCode, isPending: isVerifyPending } = useVerifyResetCode();
@@ -33,9 +35,25 @@ export default function ForgotPasswordPage() {
     resolver: zodResolver(forgotPasswordSchema),
   });
 
-  const onSubmit = (formData: ForgotPasswordInput) => {
+  const onSubmit = async (formData: ForgotPasswordInput) => {
+    const payload = { ...formData };
+
+    if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      if (!executeRecaptcha) {
+        toast.error('Captcha is still loading. Please try again.');
+        return;
+      }
+
+      try {
+        payload.recaptchaToken = await executeRecaptcha('forgot_password_request');
+      } catch {
+        toast.error('Captcha verification failed. Please try again.');
+        return;
+      }
+    }
+
     setUserEmail(formData.email);
-    forgotPassword(formData, {
+    forgotPassword(payload, {
       onSuccess: () => {
         setVerificationRequired(true);
         toast.success('Reset code sent to your email');
@@ -46,14 +64,29 @@ export default function ForgotPasswordPage() {
     });
   };
 
-  const handleVerify = (code: string) => {
+  const handleVerify = async (code: string) => {
     if (code.length !== 6) return;
-    
-    verifyCode({ email: userEmail, code }, {
-      onSuccess: (response: any) => {
-        const resetToken = response.data?.data?.resetToken || response.data?.resetToken;
+
+    const payload: { email: string; code: string; recaptchaToken?: string } = { email: userEmail, code };
+
+    if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      if (!executeRecaptcha) {
+        toast.error('Captcha is still loading. Please try again.');
+        return;
+      }
+
+      try {
+        payload.recaptchaToken = await executeRecaptcha('forgot_password_verify');
+      } catch {
+        toast.error('Captcha verification failed. Please try again.');
+        return;
+      }
+    }
+
+    verifyCode(payload, {
+      onSuccess: () => {
         toast.success('Code verified. You can now reset your password.');
-        router.push(`/reset-password?token=${resetToken}`);
+        router.push('/reset-password');
       },
       onError: (err: any) => {
         toast.error(getApiErrorMessage(err, 'Invalid reset code.'));
@@ -63,7 +96,7 @@ export default function ForgotPasswordPage() {
 
   if (verificationRequired) {
     return (
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
+      <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
         <div className="flex flex-col gap-3">
           <Button 
             variant="ghost" 
@@ -135,7 +168,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-left-4 duration-500">
+    <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8 animate-in fade-in slide-in-from-left-4 duration-500">
       <div className="flex flex-col gap-3">
         <h1 className="text-3xl font-serif tracking-tight text-foreground sm:text-4xl">Reset Password</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">

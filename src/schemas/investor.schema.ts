@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const INVESTOR_TYPES = ['EQUITY', 'FIXED_RATE'] as const;
+export const FIXED_RATE_CADENCES = ['YEARLY', 'MONTHLY'] as const;
 export const INVESTOR_TRANSACTION_KINDS = ['PRINCIPAL_IN', 'PRINCIPAL_OUT', 'INTEREST'] as const;
 
 export const createInvestorSchema = z.object({
@@ -10,6 +11,58 @@ export const createInvestorSchema = z.object({
   siteId: z.string().optional(),
   equityPercentage: z.number().min(0).max(100).optional(),
   fixedRate: z.number().min(0).optional(),
+  fixedRateCadence: z.enum(FIXED_RATE_CADENCES).optional(),
+  investmentAmount: z.number().min(0).optional(),
+  amountPaidNow: z.number().min(0).optional(),
+  paymentMode: z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI']).optional(),
+  referenceNumber: z.string().optional(),
+  paymentDate: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.type === 'FIXED_RATE') {
+    if (data.fixedRate === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Fixed rate is required for fixed-rate investors',
+        path: ['fixedRate'],
+      });
+    }
+
+    if (!data.fixedRateCadence) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose yearly or monthly cadence',
+        path: ['fixedRateCadence'],
+      });
+    }
+  }
+
+  // Validation: amountPaidNow cannot exceed investmentAmount
+  if (data.amountPaidNow && data.investmentAmount && data.amountPaidNow > data.investmentAmount) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Amount paid now cannot exceed total investment amount',
+      path: ['amountPaidNow'],
+    });
+  }
+  
+  // Validation: payment details required if amountPaidNow > 0
+  if (data.amountPaidNow && data.amountPaidNow > 0) {
+    if (!data.paymentMode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Payment mode is required when recording payment',
+        path: ['paymentMode'],
+      });
+    }
+    
+    if (data.paymentMode !== 'CASH' && !data.referenceNumber?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Reference number required for non-cash payments',
+        path: ['referenceNumber'],
+      });
+    }
+  }
 });
 export type CreateInvestorInput = z.infer<typeof createInvestorSchema>;
 
@@ -18,6 +71,7 @@ export const updateInvestorSchema = z.object({
   phone: z.string().optional(),
   equityPercentage: z.number().min(0).max(100).optional(),
   fixedRate: z.number().min(0).optional(),
+  fixedRateCadence: z.enum(FIXED_RATE_CADENCES).optional(),
 });
 export type UpdateInvestorInput = z.infer<typeof updateInvestorSchema>;
 
@@ -38,6 +92,7 @@ export interface Investor {
   siteName: string | null;
   equityPercentage: number | null;
   fixedRate: number | null;
+  fixedRateCadence: (typeof FIXED_RATE_CADENCES)[number] | null;
   totalInvested: number;
   totalReturned: number;
   interestPaid: number;
@@ -68,6 +123,11 @@ export interface InvestorDetailResponse {
   data: { investor: Investor; transactions: Transaction[] };
 }
 
+export interface InvestorMutationResponse {
+  ok: boolean;
+  data: { investor: Investor };
+}
+
 export interface SiteInvestorsResponse {
   ok: boolean;
   data: { investors: { id: string; name: string; phone: string | null; equityPercentage: number | null; totalInvested: number; totalReturned: number; isClosed: boolean; createdAt: string }[]; totalInvested: number };
@@ -77,6 +137,7 @@ export interface TransactionsResponse {
   ok: boolean;
   data: {
     transactions: Transaction[];
+    summary?: { outstandingPrincipal: number; totalPaid: number; };
     totalInvested: number;
     totalReturned: number;
     interestPaid: number;

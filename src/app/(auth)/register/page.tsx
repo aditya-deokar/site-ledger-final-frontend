@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Loader2, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 
 export default function RegisterPage() {
   const [verificationRequired, setVerificationRequired] = useState(false);
@@ -23,6 +24,7 @@ export default function RegisterPage() {
 
   const { mutate: signUp, isPending: isSignUpPending, error: signUpError } = useSignUp();
   const { mutate: verifySignUp, isPending: isVerifyPending } = useVerifySignUp();
+  const { executeRecaptcha } = useGoogleReCaptcha();
   
   const {
     register,
@@ -30,6 +32,8 @@ export default function RegisterPage() {
     watch,
     formState: { errors, isValid },
     getValues,
+    setValue,
+    setError,
   } = useForm<SignUpInput>({
     resolver: zodResolver(signUpSchema),
     mode: 'onChange',
@@ -39,6 +43,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
+      recaptchaToken: '',
     },
   });
 
@@ -58,7 +63,21 @@ export default function RegisterPage() {
     });
   };
 
-  const onSubmit = (data: SignUpInput) => {
+  const onSubmit = async (data: SignUpInput) => {
+    if (process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      if (!executeRecaptcha) {
+        setError('recaptchaToken', { message: 'Captcha is still loading. Please try again.' });
+        return;
+      }
+
+      try {
+        data.recaptchaToken = await executeRecaptcha('signup');
+      } catch {
+        setError('recaptchaToken', { message: 'Captcha verification failed. Please try again.' });
+        return;
+      }
+    }
+
     requestVerificationCode(data);
   };
 
@@ -77,7 +96,7 @@ export default function RegisterPage() {
 
   if (verificationRequired) {
     return (
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
+      <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8 animate-in fade-in slide-in-from-right-4 duration-500">
         <div className="flex flex-col gap-3">
           <Button 
             variant="ghost" 
@@ -149,7 +168,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-left-4 duration-500">
+    <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8 animate-in fade-in slide-in-from-left-4 duration-500">
       <div className="flex flex-col gap-3">
         <h1 className="text-3xl font-serif tracking-tight text-foreground sm:text-4xl">Create Account</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
@@ -212,6 +231,10 @@ export default function RegisterPage() {
             error={errors.confirmPassword?.message}
             {...register('confirmPassword')}
           />
+
+          {errors.recaptchaToken && (
+            <p className="mt-2 text-[10px] font-medium text-destructive">{errors.recaptchaToken.message}</p>
+          )}
         </div>
 
         <Button type="submit" className="h-12 rounded-none font-bold tracking-[0.2em] uppercase text-[10px] gap-3 bg-primary text-black hover:bg-primary/90 transition-all shadow-lg shadow-primary/10" disabled={isSignUpPending || !isValid}>

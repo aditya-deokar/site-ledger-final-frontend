@@ -1,13 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-import {
-  ensureFreshAccessToken,
-  getStoredAccessToken,
-  getStoredRefreshToken,
-  isTokenExpiringSoon,
-} from '@/lib/auth-session';
+import { authService } from '@/services/auth.service';
+import { refreshSession } from '@/lib/auth-session';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -18,27 +13,38 @@ export function useAuthBootstrap() {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const accessToken = getStoredAccessToken();
-
-      if (accessToken && !isTokenExpiringSoon(accessToken, 5_000)) {
+      try {
+        await authService.getMe();
         if (!cancelled) {
           setStatus('authenticated');
         }
         return;
+      } catch (error: any) {
+        if (error?.status !== 401) {
+          if (!cancelled) {
+            setStatus('unauthenticated');
+          }
+          return;
+        }
       }
 
-      if (!accessToken && !getStoredRefreshToken()) {
+      const refreshed = await refreshSession();
+
+      if (cancelled) return;
+
+      if (!refreshed) {
         if (!cancelled) {
           setStatus('unauthenticated');
         }
         return;
       }
 
-      const refreshedAccessToken = await ensureFreshAccessToken();
-
-      if (cancelled) return;
-
-      setStatus(refreshedAccessToken ? 'authenticated' : 'unauthenticated');
+      try {
+        await authService.getMe();
+        setStatus('authenticated');
+      } catch {
+        setStatus('unauthenticated');
+      }
     };
 
     void bootstrap();

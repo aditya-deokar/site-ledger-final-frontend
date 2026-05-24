@@ -3,18 +3,30 @@
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useSiteInvestors, useCreateInvestor, useUpdateInvestor, useTransactions, useAddTransaction, useReturnInvestment, useUpdateInvestorPayment } from "@/hooks/api/investor.hooks"
+import { toast } from "sonner"
+import { useSiteInvestors, useCreateInvestor, useUpdateInvestor, useTransactions, useAddTransaction, usePayInterest, useUpdateInvestorPayment } from "@/hooks/api/investor.hooks"
 import { RecordPaymentModal } from "@/components/dashboard/record-payment-modal"
 import { useSite } from "@/hooks/api/site.hooks"
 import { createInvestorSchema, CreateInvestorInput, updateInvestorSchema, UpdateInvestorInput, transactionSchema, TransactionInput, Transaction } from "@/schemas/investor.schema"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getApiErrorMessage } from "@/lib/api-error"
 import { cn } from "@/lib/utils"
 import { Loader2, Plus, X, Phone, ArrowDownLeft, ArrowUpRight } from "lucide-react"
 
 function formatINR(n: number) { return "₹" + n.toLocaleString("en-IN") }
 function formatDate(iso: string) { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() }
+function getCurrentDateTimeLocalInput() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+function getTodayDateInputValue() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
 
 const COLORS = ["bg-teal-600","bg-blue-600","bg-amber-500","bg-rose-600","bg-violet-600","bg-emerald-600"]
 function ac(n: string) { return COLORS[(n.charCodeAt(0) + (n.charCodeAt(1) || 0)) % COLORS.length] }
@@ -24,9 +36,9 @@ function formatTransactionKind(kind: Transaction["kind"]) {
     case "PRINCIPAL_IN":
       return "Principal In"
     case "PRINCIPAL_OUT":
-      return "Principal Out"
+      return "Capital Return"
     case "INTEREST":
-      return "Interest"
+      return "Profit Share"
     default:
       return kind
   }
@@ -37,43 +49,56 @@ type SiteInvestor = { id: string; name: string; phone: string | null; equityPerc
 // ── Transaction Modal ──────────────────────────────
 function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; onClose: () => void; totalProfit?: number }) {
   const { data, isLoading } = useTransactions(investor.id)
-  const [mode, setMode] = useState<"invest" | "return" | null>(null)
+  const [mode, setMode] = useState<"invest" | "profit" | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const { mutate: addTx, isPending: adding } = useAddTransaction({ onSuccess: () => { setMode(null); setApiError(null) } })
-  const { mutate: retTx, isPending: returning } = useReturnInvestment({ onSuccess: () => { setMode(null); setApiError(null) } })
+  const { mutate: payProfit, isPending: payingProfit } = usePayInterest({ onSuccess: () => { setMode(null); setApiError(null) } })
   const [payTx, setPayTx] = useState<Transaction | null>(null)
   const { mutate: updatePayment, isPending: updatingPay } = useUpdateInvestorPayment(investor.id, { onSuccess: () => setPayTx(null) })
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<TransactionInput>({ resolver: zodResolver(transactionSchema) })
+  const getTxDefaults = (): Partial<TransactionInput> => ({
+    amount: 0,
+    amountPaid: 0,
+    paymentDate: getCurrentDateTimeLocalInput(),
+    note: "",
+  })
+  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<TransactionInput>({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: getTxDefaults(),
+  })
 
   const txs: Transaction[] = data?.data?.transactions ?? []
   const total = data?.data?.totalInvested ?? investor.totalInvested
-  const totalReturned = data?.data?.totalReturned ?? investor.totalReturned ?? 0
-  const outstandingPrincipal = data?.data?.outstandingPrincipal ?? Math.max(total - totalReturned, 0)
+  const profitShareTxs = txs.filter((tx) => tx.kind === "INTEREST")
+  const profitPaid = profitShareTxs.reduce((sum, tx) => sum + tx.amountPaid, 0)
+  const recordedProfitShare = profitShareTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0)
+  const pendingProfitShare = profitShareTxs.reduce((sum, tx) => sum + Math.max(tx.remaining, 0), 0)
+  const hasOpenProfitShare = profitShareTxs.some((tx) => tx.paymentStatus !== "COMPLETED")
+  const hasInvestedCapital = total > 0
 
-  // Auto-calculate equity return: equityPercentage% of totalProfit (sum of customers' sellingPrice)
   const equityPct = investor.equityPercentage ?? 0
-  const calculatedReturn = totalProfit != null && equityPct > 0
-    ? Math.round((equityPct / 100) * totalProfit)
-    : null
+  const siteProfit = Math.max(totalProfit ?? 0, 0)
+  const estimatedProfitShare = equityPct > 0 ? Math.round((equityPct / 100) * siteProfit) : 0
+  const availableProfitShareToRecord = Math.max(estimatedProfitShare - recordedProfitShare, 0)
+  const canRecordProfitShare = !isLoading && hasInvestedCapital && availableProfitShareToRecord > 0 && !hasOpenProfitShare
 
-  const handleSetMode = (m: "invest" | "return") => {
-    reset()
+  const handleSetMode = (m: "invest" | "profit") => {
+    if (m === "profit" && !canRecordProfitShare) return
+    reset(getTxDefaults())
     setMode(m)
-    // Pre-fill return amount with equity return from total profit
-    if (m === "return" && calculatedReturn != null && calculatedReturn > 0) {
-      setTimeout(() => setValue("amount", calculatedReturn), 0)
+    if (m === "profit" && availableProfitShareToRecord > 0) {
+      setTimeout(() => setValue("amount", availableProfitShareToRecord), 0)
     }
   }
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-background border border-border max-w-lg w-full max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="bg-background border border-border w-full max-w-[1100px] min-h-[72vh] max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200">
         <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start gap-4">
           <div>
             <h3 className="text-xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Add capital for new money coming in, and use Return Capital only when principal is being paid back.
+              Add capital for new money coming in. Equity investors are paid through profit share against projected site profit, not capital return.
             </p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
@@ -98,12 +123,14 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                     "inline-flex w-fit px-2 py-1 text-[8px] font-bold tracking-widest uppercase border",
                     t.kind === "PRINCIPAL_IN"
                       ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
-                      : "text-red-500 bg-red-500/10 border-red-500/20"
+                      : t.kind === "INTEREST"
+                        ? "text-amber-600 bg-amber-500/10 border-amber-500/20"
+                        : "text-red-500 bg-red-500/10 border-red-500/20"
                   )}>
                     {formatTransactionKind(t.kind)}
                   </span>
                   <div className="flex flex-col">
-                    <span className={cn("text-sm font-sans font-bold", t.kind === "PRINCIPAL_IN" ? "text-emerald-600" : "text-red-500")}>{formatINR(Math.abs(t.amount))}</span>
+                    <span className={cn("text-sm font-sans font-bold", t.kind === "PRINCIPAL_IN" ? "text-emerald-600" : t.kind === "INTEREST" ? "text-amber-600" : "text-red-500")}>{formatINR(Math.abs(t.amount))}</span>
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[10px] font-bold text-emerald-600">{formatINR(t.amountPaid)}</span>
@@ -126,18 +153,18 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           {mode && (
             <form onSubmit={handleSubmit(d => {
               setApiError(null)
-              const onError = (err: any) => setApiError(err?.error || err?.message || "Request failed")
+              const onError = (err: unknown) => setApiError(getApiErrorMessage(err, "Request failed"))
               const payload = {
                 ...d,
                 amountPaid: isNaN(d.amountPaid as number) ? 0 : d.amountPaid,
-                paymentDate: d.paymentDate ? new Date(d.paymentDate).toISOString() : undefined,
+                paymentDate: d.paymentDate || undefined,
               }
               if (mode === "invest") addTx({ investorId: investor.id, data: payload }, { onError })
-              else retTx({ investorId: investor.id, data: payload }, { onError })
+              else payProfit({ investorId: investor.id, data: payload }, { onError })
             })} className="mt-4 border border-border p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Return Investment"}</p>
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset() }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
+                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{mode === "invest" ? "New Investment" : "Profit Share Payout"}</p>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-8 px-2 text-[9px] font-bold tracking-widest uppercase">
                   Back
                 </Button>
               </div>
@@ -148,27 +175,46 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 </div>
               )}
 
-              {/* Auto-calculate hint for return mode */}
-              {mode === "return" && calculatedReturn != null && calculatedReturn > 0 && totalProfit != null && (
-                <div className="bg-primary/5 border border-primary/10 p-3 text-[10px] text-muted-foreground flex flex-col gap-1.5">
+                {mode === "profit" && (
+                  <div className="bg-primary/5 border border-primary/10 p-3 text-[10px] text-muted-foreground flex flex-col gap-1.5">
+                    <div>
+                      <span className="font-bold text-foreground">{equityPct}%</span> of projected site profit (<span className="font-bold text-foreground">{formatINR(siteProfit)}</span>) = <span className="font-bold text-primary">{formatINR(estimatedProfitShare)}</span>
+                      {availableProfitShareToRecord > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setValue("amount", availableProfitShareToRecord)
+                            setValue("amountPaid", availableProfitShareToRecord)
+                          }}
+                          className="ml-2 text-primary font-bold underline"
+                        >
+                          Use available amount
+                        </button>
+                      )}
+                    </div>
                   <div>
-                    <span className="font-bold text-foreground">{equityPct}%</span> of total profit (<span className="font-bold text-foreground">{formatINR(totalProfit)}</span>) = <span className="font-bold text-primary">{formatINR(calculatedReturn)}</span>
-                    <button type="button" onClick={() => setValue("amount", calculatedReturn)} className="ml-2 text-primary font-bold underline">Use this</button>
+                    Recorded <span className="font-bold text-foreground">{formatINR(recordedProfitShare)}</span> · Paid <span className="font-bold text-foreground">{formatINR(profitPaid)}</span> · Pending <span className="font-bold text-primary">{formatINR(pendingProfitShare)}</span>
                   </div>
+                  {!hasInvestedCapital && (
+                    <div>Profit share stays disabled until this investor's capital has actually been paid into the site.</div>
+                  )}
+                  {hasOpenProfitShare && (
+                    <div>There is already an open profit-share row. Use the existing Partial/Pending row to record the remaining payment.</div>
+                  )}
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/50 mb-1 block">
-                    {mode === "invest" ? "Capital Amount" : "Principal to Return"}
+                    {mode === "invest" ? "Capital Amount" : "Profit Share Amount"}
                   </Label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
                     <Input
                       type="number"
                       min={0}
-                      placeholder={mode === "invest" ? "Capital amount" : "Return amount"}
+                      placeholder={mode === "invest" ? "Capital amount" : "Profit payout amount"}
                       className="h-10 pl-8 bg-muted border-none rounded-none text-sm"
                       {...register("amount", { valueAsNumber: true })}
                     />
@@ -198,10 +244,10 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={adding || returning} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "return" ? "bg-red-500 hover:bg-red-600" : "")}>
-                  {(adding || returning) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Return Capital"}
+                <Button type="submit" disabled={adding || payingProfit} size="sm" className={cn("flex-1 h-9 rounded-none font-bold text-[9px] tracking-widest uppercase", mode === "profit" ? "bg-amber-500 hover:bg-amber-600" : "")}>
+                  {(adding || payingProfit) ? <Loader2 className="w-3 h-3 animate-spin" /> : mode === "invest" ? "Add Capital" : "Record Profit Share"}
                 </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset() }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setMode(null); reset(getTxDefaults()) }} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase px-4">Cancel</Button>
               </div>
             </form>
           )}
@@ -212,30 +258,34 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
               <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Total Invested</p>
               <p className="text-lg font-serif text-primary">{formatINR(total)}</p>
             </div>
-            {totalReturned > 0 && (
-              <div>
-                <p className="text-[9px] font-bold tracking-widest uppercase text-red-500/60">Total Returned</p>
-                <p className="text-lg font-serif text-red-500">{formatINR(totalReturned)}</p>
-              </div>
-            )}
-            {outstandingPrincipal > 0 && (
-              <div>
-                <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">Outstanding</p>
-                <p className="text-lg font-serif text-foreground">{formatINR(outstandingPrincipal)}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-[9px] font-bold tracking-widest uppercase text-amber-600/70">Profit Paid</p>
+              <p className="text-lg font-serif text-amber-600">{formatINR(profitPaid)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-bold tracking-widest uppercase text-muted-foreground/40">{hasOpenProfitShare ? "Pending Payout" : "Available To Record"}</p>
+              <p className="text-lg font-serif text-foreground">{formatINR(hasOpenProfitShare ? pendingProfitShare : availableProfitShareToRecord)}</p>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-3">
-            {!mode && !investor.isClosed && (
-              <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
-                Use the status chip inside each row for follow-up payments later. You do not need to recreate the original transaction.
-              </p>
-            )}
+              {!mode && !investor.isClosed && (
+                <p className="max-w-xs text-right text-[10px] leading-relaxed text-muted-foreground">
+                  Use Add Capital for incoming equity. Profit Share turns on only after invested capital is actually paid in, and the amount is capped from projected site profit after expenses.
+                </p>
+              )}
             <div className="flex gap-2">
               {!mode && !investor.isClosed && (
                 <>
                   <Button size="sm" onClick={() => handleSetMode("invest")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4"><ArrowDownLeft className="w-3 h-3" /> Add Capital</Button>
-                  <Button size="sm" variant="outline" onClick={() => handleSetMode("return")} className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-red-500 border-red-500/30 hover:bg-red-500/5"><ArrowUpRight className="w-3 h-3" /> Return Capital</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!canRecordProfitShare}
+                    onClick={() => handleSetMode("profit")}
+                    className="h-9 rounded-none font-bold text-[9px] tracking-widest uppercase gap-1.5 px-4 text-amber-600 border-amber-500/30 hover:bg-amber-500/5 disabled:text-muted-foreground/40 disabled:border-border disabled:hover:bg-transparent"
+                  >
+                    <ArrowUpRight className="w-3 h-3" /> Record Profit Share
+                  </Button>
                 </>
               )}
               {!mode && investor.isClosed && (
@@ -258,7 +308,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
           investorId={investor.id}
           isPending={updatingPay}
           onClose={() => setPayTx(null)}
-          onSubmit={(amount, note) => {
+          onSubmit={({ amount, note }) => {
             updatePayment({ transactionId: payTx.id, data: { amount, note } })
           }}
         />
@@ -269,11 +319,84 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
 
 // ── Add Investor Panel ─────────────────────────────
 function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: string; onClose: () => void }) {
-  const { mutate: create, isPending } = useCreateInvestor({ onSuccess: onClose })
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateInvestorInput>({
+  const { mutate: createInvestor, isPending: isCreatingInvestor } = useCreateInvestor({ onSuccess: () => {} })
+  const { mutate: addTransaction, isPending: isAddingTransaction } = useAddTransaction()
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<CreateInvestorInput>({
     resolver: zodResolver(createInvestorSchema),
-    defaultValues: { name: '', phone: '', type: "EQUITY" as const, siteId, equityPercentage: 0 },
+    defaultValues: { 
+      name: '', 
+      phone: '', 
+      type: "EQUITY" as const, 
+      siteId, 
+      equityPercentage: 0,
+      investmentAmount: 0,
+      amountPaidNow: 0,
+      paymentMode: 'CASH',
+      paymentDate: getTodayDateInputValue(),
+    },
   })
+  
+  const investmentAmount = watch('investmentAmount') || 0;
+  const amountPaidNow = watch('amountPaidNow') || 0;
+  const paymentMode = watch('paymentMode') || 'CASH';
+  const isSubmitting = isCreatingInvestor || isAddingTransaction;
+
+  // Debug: Log investment amount changes
+  console.log('Investment amount:', investmentAmount, 'Type:', typeof investmentAmount);
+
+  const onSubmit = async (data: CreateInvestorInput) => {
+    try {
+      // Step 1: Create investor (existing API, unchanged)
+      const investorResult = await new Promise<any>((resolve, reject) => {
+        createInvestor({
+          ...data,
+          type: "EQUITY",
+          siteId,
+          equityPercentage: data.equityPercentage,
+          // Remove payment-related fields - backend doesn't expect them
+          investmentAmount: undefined,
+          amountPaidNow: undefined,
+          paymentMode: undefined,
+          referenceNumber: undefined,
+          paymentDate: undefined,
+        }, {
+          onSuccess: resolve,
+          onError: reject,
+        });
+      });
+
+      if (!investorResult?.data?.investor?.id) {
+        throw new Error('Failed to create investor');
+      }
+
+      // Step 2: Add immediate transaction if amountPaidNow > 0
+      if (data.amountPaidNow && data.amountPaidNow > 0 && data.investmentAmount) {
+        await new Promise<any>((resolve, reject) => {
+          addTransaction({
+            investorId: investorResult.data.investor.id,
+            data: {
+              amount: data.investmentAmount || 0,
+              amountPaid: data.amountPaidNow,
+              note: 'Initial investment payment during investor creation',
+              paymentDate: data.paymentDate || getTodayDateInputValue(),
+            },
+          }, {
+            onSuccess: resolve,
+            onError: reject,
+          });
+        });
+
+        toast.success(`Investor added and ₹${formatINR(data.amountPaidNow)} recorded immediately`);
+      } else {
+        toast.success('Investor added successfully');
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Investor creation failed:', error);
+      // Error handling is already handled by the mutation hooks
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -288,11 +411,11 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
             <button onClick={onClose}><X className="w-5 h-5 text-muted-foreground/40 hover:text-foreground" /></button>
           </div>
         </div>
-        <form onSubmit={handleSubmit((data) => create({ ...data, type: "EQUITY", siteId }))} className="px-8 py-6 flex flex-col gap-5 flex-1">
+        <form onSubmit={handleSubmit(onSubmit)} className="px-8 py-6 flex flex-col gap-5 flex-1">
           <input type="hidden" {...register("type")} />
           <input type="hidden" {...register("siteId")} />
           <div className="border border-primary/20 bg-primary/5 p-4 text-[11px] leading-relaxed text-muted-foreground">
-            This creates the investor profile for <strong className="text-foreground">{siteName}</strong>. Use Ledger & Actions later whenever you want to add remaining capital or record a return.
+            This creates the investor profile for <strong className="text-foreground">{siteName}</strong>. Use Ledger & Actions later whenever you want to add more capital or record profit share.
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Investor Full Name</Label>
@@ -310,11 +433,99 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
             </div>
           </div>
+
+          {/* NEW: Investment Amount */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Total Investment Amount (₹)</Label>
+            <Input 
+              type="number" 
+              min={0} 
+              step="0.01" 
+              className="h-11 bg-muted border-none rounded-none text-sm" 
+              {...register("investmentAmount", { valueAsNumber: true })}
+              placeholder="e.g. 500000"
+            />
+          </div>
+
+          {/* NEW: Immediate Payment Section (shown if investmentAmount > 0) */}
+          {(investmentAmount && Number(investmentAmount) > 0) && (
+            <div className="border border-border bg-muted/20 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 mb-3">
+                Immediate Payment (Optional)
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Amount Paid Now (₹)</Label>
+                  <Input 
+                    type="number" 
+                    min={0} 
+                    max={investmentAmount}
+                    step="0.01" 
+                    className="h-11 bg-muted border-none rounded-none text-sm" 
+                    {...register("amountPaidNow", { valueAsNumber: true })}
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Mode</Label>
+                  <select 
+                    className="h-11 bg-muted border-none text-sm px-3 outline-none focus:ring-2 focus:ring-primary font-bold tracking-widest"
+                    {...register("paymentMode")}
+                  >
+                    <option value="">Select payment mode</option>
+                    <option value="CASH">Cash</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="UPI">UPI</option>
+                  </select>
+                </div>
+              </div>
+              
+              {amountPaidNow > 0 && paymentMode && paymentMode !== 'CASH' && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Reference Number</Label>
+                  <Input 
+                    className="h-11 bg-muted border-none rounded-none text-sm"
+                    {...register("referenceNumber")}
+                    placeholder={
+                      paymentMode === 'CHEQUE' ? 'Cheque number' : 
+                      paymentMode === 'UPI' ? 'UPI transaction ID' : 
+                      'Bank transfer ref / UTR'
+                    }
+                  />
+                </div>
+              )}
+              
+              {amountPaidNow > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">Payment Date</Label>
+                  <Input 
+                    type="date"
+                    className="h-11 bg-muted border-none rounded-none text-sm"
+                    {...register("paymentDate")}
+                    defaultValue={getTodayDateInputValue()}
+                  />
+                </div>
+              )}
+              
+              {amountPaidNow > 0 && (
+                <div className="border border-amber-500/20 bg-amber-500/5 p-3">
+                  <p className="text-[10px] text-amber-700">
+                    ₹{formatINR(amountPaidNow)} will be recorded immediately as principal investment.
+                    Remaining ₹{formatINR(investmentAmount - amountPaidNow)} will be pending.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-primary/5 border border-primary/10 p-4 text-[10px] text-muted-foreground">
             This investor will be automatically linked to <strong className="text-foreground">{siteName}</strong> and their investment will be added to the site&apos;s allocated fund.
           </div>
-          <Button type="submit" disabled={isPending} className="h-14 rounded-none font-bold text-[11px] tracking-[0.2em] uppercase gap-2 mt-auto">
-            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Investor"}
+          <Button type="submit" disabled={isSubmitting} className="h-14 rounded-none font-bold text-[11px] tracking-[0.2em] uppercase gap-2 mt-auto">
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Investor"}
           </Button>
         </form>
       </div>
@@ -344,7 +555,7 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
             <p className="text-[9px] font-bold tracking-[0.3em] uppercase text-muted-foreground/40 mb-1">Total Capital Committed</p>
             <p className="text-3xl font-serif text-foreground tracking-tight">{formatINR(totalInvested)}</p>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-              Create the investor once, then use Ledger & Actions to add more capital or record returns without opening another investor record.
+              Create the investor once, then use Ledger & Actions to add more capital or record profit share without opening another investor record.
             </p>
           </div>
           <Button onClick={() => setAddOpen(true)} className="h-10 text-[10px] font-bold tracking-widest uppercase gap-2 px-6">
@@ -388,7 +599,7 @@ export function InvestorsTab({ siteId, siteName }: { siteId: string; siteName: s
                   <p className="font-serif text-sm tracking-tight text-foreground">{formatINR(inv.totalInvested)}</p>
                   <p className="text-[9px] text-muted-foreground/40 uppercase tracking-widest">Invested</p>
                   {inv.totalReturned > 0 && (
-                    <p className="text-[9px] text-red-500 uppercase tracking-widest mt-0.5">Returned: {formatINR(inv.totalReturned)}</p>
+                    <p className="text-[9px] text-amber-600 uppercase tracking-widest mt-0.5">Profit Paid: {formatINR(inv.totalReturned)}</p>
                   )}
                 </div>
                 <div className="col-span-3 text-right">

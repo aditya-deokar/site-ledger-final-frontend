@@ -1,4 +1,18 @@
 import { z } from 'zod';
+import { paymentModeSchema } from './customer.schema';
+
+export const bookFlatAgreementLineTypeSchema = z.enum(['CHARGE', 'TAX', 'DISCOUNT', 'CREDIT']);
+
+export const bookFlatAgreementLineSchema = z.object({
+  type: bookFlatAgreementLineTypeSchema,
+  label: z.string().trim().min(1, 'Line label is required'),
+  amount: z.number().min(0, 'Line amount must be zero or more'),
+  ratePercent: z.number().min(0).optional(),
+  calculationBase: z.number().min(0).optional(),
+  affectsProfit: z.boolean().optional(),
+  note: z.string().optional().or(z.literal('')),
+});
+export type BookFlatAgreementLineInput = z.infer<typeof bookFlatAgreementLineSchema>;
 
 export const bookFlatSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -6,6 +20,9 @@ export const bookFlatSchema = z.object({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   sellingPrice: z.number().min(0, 'Required'),
   bookingAmount: z.number().min(0),
+  paymentMode: paymentModeSchema.optional(),
+  referenceNumber: z.string().optional().or(z.literal('')),
+  agreementLines: z.array(bookFlatAgreementLineSchema).optional(),
 });
 export type BookFlatInput = z.infer<typeof bookFlatSchema>;
 
@@ -26,6 +43,7 @@ export interface Flat {
   id: string;
   flatNumber: number | null;
   customFlatId: string | null;
+  unitType: string | null;
   status: 'AVAILABLE' | 'BOOKED' | 'SOLD';
   flatType: 'CUSTOMER' | 'EXISTING_OWNER';
   customer: FlatCustomer | null;
@@ -35,6 +53,8 @@ export interface Floor {
   id: string;
   floorNumber: number;
   floorName: string | null;
+  wingId?: string | null;
+  wingName?: string | null;
   flats: Flat[];
 }
 
@@ -43,16 +63,51 @@ export interface FloorsResponse {
   data: { floors: Floor[] };
 }
 
+export interface FloorMutationResponse {
+  ok: boolean;
+  data: {
+    floor: {
+      id: string;
+      floorNumber: number;
+      floorName: string | null;
+      wingId: string | null;
+    };
+  };
+}
+
 export const createFloorSchema = z.object({
   floorName: z.string().min(1, 'Floor name is required'),
+  wingId: z.string().optional(),
 });
 export type CreateFloorInput = z.infer<typeof createFloorSchema>;
 
 export const createFlatSchema = z.object({
   customFlatId: z.string().min(1, 'Flat ID is required'),
+  unitType: z.string().trim().min(1, 'Unit type is required').optional(),
   flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
 });
 export type CreateFlatInput = z.input<typeof createFlatSchema>;
+
+export const updateFlatDetailsSchema = z.object({
+  customFlatId: z.string().min(1, 'Flat ID is required'),
+  unitType: z.string().trim().min(1, 'Unit type is required').optional(),
+  floorId: z.string().min(1, 'Floor is required').optional(),
+  flatType: z.enum(['CUSTOMER', 'EXISTING_OWNER']).optional().default('CUSTOMER'),
+});
+export type UpdateFlatDetailsInput = z.input<typeof updateFlatDetailsSchema>;
+
+export interface FlatMutationResponse {
+  ok: boolean;
+  data: {
+    flat: {
+      id: string;
+      customFlatId: string | null;
+      unitType: string | null;
+      flatType?: Flat['flatType'];
+      status: Flat['status'];
+    };
+  };
+}
 
 // ── Expenses ──────────────────────────────────────────
 
@@ -61,9 +116,15 @@ export const createExpenseSchema = z.object({
   reason: z.string().optional(),
   vendorId: z.string().optional(),
   description: z.string().optional(),
+  billNumber: z.string().optional().or(z.literal('')),
+  billDate: z.string().optional(),
+  dueDate: z.string().optional(),
   amount: z.number().positive('Amount must be positive'),
   amountPaid: z.number().min(0).optional(),
   paymentDate: z.string().optional(),
+  paymentMode: paymentModeSchema.optional(),
+  referenceNumber: z.string().optional().or(z.literal('')),
+  note: z.string().optional().or(z.literal('')),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
@@ -75,6 +136,9 @@ export interface Expense {
   vendorName: string | null;
   vendorType: string | null;
   description: string | null;
+  billNumber: string | null;
+  billDate: string;
+  dueDate: string | null;
   amount: number;
   amountPaid: number;
   remaining: number;
@@ -96,8 +160,29 @@ export const createSiteSchema = z.object({
   projectType: z.enum(['NEW_CONSTRUCTION', 'REDEVELOPMENT']).optional().default('NEW_CONSTRUCTION'),
   totalFloors: z.number().int('Total floors must be a whole number').min(1, 'Total floors must be at least 1').optional(),
   totalFlats: z.number().int('Total flats must be a whole number').min(1, 'Total flats must be at least 1').optional(),
+  hasMultipleWings: z.boolean().optional().default(false),
+  includeGroundFloor: z.boolean().optional().default(false),
+  wings: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, 'Wing name is required'),
+        floorCount: z.number().int('Floor count must be a whole number').min(1, 'Each wing needs at least 1 floor'),
+        includeGroundFloor: z.boolean().optional().default(false),
+      }),
+    )
+    .optional(),
 }).superRefine((data, ctx) => {
-  if (data.totalFlats && !data.totalFloors) {
+  const hasWings = (data.wings?.length ?? 0) > 0;
+
+  if (data.hasMultipleWings && !hasWings) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['wings'],
+      message: 'Add at least one wing when multiple wings is enabled.',
+    });
+  }
+
+  if (!hasWings && data.totalFlats && !data.totalFloors) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['totalFloors'],
@@ -106,6 +191,22 @@ export const createSiteSchema = z.object({
   }
 });
 export type CreateSiteInput = z.input<typeof createSiteSchema>;
+
+export interface Wing {
+  id: string;
+  siteId: string;
+  name: string;
+  code: string | null;
+  isActive: boolean;
+  floorsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WingsResponse {
+  ok: boolean;
+  data: { wings: Wing[] };
+}
 
 export interface Site {
   id: string;

@@ -1,12 +1,14 @@
 import api from '@/lib/axios';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 import {
   CreateInvestorInput,
-  UpdateInvestorInput,
-  TransactionInput,
-  InvestorsResponse,
+  type InvestorMutationResponse,
   InvestorDetailResponse,
   SiteInvestorsResponse,
+  InvestorsResponse,
+  TransactionInput,
   TransactionsResponse,
+  UpdateInvestorInput,
 } from '@/schemas/investor.schema';
 
 export const investorService = {
@@ -21,10 +23,10 @@ export const investorService = {
   getInvestor: (id: string): Promise<InvestorDetailResponse> =>
     api.get(`/investors/${id}`),
 
-  createInvestor: (data: CreateInvestorInput) =>
+  createInvestor: (data: CreateInvestorInput): Promise<InvestorMutationResponse> =>
     api.post('/investors', data),
 
-  updateInvestor: (id: string, data: UpdateInvestorInput) =>
+  updateInvestor: (id: string, data: UpdateInvestorInput): Promise<InvestorMutationResponse> =>
     api.put(`/investors/${id}`, data),
 
   deleteInvestor: (id: string) =>
@@ -35,18 +37,30 @@ export const investorService = {
     api.get(`/sites/${siteId}/investors`),
 
   // Transactions
-  getTransactions: (investorId: string): Promise<TransactionsResponse> =>
-    api.get(`/investors/${investorId}/transactions`),
+  getTransactions: (investorId: string, page?: number, size?: number): Promise<TransactionsResponse> =>
+    api.get(`/investors/${investorId}/transactions`, { params: { page, size } }),
 
   addTransaction: (investorId: string, data: TransactionInput) =>
-    api.post(`/investors/${investorId}/transactions`, data),
+    api.post(`/investors/${investorId}/transactions`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`investor-principal-in:${investorId}`),
+    }),
 
   returnInvestment: (investorId: string, data: TransactionInput) =>
-    api.post(`/investors/${investorId}/return`, data),
+    api.post(`/investors/${investorId}/return`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`investor-principal-out:${investorId}`),
+    }),
 
   payInterest: (investorId: string, data: TransactionInput) =>
-    api.post(`/investors/${investorId}/interest`, data),
+    api.post(`/investors/${investorId}/interest`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`investor-interest:${investorId}`),
+    }),
 
   updateTransactionPayment: (investorId: string, transactionId: string, data: { amount: number; note?: string }) =>
-    api.patch(`/investors/${investorId}/transactions/${transactionId}/payment`, data),
+    api.patch(`/investors/${investorId}/transactions/${transactionId}/payment`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`investor-payment:${transactionId}`),
+    }),
 };

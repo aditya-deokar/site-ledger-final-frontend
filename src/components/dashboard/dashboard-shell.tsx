@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Loader2 } from 'lucide-react';
@@ -12,7 +12,7 @@ import { Header } from './header';
 
 function DashboardShellLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-6 dark:bg-black">
+    <div className="flex min-h-dvh items-center justify-center bg-gray-50 px-6 dark:bg-black">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
         <div className="flex h-14 w-14 items-center justify-center border border-border bg-background">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -31,26 +31,35 @@ function DashboardShellLoading() {
 }
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const { isLoading, isAuthenticated } = useAuthBootstrap();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, mounted]);
 
-  if (isLoading || !isAuthenticated) {
+  if (!mounted || isLoading || !isAuthenticated) {
     return <DashboardShellLoading />;
   }
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-black font-sans">
-        <Sidebar />
-        <div className="flex flex-col flex-1 min-w-0">
-          <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-10 lg:pb-10 lg:pt-8">
+      <div className="flex min-h-dvh overflow-hidden bg-gray-50 font-sans dark:bg-black print:block print:min-h-0 print:overflow-visible print:bg-white">
+        <div className="print:hidden">
+          <Sidebar />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col print:block print:min-w-0">
+          <div className="print:hidden">
+            <Header />
+          </div>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:px-8 lg:pb-8 lg:pt-7 print:block print:overflow-visible print:px-0 print:pb-0 print:pt-0">
             {children}
           </main>
         </div>

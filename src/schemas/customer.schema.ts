@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+export const paymentModeSchema = z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI']);
+export type PaymentMode = z.infer<typeof paymentModeSchema>;
+
+const optionalTextFieldSchema = z.string().optional().or(z.literal(''));
+
 export const updateCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
@@ -7,10 +12,52 @@ export const updateCustomerSchema = z.object({
 });
 export type UpdateCustomerInput = z.infer<typeof updateCustomerSchema>;
 
+export const customerAgreementLineTypeSchema = z.enum(['BASE_PRICE', 'CHARGE', 'TAX', 'DISCOUNT', 'CREDIT']);
+export type CustomerAgreementLineType = z.infer<typeof customerAgreementLineTypeSchema>;
+
+export const customerAgreementLineSchema = z.object({
+  type: customerAgreementLineTypeSchema,
+  label: z.string().trim().min(1, 'Label is required'),
+  amount: z.coerce.number().min(0, 'Amount must be zero or more'),
+  ratePercent: z.coerce.number().min(0).optional(),
+  calculationBase: z.coerce.number().min(0).optional(),
+  affectsProfit: z.boolean().optional(),
+  note: z.string().optional().or(z.literal('')),
+}).transform((data) => ({
+  type: data.type,
+  label: data.label.trim(),
+  amount: data.amount,
+  ratePercent: data.ratePercent,
+  calculationBase: data.calculationBase,
+  affectsProfit: data.affectsProfit,
+  note: data.note?.trim() || undefined,
+}));
+export type CustomerAgreementLineInput = z.infer<typeof customerAgreementLineSchema>;
+
 export const recordPaymentSchema = z.object({
   amount: z.number().positive('Amount is required'),
-});
+  note: optionalTextFieldSchema,
+  paymentMode: paymentModeSchema,
+  referenceNumber: optionalTextFieldSchema,
+  paymentDate: optionalTextFieldSchema,
+}).transform((data) => ({
+  amount: data.amount,
+  note: data.note?.trim() || undefined,
+  paymentMode: data.paymentMode,
+  referenceNumber: data.paymentMode === 'CASH' ? undefined : data.referenceNumber?.trim() || undefined,
+  paymentDate: data.paymentDate?.trim() || undefined,
+}));
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+export const cancelDealSchema = z.object({
+  reason: z.string().trim().min(1, 'Reason is required'),
+  refundAmount: z.coerce.number().min(0, 'Refund amount cannot be negative'),
+});
+export type CancelDealInput = z.infer<typeof cancelDealSchema>;
+
+export type DealStatus = 'ACTIVE' | 'CANCELLED';
+export type CustomerFlatStatus = 'BOOKED' | 'SOLD' | 'AVAILABLE';
+export type CustomerPaymentMovementType = 'CUSTOMER_PAYMENT' | 'CUSTOMER_REFUND';
 
 export interface Customer {
   id: string;
@@ -21,17 +68,116 @@ export interface Customer {
   bookingAmount: number;
   amountPaid: number;
   remaining: number;
-  flatId: string;
-  flatNumber: number;
-  customFlatId?: string;
-  floorNumber: number;
-  floorName?: string;
+  dealStatus: DealStatus;
+  flatId: string | null;
+  flatNumber: number | null;
+  customFlatId?: string | null;
+  floorNumber: number | null;
+  floorName?: string | null;
+  wingId?: string | null;
+  wingName?: string | null;
+  unitType?: string | null;
+  flatType?: string | null;
   customerType?: 'CUSTOMER' | 'EXISTING_OWNER' | null;
-  flatStatus: 'BOOKED' | 'SOLD' | 'AVAILABLE';
+  flatStatus: CustomerFlatStatus | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  cancelledByUserId: string | null;
+  cancelledFromFlatStatus: CustomerFlatStatus | null;
+  cancelledFlatId: string | null;
+  cancelledFlatDisplay: string | null;
+  cancelledFloorNumber: number | null;
+  cancelledFloorName: string | null;
   createdAt: string;
+}
+
+export interface CustomerWithSite extends Customer {
+  siteId: string | null;
+  siteName: string | null;
+}
+
+export interface CustomerGroup {
+  groupKey: string;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+  deals: CustomerWithSite[];
+  dealCount: number;
+  totalSellingPrice: number;
+  totalBookingAmount: number;
+  totalPaid: number;
+  totalRemaining: number;
 }
 
 export interface SiteCustomersResponse {
   ok: boolean;
   data: { customers: Customer[] };
+}
+
+export interface AllCustomersResponse {
+  ok: boolean;
+  data: {
+    customers: CustomerWithSite[];
+  };
+}
+
+export interface CustomerPaymentHistoryItem {
+  id: string;
+  amount: number;
+  direction: 'IN' | 'OUT';
+  movementType: CustomerPaymentMovementType;
+  paymentMode: PaymentMode | null;
+  referenceNumber: string | null;
+  note: string | null;
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversalPaymentId?: string | null;
+  receiptId?: string | null;
+  receiptNumber?: string | null;
+  receiptStatus?: 'ACTIVE' | 'VOIDED' | null;
+  createdAt: string;
+}
+
+export interface CustomerPaymentsResponse {
+  ok: boolean;
+  data: { 
+    payments: CustomerPaymentHistoryItem[];
+    summary?: { totalCollected: number; totalRefunded: number; netAmount: number; };
+  };
+}
+
+export interface CustomerAgreementLine {
+  id: string;
+  type: CustomerAgreementLineType;
+  label: string;
+  amount: number;
+  signedAmount: number;
+  ratePercent: number | null;
+  calculationBase: number | null;
+  affectsProfit: boolean;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface CustomerAgreementTotals {
+  basePrice: number;
+  charges: number;
+  tax: number;
+  discounts: number;
+  credits: number;
+  payableTotal: number;
+  profitRevenue: number;
+}
+
+export interface CustomerAgreement {
+  customerId: string;
+  lines: CustomerAgreementLine[];
+  totals: CustomerAgreementTotals;
+  amountPaid: number;
+  remaining: number;
+}
+
+export interface CustomerAgreementResponse {
+  ok: boolean;
+  data: { agreement: CustomerAgreement };
 }

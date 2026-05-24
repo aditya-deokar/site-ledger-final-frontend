@@ -1,5 +1,7 @@
 import api from '@/lib/axios';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
 import {
+  CompanyActivityResponse,
   CompanyResponse,
   CompanyWithdrawalPaymentsResponse,
   CompanyWithdrawalResponse,
@@ -28,11 +30,17 @@ export const companyService = {
   },
 
   addPartner: async (data: PartnerInput) => {
-    return api.post('/company/partners', data);
+    return api.post('/company/partners', {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey('partner-create'),
+    });
   },
 
   updatePartner: async (id: string, data: PartnerInput) => {
-    return api.put(`/company/partners/${id}`, data);
+    return api.put(`/company/partners/${id}`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`partner-update:${id}`),
+    });
   },
 
   deletePartner: async (id: string) => {
@@ -40,7 +48,10 @@ export const companyService = {
   },
 
   withdrawFund: async (data: { amount: number; note?: string }) => {
-    return api.post('/company/withdraw', data);
+    return api.post('/company/withdraw', {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey('company-withdraw'),
+    });
   },
 
   getWithdrawals: async (): Promise<CompanyWithdrawalsResponse> => {
@@ -52,19 +63,56 @@ export const companyService = {
   },
 
   recordWithdrawalPayment: async (id: string, data: { amount: number; note?: string }): Promise<CompanyWithdrawalResponse> => {
-    return api.patch(`/company/withdrawals/${id}/payment`, data);
+    return api.patch(`/company/withdrawals/${id}/payment`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`company-withdrawal-payment:${id}`),
+    });
+  },
+
+  updateWithdrawalNote: async (id: string, data: { note?: string }): Promise<CompanyWithdrawalResponse> => {
+    return api.patch(`/company/withdrawals/${id}`, data);
+  },
+
+  deleteWithdrawal: async (id: string): Promise<{ ok: boolean; data: { message: string } }> => {
+    return api.delete(`/company/withdrawals/${id}`);
   },
 
   getWithdrawalPayments: async (id: string): Promise<CompanyWithdrawalPaymentsResponse> => {
     return api.get(`/company/withdrawals/${id}/payments`);
   },
 
-  getActivity: async (cursor?: string) => {
-    const params = cursor ? `?cursor=${cursor}` : '';
+  getPartnerLedger: async (partnerId: string) => {
+    return api.get(`/company/partners/${partnerId}/ledger`);
+  },
+
+  getActivity: async (cursor?: string, limit?: number): Promise<CompanyActivityResponse> => {
+    const searchParams = new URLSearchParams();
+    if (cursor) searchParams.set('cursor', cursor);
+    if (limit) searchParams.set('limit', String(limit));
+    const params = searchParams.toString() ? `?${searchParams.toString()}` : '';
     return api.get(`/company/activity${params}`);
   },
 
   getExpenses: async (page: number = 1) => {
     return api.get(`/company/expenses?page=${page}&limit=20`);
+  },
+
+  uploadLogoToS3: async (file: File): Promise<string> => {
+    const uploadEndpoint = process.env.NEXT_PUBLIC_COMPANY_LOGO_UPLOAD_URL || '/uploads/company-logo';
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post(uploadEndpoint, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }) as any;
+
+    const url = response?.data?.url || response?.data?.data?.url || response?.url;
+    if (!url) {
+      throw new Error('Upload response missing URL');
+    }
+
+    return String(url);
   },
 };

@@ -1,9 +1,8 @@
 import api from '@/lib/axios';
-import { clearStoredTokens } from '@/lib/auth-session';
-import { LoginInput, SignUpInput, AuthResponse, UserResponse, VerifySignUpInput } from '@/schemas/auth.schema';
+import { LoginInput, SignUpInput, SessionResponse, UserResponse, VerifySignUpInput } from '@/schemas/auth.schema';
 
 export const authService = {
-  login: async (data: LoginInput): Promise<AuthResponse> => {
+  login: async (data: LoginInput): Promise<SessionResponse> => {
     return api.post('/auth/signin', data);
   },
 
@@ -11,7 +10,7 @@ export const authService = {
     return api.post('/auth/signup', data);
   },
 
-  verifySignUp: async (data: VerifySignUpInput): Promise<AuthResponse> => {
+  verifySignUp: async (data: VerifySignUpInput): Promise<SessionResponse> => {
     return api.post('/auth/signup/verify', data);
   },
 
@@ -22,10 +21,7 @@ export const authService = {
   logout: async () => {
     try {
       await api.post('/auth/logout');
-    } catch (error) {
-      console.error('Logout error:', error);
     } finally {
-      clearStoredTokens();
       window.location.replace('/login');
     }
   },

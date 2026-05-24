@@ -1,31 +1,96 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { investorService } from '@/services/investor.service';
-import { CreateInvestorInput, UpdateInvestorInput, TransactionInput } from '@/schemas/investor.schema';
+import {
+  CreateInvestorInput,
+  type Investor,
+  TransactionInput,
+  UpdateInvestorInput,
+} from '@/schemas/investor.schema';
 
-export const useInvestors = (type?: string, search?: string) => {
+export const investorKeys = {
+  all: ['investors'] as const,
+  list: (type?: Investor['type'], search?: string) => [
+    'investors',
+    type ?? '',
+    search ?? '',
+  ] as const,
+  detailRoot: ['investor'] as const,
+  detail: (id?: string) => ['investor', id ?? ''] as const,
+  siteRoot: ['siteInvestors'] as const,
+  site: (siteId?: string) => ['siteInvestors', siteId ?? ''] as const,
+  transactionsRoot: ['investorTransactions'] as const,
+  transactionsByInvestor: (investorId?: string) => ['investorTransactions', investorId ?? ''] as const,
+} as const;
+
+function invalidateInvestorDirectory(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: investorKeys.all });
+  queryClient.invalidateQueries({ queryKey: investorKeys.siteRoot });
+  queryClient.invalidateQueries({ queryKey: ['activity'] });
+}
+
+function invalidateInvestorProfile(
+  queryClient: ReturnType<typeof useQueryClient>,
+  investorId?: string,
+) {
+  if (investorId) {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detail(investorId) });
+  } else {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detailRoot });
+  }
+
+  invalidateInvestorDirectory(queryClient);
+}
+
+function invalidateInvestorFinancials(
+  queryClient: ReturnType<typeof useQueryClient>,
+  investorId?: string,
+) {
+  if (investorId) {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detail(investorId) });
+    queryClient.invalidateQueries({
+      queryKey: investorKeys.transactionsByInvestor(investorId),
+    });
+  } else {
+    queryClient.invalidateQueries({ queryKey: investorKeys.detailRoot });
+    queryClient.invalidateQueries({ queryKey: investorKeys.transactionsRoot });
+  }
+
+  queryClient.invalidateQueries({ queryKey: investorKeys.all });
+  queryClient.invalidateQueries({ queryKey: investorKeys.siteRoot });
+  queryClient.invalidateQueries({ queryKey: ['site'] });
+  queryClient.invalidateQueries({ queryKey: ['company'] });
+  queryClient.invalidateQueries({ queryKey: ['activity'] });
+}
+
+export const useInvestors = (
+  type?: Investor['type'],
+  search?: string,
+  options?: { enabled?: boolean },
+) => {
   return useQuery({
-    queryKey: ['investors', type, search],
+    queryKey: investorKeys.list(type, search),
     queryFn: () => investorService.getInvestors(type, search),
     placeholderData: (previousData) => previousData,
     retry: false,
+    enabled: options?.enabled,
   });
 };
 
-export const useInvestor = (id: string) => {
+export const useInvestor = (id?: string) => {
   return useQuery({
-    queryKey: ['investor', id],
-    queryFn: () => investorService.getInvestor(id),
+    queryKey: investorKeys.detail(id),
+    queryFn: () => investorService.getInvestor(id!),
     retry: false,
-    enabled: !!id,
+    enabled: Boolean(id),
   });
 };
 
-export const useSiteInvestors = (siteId: string) => {
+export const useSiteInvestors = (siteId?: string) => {
   return useQuery({
-    queryKey: ['siteInvestors', siteId],
-    queryFn: () => investorService.getSiteInvestors(siteId),
+    queryKey: investorKeys.site(siteId),
+    queryFn: () => investorService.getSiteInvestors(siteId!),
     retry: false,
-    enabled: !!siteId,
+    enabled: Boolean(siteId),
   });
 };
 
@@ -33,10 +98,8 @@ export const useCreateInvestor = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateInvestorInput) => investorService.createInvestor(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+    onSuccess: (response) => {
+      invalidateInvestorProfile(queryClient, response?.data?.investor?.id);
       options?.onSuccess?.();
     },
   });
@@ -47,11 +110,8 @@ export const useUpdateInvestor = (options?: { onSuccess?: () => void }) => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateInvestorInput }) =>
       investorService.updateInvestor(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['investor'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+    onSuccess: (_, variables) => {
+      invalidateInvestorProfile(queryClient, variables.id);
       options?.onSuccess?.();
     },
   });
@@ -61,9 +121,11 @@ export const useDeleteInvestor = (options?: { onSuccess?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => investorService.deleteInvestor(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: investorKeys.all });
+      queryClient.invalidateQueries({ queryKey: investorKeys.siteRoot });
+      queryClient.removeQueries({ queryKey: investorKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: investorKeys.transactionsByInvestor(id) });
       queryClient.invalidateQueries({ queryKey: ['site'] });
       queryClient.invalidateQueries({ queryKey: ['company'] });
       queryClient.invalidateQueries({ queryKey: ['activity'] });
@@ -72,12 +134,12 @@ export const useDeleteInvestor = (options?: { onSuccess?: () => void }) => {
   });
 };
 
-export const useTransactions = (investorId: string) => {
+export const useTransactions = (investorId?: string) => {
   return useQuery({
-    queryKey: ['transactions', investorId],
-    queryFn: () => investorService.getTransactions(investorId),
+    queryKey: investorKeys.transactionsByInvestor(investorId),
+    queryFn: () => investorService.getTransactions(investorId!),
     retry: false,
-    enabled: !!investorId,
+    enabled: Boolean(investorId),
   });
 };
 
@@ -87,13 +149,7 @@ export const useAddTransaction = (options?: { onSuccess?: () => void }) => {
     mutationFn: ({ investorId, data }: { investorId: string; data: TransactionInput }) =>
       investorService.addTransaction(investorId, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['investor'] });
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', variables.investorId] });
-      queryClient.invalidateQueries({ queryKey: ['site'] });
-      queryClient.invalidateQueries({ queryKey: ['company'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+      invalidateInvestorFinancials(queryClient, variables.investorId);
       options?.onSuccess?.();
     },
   });
@@ -105,13 +161,7 @@ export const usePayInterest = (options?: { onSuccess?: () => void }) => {
     mutationFn: ({ investorId, data }: { investorId: string; data: TransactionInput }) =>
       investorService.payInterest(investorId, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['investor'] });
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', variables.investorId] });
-      queryClient.invalidateQueries({ queryKey: ['site'] });
-      queryClient.invalidateQueries({ queryKey: ['company'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+      invalidateInvestorFinancials(queryClient, variables.investorId);
       options?.onSuccess?.();
     },
   });
@@ -123,13 +173,7 @@ export const useReturnInvestment = (options?: { onSuccess?: () => void }) => {
     mutationFn: ({ investorId, data }: { investorId: string; data: TransactionInput }) =>
       investorService.returnInvestment(investorId, data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['investor'] });
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', variables.investorId] });
-      queryClient.invalidateQueries({ queryKey: ['site'] });
-      queryClient.invalidateQueries({ queryKey: ['company'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+      invalidateInvestorFinancials(queryClient, variables.investorId);
       options?.onSuccess?.();
     },
   });
@@ -141,14 +185,7 @@ export const useUpdateInvestorPayment = (investorId: string, options?: { onSucce
     mutationFn: ({ transactionId, data }: { transactionId: string; data: { amount: number; note?: string } }) =>
       investorService.updateTransactionPayment(investorId, transactionId, data),
     onSuccess: () => {
-      queryClient.removeQueries({ queryKey: ['transactions', investorId] });
-      queryClient.invalidateQueries({ queryKey: ['transactions', investorId] });
-      queryClient.invalidateQueries({ queryKey: ['investor'] });
-      queryClient.invalidateQueries({ queryKey: ['investors'] });
-      queryClient.invalidateQueries({ queryKey: ['siteInvestors'] });
-      queryClient.invalidateQueries({ queryKey: ['site'] });
-      queryClient.invalidateQueries({ queryKey: ['company'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
+      invalidateInvestorFinancials(queryClient, investorId);
       options?.onSuccess?.();
     },
   });

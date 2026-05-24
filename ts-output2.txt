@@ -1,4 +1,0 @@
-src/app/investors/page.tsx(225,97): error TS2304: Cannot find name 'X'.
-src/app/sites/page.tsx(230,23): error TS2322: Type 'number | null' is not assignable to type 'number'.
-  Type 'null' is not assignable to type 'number'.
-src/app/vendors/page.tsx(170,16): error TS2304: Cannot find name 'X'.

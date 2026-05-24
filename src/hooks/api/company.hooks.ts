@@ -11,16 +11,17 @@ export const useCreateCompany = () => {
     mutationFn: (data: CreateCompanyInput) => companyService.createCompany(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company'] });
-      router.push('/dashboard');
+      router.push('/navigator');
     },
   });
 };
 
-export const useCompany = () => {
+export const useCompany = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['company'],
     queryFn: () => companyService.getCompany(),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 
@@ -116,11 +117,12 @@ export const useWithdrawFund = (options?: { onSuccess?: () => void }) => {
   });
 };
 
-export const useWithdrawals = () => {
+export const useWithdrawals = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: ['company-withdrawals'],
     queryFn: () => companyService.getWithdrawals(),
     retry: false,
+    enabled: options?.enabled,
   });
 };
 
@@ -146,6 +148,41 @@ export const useRecordWithdrawalPayment = (options?: { onSuccess?: () => void })
       await queryClient.invalidateQueries({ queryKey: ['activity'] });
       options?.onSuccess?.();
     },
+  });
+};
+
+export const useUpdateWithdrawalNote = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { note?: string } }) =>
+      companyService.updateWithdrawalNote(id, data),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawal', variables.id] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const useDeleteWithdrawal = (options?: { onSuccess?: () => void }) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => companyService.deleteWithdrawal(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['company'] });
+      await queryClient.invalidateQueries({ queryKey: ['company-withdrawals'] });
+      await queryClient.invalidateQueries({ queryKey: ['activity'] });
+      options?.onSuccess?.();
+    },
+  });
+};
+
+export const usePartnerLedger = (partnerId: string | null) => {
+  return useQuery({
+    queryKey: ['partner-ledger', partnerId],
+    queryFn: () => companyService.getPartnerLedger(partnerId!),
+    enabled: !!partnerId,
+    retry: false,
   });
 };
 

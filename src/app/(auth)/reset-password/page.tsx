@@ -7,18 +7,14 @@ import { resetPasswordSchema, ResetPasswordInput } from '@/schemas/auth.schema';
 import { useResetPassword } from '@/hooks/api/auth.hooks';
 import { PasswordRequirements } from '@/components/auth/password-requirements';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import { getApiErrorMessage } from '@/lib/api-error';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
 function ResetPasswordForm() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const urlToken = searchParams.get('token');
   const { mutate: resetPassword, isPending, error, isSuccess } = useResetPassword();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
@@ -26,14 +22,13 @@ function ResetPasswordForm() {
   const {
     register,
     handleSubmit,
-    setValue,
     watch,
     formState: { errors, isValid },
   } = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
     mode: 'onChange',
     defaultValues: {
-      token: urlToken || '',
+      token: undefined,
       newPassword: '',
       confirmPassword: '',
     }
@@ -41,12 +36,6 @@ function ResetPasswordForm() {
 
   const newPasswordValue = watch('newPassword', '');
   const resetErrorMessage = error ? getApiErrorMessage(error, 'Unable to update your password.') : null;
-
-  useEffect(() => {
-    if (urlToken) {
-      setValue('token', urlToken);
-    }
-  }, [urlToken, setValue]);
 
   useEffect(() => {
     if (!isSuccess) return;
@@ -78,7 +67,7 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="rounded border border-border bg-card p-6 sm:p-8 flex flex-col gap-8">
       <div className="flex flex-col gap-3">
         <h1 className="text-3xl font-serif tracking-tight text-foreground sm:text-4xl">New Password</h1>
         <p className="text-[13px] text-muted-foreground leading-relaxed">
@@ -111,29 +100,11 @@ function ResetPasswordForm() {
         )}
 
         {!isSuccess && (
-          <>
-            <div className="flex flex-col gap-5">
-              {!urlToken && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="token" className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/60">
-                    Reset Token
-                  </Label>
-                  <Input
-                    id="token"
-                    type="text"
-                    placeholder="Paste your reset token"
-                    className="h-12 bg-muted/50 border-none rounded-none text-sm font-mono placeholder:text-muted-foreground/30 placeholder:font-sans focus-visible:bg-muted transition-colors"
-                    {...register('token')}
-                  />
-                  {errors.token && (
-                    <p className="text-[10px] font-medium text-destructive mt-1">{errors.token.message}</p>
-                  )}
-                </div>
-              )}
-
-              <PasswordInput
-                id="newPassword"
-                label="Secure Password"
+           <>
+             <div className="flex flex-col gap-5">
+               <PasswordInput
+                 id="newPassword"
+                 label="Secure Password"
                 placeholder="Create your new password"
                 autoComplete="new-password"
                 error={errors.newPassword?.message}

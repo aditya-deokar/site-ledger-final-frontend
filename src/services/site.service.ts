@@ -1,5 +1,20 @@
 import api from '@/lib/axios';
-import { CreateSiteInput, SiteDetailResponse, SiteTransferDirection, SiteTransferResponse, SitesResponse, SiteFundHistoryResponse } from '@/schemas/site.schema';
+import { createClientIdempotencyKey } from '@/lib/idempotency';
+import {
+  CreateSiteInput,
+  type CreateFlatInput,
+  type CreateFloorInput,
+  type FlatMutationResponse,
+  type FloorMutationResponse,
+  type FloorsResponse,
+  SiteDetailResponse,
+  SiteFundHistoryResponse,
+  type SiteTransferDirection,
+  SiteTransferResponse,
+  SitesResponse,
+  type UpdateFlatDetailsInput,
+  WingsResponse,
+} from '@/schemas/site.schema';
 import { SiteReportResponse } from '@/schemas/site-report.schema';
 
 export const siteService = {
@@ -9,8 +24,8 @@ export const siteService = {
   getSite: (id: string): Promise<SiteDetailResponse> =>
     api.get(`/sites/${id}`),
 
-  getSiteReport: (id: string): Promise<SiteReportResponse> =>
-    api.get(`/sites/${id}/report`),
+  getSiteReport: (id: string, page?: number, size?: number): Promise<SiteReportResponse> =>
+    api.get(`/sites/${id}/report`, { params: { page, size } }),
 
   createSite: (data: CreateSiteInput) =>
     api.post('/sites', data),
@@ -22,7 +37,10 @@ export const siteService = {
     api.delete(`/sites/${id}`, { params: { keepCustomers: String(keepCustomers) } }),
 
   transfer: (id: string, data: { amount: number; direction: SiteTransferDirection; note?: string }) : Promise<SiteTransferResponse> =>
-    api.post(`/sites/${id}/transfer`, data),
+    api.post(`/sites/${id}/transfer`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`site-transfer:${id}:${data.direction}`),
+    }),
 
   addFund: (id: string, data: { amount: number; note?: string }) =>
     siteService.transfer(id, { ...data, direction: 'COMPANY_TO_SITE' }),
@@ -30,29 +48,44 @@ export const siteService = {
   withdrawFund: (id: string, data: { amount: number; note?: string }) =>
     siteService.transfer(id, { ...data, direction: 'SITE_TO_COMPANY' }),
 
-  getFloors: (siteId: string) =>
+  getFloors: (siteId: string): Promise<FloorsResponse> =>
     api.get(`/sites/${siteId}/floors`),
 
-  createFloor: (siteId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
+  getWings: (siteId: string): Promise<WingsResponse> =>
+    api.get(`/sites/${siteId}/wings`),
+
+  createWing: (siteId: string, data: { name: string }) =>
+    api.post(`/sites/${siteId}/wings`, data),
+
+  updateWing: (siteId: string, wingId: string, data: { name: string }) =>
+    api.patch(`/sites/${siteId}/wings/${wingId}`, data),
+
+  deleteWing: (siteId: string, wingId: string) =>
+    api.delete(`/sites/${siteId}/wings/${wingId}`),
+
+  createFloor: (siteId: string, data: CreateFloorInput): Promise<FloorMutationResponse> =>
     api.post(`/sites/${siteId}/floors`, data),
 
-  updateFloor: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFloorInput) =>
+  updateFloor: (siteId: string, floorId: string, data: CreateFloorInput): Promise<FloorMutationResponse> =>
     api.patch(`/sites/${siteId}/floors/${floorId}`, data),
 
   deleteFloor: (siteId: string, floorId: string) =>
     api.delete(`/sites/${siteId}/floors/${floorId}`),
 
-  createFlat: (siteId: string, floorId: string, data: import('@/schemas/site.schema').CreateFlatInput) =>
+  createFlat: (siteId: string, floorId: string, data: CreateFlatInput): Promise<FlatMutationResponse> =>
     api.post(`/sites/${siteId}/floors/${floorId}/flats`, data),
 
-  updateFlatDetails: (siteId: string, flatId: string, data: import('@/schemas/site.schema').CreateFlatInput) =>
+  updateFlatDetails: (siteId: string, flatId: string, data: UpdateFlatDetailsInput): Promise<FlatMutationResponse> =>
     api.patch(`/sites/${siteId}/flats/${flatId}`, data),
 
   deleteFlat: (siteId: string, flatId: string) =>
     api.delete(`/sites/${siteId}/flats/${flatId}`),
 
   bookFlat: (siteId: string, flatId: string, data: import('@/schemas/site.schema').BookFlatInput) =>
-    api.post(`/sites/${siteId}/flats/${flatId}/customer`, data),
+    api.post(`/sites/${siteId}/flats/${flatId}/customer`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`book-flat:${siteId}:${flatId}`),
+    }),
 
   getExpenses: (siteId: string) =>
     api.get(`/sites/${siteId}/expenses`),
@@ -61,8 +94,18 @@ export const siteService = {
     api.get(`/sites/${siteId}/fund-history`),
 
   addExpense: (siteId: string, data: import('@/schemas/site.schema').CreateExpenseInput) =>
-    api.post(`/sites/${siteId}/expenses`, data),
+    api.post(`/sites/${siteId}/expenses`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`site-expense:${siteId}`),
+    }),
 
-  updateExpensePayment: (siteId: string, expenseId: string, data: { amount: number; note?: string }) =>
-    api.patch(`/sites/${siteId}/expenses/${expenseId}/payment`, data),
+  updateExpensePayment: (
+    siteId: string,
+    expenseId: string,
+    data: { amount: number; note?: string; paymentMode?: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'UPI'; referenceNumber?: string; paymentDate?: string },
+  ) =>
+    api.patch(`/sites/${siteId}/expenses/${expenseId}/payment`, {
+      ...data,
+      idempotencyKey: createClientIdempotencyKey(`expense-payment:${expenseId}`),
+    }),
 };
