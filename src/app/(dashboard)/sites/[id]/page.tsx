@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { DocumentManager } from '@/components/documents/DocumentManager';
 import { cn } from '@/lib/utils';
 
 // Lazy load tab components
@@ -33,7 +34,7 @@ function TabContentLoadingFallback() {
   );
 }
 
-const SITE_TAB_KEYS = ['overview', 'ledger', 'expenses', 'floors', 'investors', 'existingOwners'] as const;
+const SITE_TAB_KEYS = ['overview', 'ledger', 'expenses', 'floors', 'investors', 'existingOwners', 'documents'] as const;
 type TabKey = (typeof SITE_TAB_KEYS)[number];
 
 function isSiteTabKey(value: string | null): value is TabKey {
@@ -609,6 +610,7 @@ export default function SiteDetailPage() {
     { key: 'floors', label: 'Floors & Flats' },
     { key: 'investors', label: 'Investors' },
     ...(isRedevelopment ? [{ key: 'existingOwners' as const, label: 'Existing Owners' }] : []),
+    { key: 'documents', label: 'Documents' },
   ] as Array<{ key: TabKey; label: string }>;
   const requestedTab = searchParams.get('tab');
   const activeTab =
@@ -748,6 +750,12 @@ export default function SiteDetailPage() {
           <Suspense fallback={<TabContentLoadingFallback />}>
             <ExistingOwnersTab siteId={site.id} siteName={site.name} />
           </Suspense>
+        )}
+
+        {activeTab === 'documents' && (
+          <div className="p-4 bg-card border rounded-lg">
+            <DocumentManager entityType="site" entityId={site.id} />
+          </div>
         )}
 
       </div>
