@@ -96,7 +96,7 @@ function TxModal({ investor, onClose, totalProfit }: { investor: SiteInvestor; o
         <div className="bg-background border border-border w-full max-w-[1100px] min-h-[72vh] max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200">
         <div className="px-8 pt-8 pb-4 border-b border-border flex justify-between items-start gap-4">
           <div>
-            <h3 className="text-xl font-serif text-foreground">Investor Ledger & Actions: {investor.name}</h3>
+            <h3 className="text-xl font-serif text-foreground"> {investor.name}</h3>
             <p className="mt-2 text-[11px] text-muted-foreground">
               Add capital for new money coming in. Equity investors are paid through profit share against projected site profit, not capital return.
             </p>
@@ -378,7 +378,7 @@ function AddPanel({ siteId, siteName, onClose }: { siteId: string; siteName: str
               amount: data.investmentAmount || 0,
               amountPaid: data.amountPaidNow,
               note: 'Initial investment payment during investor creation',
-              paymentDate: data.paymentDate || getTodayDateInputValue(),
+paymentDate: data.paymentDate ? `${data.paymentDate}T00:00:00` : `${getTodayDateInputValue()}T00:00:00`,
             },
           }, {
             onSuccess: resolve,

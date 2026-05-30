@@ -49,7 +49,17 @@ import {
 import { buildVendorWorkspacePath } from '@/lib/vendor-workspace';
 
 function formatINR(value: number) {
-  return `Rs. ${value.toLocaleString('en-IN')}`;
+  return `₹${value.toLocaleString('en-IN')}`;
+}
+
+function formatPhone(phone?: string | null) {
+  if (!phone) return null;
+  // Format as XXX-XXX-XXXX for 10 digit numbers
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return phone;
 }
 
 function formatDate(value?: string | null) {
@@ -62,13 +72,13 @@ function formatDate(value?: string | null) {
 function statusTone(status: VendorStatus) {
   switch (status) {
     case 'ACTIVE':
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700';
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400';
     case 'INACTIVE':
-      return 'border-slate-500/30 bg-slate-500/10 text-slate-700';
+      return 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-500/30 dark:bg-slate-500/10 dark:text-slate-400';
     case 'BLOCKED':
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400';
     case 'ARCHIVED':
-      return 'border-rose-500/30 bg-rose-500/10 text-rose-700';
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400';
     default:
       return 'border-border bg-muted text-foreground';
   }
@@ -345,7 +355,7 @@ export default function VendorsPage() {
     <DashboardPage className="space-y-4 px-3 py-4 lg:px-6">
       <DashboardPageHeader
         eyebrow="Vendor Management"
-        title="Company-wide vendor cockpit"
+        title="vendor"
         subtitle="Manage vendor profiles, site assignments, bills, payments, receipts, documents, and due tracking in one place."
         action={(
           <Button
@@ -362,22 +372,24 @@ export default function VendorsPage() {
         )}
       />
 
-      <DashboardStatsGrid className="md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <SummaryCard label="Total Vendors" value={String(vendors.length)} helper="Current filtered vendor count" onClick={resetFilters} />
-        <SummaryCard label="Active Vendors" value={String(activeVendors)} helper="Ready for new bills" onClick={() => setStatusFilter('ACTIVE')} />
-        <SummaryCard label="Assigned Vendors" value={String(assignedVendors)} helper="Mapped to one or more sites" onClick={() => setSiteFilter('ALL')} />
+      <DashboardStatsGrid className="md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <SummaryCard 
+          label="Total Vendors" 
+          value={String(vendors.length)} 
+          helper="Current filtered vendor count" 
+          onClick={resetFilters} 
+        />
+        <SummaryCard 
+          label="Active Vendors" 
+          value={String(activeVendors)} 
+          helper="Ready for new bills" 
+          onClick={() => setStatusFilter('ACTIVE')} 
+        />
         <SummaryCard
           label="Outstanding"
           value={formatINR(totalOutstanding)}
           helper="Open due across filtered vendors"
           tone={totalOutstanding > 0 ? 'warning' : 'default'}
-          onClick={() => setOutstandingFilter('OUTSTANDING_ONLY')}
-        />
-        <SummaryCard
-          label="Overdue Vendors"
-          value={String(overdueVendors)}
-          helper="Have at least one overdue bill"
-          tone={overdueVendors > 0 ? 'warning' : 'default'}
           onClick={() => setOutstandingFilter('OUTSTANDING_ONLY')}
         />
         <SummaryCard
@@ -480,16 +492,16 @@ export default function VendorsPage() {
       <div className="overflow-hidden border border-border bg-card">
         <Table className="text-sm">
           <TableHeader>
-            <TableRow>
-              <TableHead className="text-[11px] tracking-[0.18em]">Vendor</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Category</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Status</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Contact</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Sites</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Outstanding</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Overdue</TableHead>
-              <TableHead className="text-[11px] tracking-[0.18em]">Last Payment</TableHead>
-              <TableHead className="text-right text-[11px] tracking-[0.18em]">Actions</TableHead>
+            <TableRow className="border-b-2">
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">VENDOR</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">CATEGORY</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">STATUS</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">CONTACT</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">SITES</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">OUTSTANDING</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">OVERDUE</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">LAST PAYMENT</TableHead>
+              <TableHead className="text-right text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">ACTIONS</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -521,20 +533,26 @@ export default function VendorsPage() {
                   </TableCell>
                   <TableCell className="text-sm font-medium text-muted-foreground">{formatCategoryLabel(vendor.type)}</TableCell>
                   <TableCell className="text-sm">
-                    <DashboardStatusBadge className={cn('text-[9px] tracking-widest', statusTone(vendor.status))}>
+                    <DashboardStatusBadge className={cn('text-[10px] font-semibold tracking-wider', statusTone(vendor.status))}>
                       {vendor.status}
                     </DashboardStatusBadge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{vendor.phone || vendor.email || '-'}</TableCell>
+                  <TableCell className="text-sm">
+                    <div className="space-y-0.5">
+                      {formatPhone(vendor.phone) && <p className="font-medium text-foreground">{formatPhone(vendor.phone)}</p>}
+                      {vendor.email && <p className="text-xs text-muted-foreground">{vendor.email}</p>}
+                      {!vendor.phone && !vendor.email && <p className="text-muted-foreground">-</p>}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm">{vendor.siteCount}</TableCell>
                   <TableCell className={cn('text-sm', vendor.totalOutstanding > 0 ? 'font-semibold text-rose-600' : 'font-semibold text-emerald-700')}>
                     {formatINR(vendor.totalOutstanding)}
                   </TableCell>
                   <TableCell className="text-sm">{vendor.overdueBillCount}</TableCell>
                   <TableCell className="text-sm">
-                    <div className="space-y-1">
-                      <p>{formatDate(vendor.lastPaymentDate)}</p>
-                      {vendor.lastPaymentDate ? (
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-foreground">{formatDate(vendor.lastPaymentDate)}</p>
+                      {vendor.lastPaymentDate && (
                         <p className="text-xs text-muted-foreground">
                           {Math.max(
                             0,
@@ -545,24 +563,35 @@ export default function VendorsPage() {
                           )}{' '}
                           days ago
                         </p>
-                      ) : null}
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" size="control" variant="outline" onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>
-                        <Eye className="h-4 w-4" />
-                        Open
+                      <Button 
+                        type="button" 
+                        size="control" 
+                        variant="ghost"
+                        onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}
+                        className="h-8 px-3"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
                       </Button>
-                      <Button type="button" size="control" variant="outline" onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}>
-                        <Pencil className="h-4 w-4" />
-                        Edit
+                      <Button 
+                        type="button" 
+                        size="control" 
+                        variant="ghost"
+                        onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}
+                        className="h-8 px-3"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <DropdownMenu>
-                        <DropdownMenuTrigger>
-                          <Button type="button" size="icon-control" variant="outline" aria-label={`More actions for ${vendor.name}`}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
+                        <DropdownMenuTrigger
+                          className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                          aria-label={`More actions for ${vendor.name}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44 rounded-none">
                           <DropdownMenuItem onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}>

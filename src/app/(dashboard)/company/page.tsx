@@ -263,22 +263,20 @@ function EquityPanel({
           </div>
         </div>
         <div className="border border-border">
-          <div className="grid grid-cols-[1fr_72px_56px] border-b border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+          <div className="grid grid-cols-[1fr_80px] border-b border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
             <span>Label</span>
-            <span className="text-right">Value</span>
             <span className="text-right">%</span>
           </div>
           <div className="divide-y divide-border">
             {donutRows.map((row) => {
               const percent = pieTotal > 0 ? (row.value / pieTotal) * 100 : 0;
               return (
-                <div key={row.key} className="grid grid-cols-[1fr_72px_56px] items-center px-3 py-2.5 text-sm">
+                <div key={row.key} className="grid grid-cols-[1fr_80px] items-center px-3 py-2.5 text-sm">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
                     <span className="truncate text-foreground">{row.label}</span>
                   </div>
-                  <span className="text-right font-semibold text-foreground tabular-nums">{row.value.toFixed(1)}</span>
-                  <span className="text-right font-semibold text-muted-foreground tabular-nums">{percent.toFixed(1)}%</span>
+                  <span className="text-right font-semibold text-foreground tabular-nums">{percent.toFixed(1)}%</span>
                 </div>
               );
             })}

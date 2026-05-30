@@ -241,7 +241,7 @@ function getPaymentModeLabel(mode?: string | null): string {
     case "UPI":
       return "UPI"
     default:
-      return "Not recorded"
+      return ""
   }
 }
 
@@ -1700,17 +1700,21 @@ export async function generateVendorReceiptPDF(data: VendorReceiptPdfData, filen
   setFont("normal", 6.5, 100)
   doc.text(data.paymentAmountWords, ml, y + 14.5)
 
-  // Mode pill
-  const modeW = 28
-  const modeX = pageWidth - mr - modeW
-  doc.setFillColor(240, 240, 240)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
-  setFont("bold", 7, 0)
-  doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
+  // Mode pill - only show if payment mode exists
+  if (data.paymentMode) {
+    const modeW = 28
+    const modeX = pageWidth - mr - modeW
+    doc.setFillColor(240, 240, 240)
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
+    setFont("bold", 7, 0)
+    doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
+  }
 
   // Status badge
+  const modeW = 28
+  const modeX = pageWidth - mr - modeW
   const statusColor = data.status === "VOIDED" ? [220, 38, 38] : [21, 128, 61]
   doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
   doc.roundedRect(modeX - 32, y + 3.5, 28, 8, 1.5, 1.5, "F")
@@ -1896,14 +1900,17 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
   setFont("normal", 6.5, 100)
   doc.text(data.paymentAmountWords, ml, y + 14.5)
 
-  const modeW = 28
-  const modeX = pageWidth - mr - modeW
-  doc.setFillColor(240, 240, 240)
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
-  setFont("bold", 7, 0)
-  doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
+  // Mode pill - only show if payment mode exists
+  if (data.paymentMode) {
+    const modeW = 28
+    const modeX = pageWidth - mr - modeW
+    doc.setFillColor(240, 240, 240)
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
+    setFont("bold", 7, 0)
+    doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
+  }
 
   y += 17
   doc.setFillColor(210, 210, 210)

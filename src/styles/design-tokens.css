@@ -1,0 +1,17 @@
+/* Design tokens for Vendor UI */
+:root {
+  --vendor-bg: rgba(255, 255, 255, 0.6);
+  --vendor-primary: #0d6efd; /* bootstrap primary blue */
+  --vendor-accent: #6610f2; /* purple accent */
+  --glass-bg: rgba(255, 255, 255, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.3);
+}
+
+/* Glassmorphism helper */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}

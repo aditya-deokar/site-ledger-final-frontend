@@ -362,8 +362,8 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
           raw: transaction,
         }));
       case 'vendor-transactions':
-        return (vendorStatementQuery.data?.pages.flatMap(p => p.data?.statement ?? []) ?? []).map((entry, index) => ({
-          id: entry.referenceId || `vs-${entry.date}-${entry.balance}-${index}`,
+        return (vendorStatementQuery.data?.pages.flatMap(p => p.data?.statement ?? []) ?? []).map((entry) => ({
+          id: entry.id,
           date: entry.date,
           scope: 'vendor',
           raw: entry,
@@ -776,6 +776,12 @@ export function TransactionHistoryView({ action, selectedEntity, onBack }: Props
     return [...filteredRows].sort((left, right) => {
       const leftValue = activeColumn.getSortValue(left);
       const rightValue = activeColumn.getSortValue(right);
+
+      if (sortKey === 'date') {
+        const leftTime = leftValue ? new Date(leftValue).getTime() : 0;
+        const rightTime = rightValue ? new Date(rightValue).getTime() : 0;
+        return sortDirection === 'asc' ? leftTime - rightTime : rightTime - leftTime;
+      }
 
       if (typeof leftValue === 'number' && typeof rightValue === 'number') {
         return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue;

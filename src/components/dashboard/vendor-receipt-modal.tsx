@@ -1,11 +1,10 @@
 'use client';
 
-import { Download, FileText, Printer, X } from 'lucide-react';
+import { FileText, Printer, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useCompany } from '@/hooks/api/company.hooks';
 import { resolveCompanyLogoUrl } from '@/lib/company-logo';
-import { downloadVendorReceiptPDF } from '@/lib/pdf-generator';
 import type { VendorReceipt } from '@/schemas/vendor.schema';
 
 function escapeHtml(value: string) {
@@ -115,7 +114,7 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
     .filter(Boolean)
     .join(' • ');
   const paymentParticulars = [
-    receipt.paymentMode ? `Paid via ${getPaymentModeLabel(receipt.paymentMode)}` : null,
+    receipt.paymentMode ? `Paid via ${getPaymentModeLabel(receipt.paymentMode)}` : 'Payment for expense',
     receipt.referenceNumber ? `Ref ${receipt.referenceNumber}` : null,
     receipt.note,
   ]
@@ -147,13 +146,12 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
         </div>
       </div>
 
-      <div style="border-top:1px solid #d4d4d4;border-bottom:1px solid #d4d4d4;background:#fafafa;padding:16px 0;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:24px;">
+      <div style="border-top:1px solid #d4d4d4;border-bottom:1px solid #d4d4d4;background:#fafafa;padding:16px;margin-bottom:20px;">
         <div>
           <p style="margin:0;font-size:12px;font-weight:700;text-transform:uppercase;color:#6b7280;">Amount Paid</p>
           <p style="margin:8px 0 0;font-size:24px;font-weight:800;color:#111827;">${escapeHtml(formatINR(receipt.amount))}</p>
           <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">Payment issued to ${escapeHtml(receipt.vendorName)}</p>
         </div>
-        ${receipt.paymentMode ? `<div style="min-width:120px;border:1px solid #d4d4d4;border-radius:6px;background:#ffffff;padding:10px 16px;text-align:center;font-size:16px;font-weight:700;color:#111827;">${escapeHtml(getPaymentModeLabel(receipt.paymentMode))}</div>` : ''}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-bottom:20px;">
@@ -270,16 +268,6 @@ export function VendorReceiptModal({
   const { data: companyResponse } = useCompany();
   const companyData = companyResponse?.data?.company;
 
-  const handleDownload = async () => {
-    try {
-      await downloadVendorReceiptPDF(receipt, companyData);
-      toast.success('Receipt downloaded successfully.');
-    } catch (error) {
-      console.error('Vendor receipt PDF error:', error);
-      toast.error('Failed to export receipt as PDF.');
-    }
-  };
-
   const handlePrint = () => {
     printVendorReceipt(receipt, companyData);
   };
@@ -306,13 +294,6 @@ export function VendorReceiptModal({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
-          <button
-            onClick={() => void handleDownload()}
-            className="inline-flex h-10 items-center gap-2 border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"
-          >
-            <Download className="h-4 w-4" />
-            Download PDF
-          </button>
           <button
             onClick={handlePrint}
             className="inline-flex h-10 items-center gap-2 border border-border px-4 text-[10px] font-bold uppercase tracking-widest text-foreground transition-colors hover:bg-muted"

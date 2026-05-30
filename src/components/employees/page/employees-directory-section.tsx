@@ -36,13 +36,13 @@ export function EmployeesDirectorySection({
 
   return (
     <div className="overflow-hidden border border-border divide-y divide-border">
-      <div className="hidden grid-cols-12 gap-4 bg-muted/30 px-6 py-4 lg:grid">
-        <div className="col-span-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Employee</div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Department</div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Designation</div>
-        <div className="col-span-2 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Joined / Salary</div>
-        <div className="col-span-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Status</div>
-        <div className="col-span-2 text-right text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Actions</div>
+      <div className="hidden grid-cols-12 gap-3 bg-muted/30 px-4 py-2.5 lg:grid">
+        <div className="col-span-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Employee</div>
+        <div className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Department</div>
+        <div className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Designation</div>
+        <div className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Joined / Salary</div>
+        <div className="col-span-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Status</div>
+        <div className="col-span-2 text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Actions</div>
       </div>
 
       {employees.map((employee) => {
@@ -56,16 +56,16 @@ export function EmployeesDirectorySection({
         return (
         <div
           key={employee.id}
-          className="grid grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-muted/20 lg:grid-cols-12 lg:items-center lg:gap-4 lg:px-6"
+          className="grid grid-cols-1 gap-2 px-3 py-3 transition-colors hover:bg-muted/20 lg:grid-cols-12 lg:items-center lg:gap-3 lg:px-4"
         >
           <div className="min-w-0 lg:col-span-3">
-            <p className="truncate font-serif text-base text-foreground">{employee.name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{employee.employeeId}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{employee.phone}</p>
+            <p className="truncate font-serif text-sm text-foreground">{employee.name}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{employee.employeeId}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{employee.phone}</p>
             {salaryReminderStatus && (
               <span
                 className={cn(
-                  'mt-2 inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest',
+                  'mt-1.5 inline-flex px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest',
                   salaryTagClass,
                 )}
               >
@@ -77,7 +77,7 @@ export function EmployeesDirectorySection({
           <div className="text-sm text-muted-foreground lg:col-span-2">{employee.designation}</div>
           <div className="lg:col-span-2">
             <p className="text-sm text-foreground">{formatDate(employee.dateOfJoining)}</p>
-            <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(employee.salary)}</p>
+            <p className="mt-0.5 text-sm font-semibold text-primary">{formatCurrency(employee.salary)}</p>
             {employee.salaryDate != null && (
               <p className="mt-0.5 text-[10px] text-muted-foreground/60">Due: {employee.salaryDate}th</p>
             )}
@@ -85,18 +85,18 @@ export function EmployeesDirectorySection({
           <div className="lg:col-span-1">
             <span
               className={cn(
-                'inline-flex px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest',
+                'inline-flex px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest',
                 statusClass(employee.status),
               )}
             >
               {statusLabel(employee.status)}
             </span>
           </div>
-          <div className="flex items-center justify-start gap-2 lg:col-span-2 lg:justify-end">
+          <div className="flex items-center justify-start gap-1.5 lg:col-span-2 lg:justify-end">
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-9 w-9 rounded-md"
+              className="h-8 w-8 rounded-md"
               onClick={() => onViewHistory(employee)}
               title="View Transaction History"
               aria-label={`View transaction history for ${employee.name}`}
@@ -106,7 +106,7 @@ export function EmployeesDirectorySection({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-9 w-9 rounded-md"
+              className="h-8 w-8 rounded-md"
               onClick={() => onEditEmployee(employee)}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -114,7 +114,7 @@ export function EmployeesDirectorySection({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="h-9 w-9 rounded-md text-muted-foreground hover:text-destructive"
+              className="h-8 w-8 rounded-md text-muted-foreground hover:text-destructive"
               onClick={() => onDeleteEmployee(employee)}
             >
               <Trash2 className="h-3.5 w-3.5" />

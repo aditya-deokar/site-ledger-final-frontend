@@ -114,7 +114,7 @@ export function EmployeesPage() {
 
   return (
     <>
-      <DashboardPage className="space-y-8 duration-700">
+      <DashboardPage className="space-y-5 duration-700">
         <DashboardPageHeader
           eyebrow="Workforce"
           title="Employees"
@@ -154,14 +154,14 @@ export function EmployeesPage() {
         </div>
         </DashboardFilterBar>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-1 overflow-x-auto border-b border-border pb-px">
             {employeeSectionOptions.map((option) => (
               <button
                 key={option.value}
                 onClick={() => setSection(option.value)}
                 className={[
-                  'whitespace-nowrap border-b-2 px-5 py-3 text-xs font-bold uppercase tracking-widest transition-colors -mb-px',
+                  'whitespace-nowrap border-b-2 px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors -mb-px',
                   section === option.value
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground',

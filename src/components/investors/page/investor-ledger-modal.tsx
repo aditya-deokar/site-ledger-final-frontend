@@ -51,7 +51,7 @@ export function InvestorLedgerModal({
           <div className="flex items-start justify-between border-b border-border px-8 pb-4 pt-8">
             <div>
               <h3 className="text-2xl font-serif text-foreground">
-                Investor Ledger & Actions: {investor.name}
+                 {investor.name}
               </h3>
                 <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40">
                   {investor.type === 'EQUITY'

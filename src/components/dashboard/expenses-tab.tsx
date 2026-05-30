@@ -220,7 +220,7 @@ function AddExpensePanel({
               />
             </div>
 
-            {expenseType === "VENDOR" && (
+            {/* {expenseType === "VENDOR" && (
               <div className="flex flex-col gap-1.5">
                 <Label className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground/50">
                   Bill Attachment
@@ -236,7 +236,7 @@ function AddExpensePanel({
                   />
                 </label>
               </div>
-            )}
+            )} */}
 
             {/* Bill and initial payment row */}
             <div className="grid grid-cols-2 gap-4">

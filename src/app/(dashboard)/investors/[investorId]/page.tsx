@@ -111,7 +111,7 @@ function InvestorLedgerPageContent({ investor }: { investor: any }) {
             Investors
           </Link>
           <h1 className="text-3xl font-serif tracking-tight text-foreground">
-            Investor Ledger & Actions: {investor.name}
+             {investor.name}
           </h1>
           <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">
             {investor.type === 'EQUITY'

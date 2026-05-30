@@ -14,16 +14,16 @@ export function StatCard({
   color?: string;
 }) {
   return (
-    <div className="min-w-0 border border-border p-5">
+    <div className="min-w-0 border border-border p-3">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground/50" />
-        <p className="truncate text-[11px] font-bold uppercase tracking-widest text-muted-foreground/40">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground/50" />
+        <p className="truncate text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">
           {label}
         </p>
       </div>
       <p
         className={cn(
-          'mt-2 truncate text-2xl font-sans font-bold tracking-tight sm:text-3xl',
+          'mt-1.5 truncate text-xl font-sans font-bold tracking-tight sm:text-2xl',
           color ?? 'text-foreground',
         )}
       >
