@@ -3,8 +3,9 @@
 ## Overview
 
 This is the Next.js frontend for SiteLedger. It provides the authentication flow, dashboard, company setup, sites, vendors, customers, investors, expenses, and reporting interfaces.
-
+  
 ## Prerequisites
+
 
 - Node.js 20+
 - A running backend API
