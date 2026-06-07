@@ -1,7 +1,8 @@
 import type { Flat } from '@/schemas/site.schema';
+import { formatMoney } from '@/lib/money';
 
 export function formatINR(n: number) {
-  return 'INR ' + n.toLocaleString('en-IN');
+  return formatMoney(n);
 }
 
 export function getShortcutNumber(e: KeyboardEvent): number | null {

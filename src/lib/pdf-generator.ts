@@ -1,5 +1,6 @@
 import type { jsPDF } from "jspdf"
 import { resolveCompanyLogoUrl } from "@/lib/company-logo"
+import { formatMoneyAscii } from "./money"
 
 export interface ReceiptData {
   receiptNumber: string
@@ -94,13 +95,11 @@ export interface StatementData {
 }
 
 function formatINR(value: number): string {
-  return "Rs. " + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatMoneyAscii(value)
 }
 
 function formatSignedINR(value: number): string {
-  if (value < 0)
-    return `- Rs. ${Math.abs(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  return "Rs. " + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatMoneyAscii(value, { signed: true })
 }
 
 function getAgreementPayableTotal(agreement: any, fallback: number = 0) {
@@ -1545,6 +1544,8 @@ export interface VendorReceiptPdfData {
   paymentMode: string
   paymentAmount: number
   paymentAmountWords: string
+  amountPaidToDate?: number
+  balanceDue?: number
   referenceNumber?: string
   note?: string
 
@@ -1605,208 +1606,6 @@ function convertToIndianWords(num: number): string {
   return `${result} Only`
 }
 
-export async function generateVendorReceiptPDF(data: VendorReceiptPdfData, filename: string) {
-  const { jsPDF } = await import("jspdf")
-  const doc = new jsPDF("p", "mm", "a4")
-  const companyLogoDataUrl = await loadImageAsPngDataUrl(data.companyLogoUrl)
-
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const ml = 15
-  const mr = 15
-  const cw = pageWidth - ml - mr
-  let y = 0
-
-  const setFont = (style: "bold" | "normal" | "italic", size: number, color: number = 0) => {
-    doc.setFont("helvetica", style)
-    doc.setFontSize(size)
-    doc.setTextColor(color, color, color)
-  }
-
-  const infoRow = (label: string, value: string | undefined, x: number, iy: number, maxW: number): number => {
-    if (!value) return 0
-    setFont("bold", 6.5, 110)
-    doc.text(label, x, iy)
-    setFont("normal", 7.5, 20)
-    const lines = doc.splitTextToSize(value, maxW)
-    doc.text(lines, x, iy + 4)
-    return lines.length * 4 + 5
-  }
-
-  // ─── HEADER BAND ──────────────────────────────────────────────────────────
-  const badgeX = pageWidth - mr - 58
-  const logoBoxW = 20
-  const logoBoxH = 14
-  const logoX = ml
-  const logoY = 3
-  const textStartX = companyLogoDataUrl ? logoX + logoBoxW + 4 : ml
-  const headerTextMaxWidth = badgeX - textStartX - 6
-  const complianceParts = [
-    data.companyGstin ? `GSTIN: ${data.companyGstin}` : null,
-    data.companyPan ? `PAN: ${data.companyPan}` : null,
-    data.companyReraNumber ? `RERA: ${data.companyReraNumber}` : null,
-  ].filter(Boolean) as string[]
-  const headerLines = [
-    data.companyAddress,
-    data.companySupportContact ? `Support: ${data.companySupportContact}` : undefined,
-    complianceParts.length > 0 ? complianceParts.join("  •  ") : undefined,
-  ].filter(Boolean) as string[]
-  const headerHeight = Math.max(22, 12 + headerLines.length * 4 + 6)
-
-  doc.setFillColor(255, 255, 255)
-  doc.rect(0, 0, pageWidth, headerHeight, "F")
-  doc.setDrawColor(0, 0, 0)
-  doc.setLineWidth(0.5)
-  doc.line(0, headerHeight, pageWidth, headerHeight)
-
-  if (companyLogoDataUrl) {
-    doc.setDrawColor(215, 215, 215)
-    doc.setLineWidth(0.2)
-    doc.roundedRect(logoX, logoY, logoBoxW, logoBoxH, 1, 1, "S")
-    doc.addImage(companyLogoDataUrl, "PNG", logoX + 1, logoY + 1, logoBoxW - 2, logoBoxH - 2, undefined, "FAST")
-  }
-
-  setFont("bold", 13, 0)
-  doc.text(data.companyName.toUpperCase(), textStartX, 7)
-
-  let headerLineY = 12
-  headerLines.forEach((line, index) => {
-    setFont("normal", index === 0 ? 7.5 : 6.5, index === 0 ? 60 : 100)
-    doc.text(doc.splitTextToSize(line, headerTextMaxWidth)[0], textStartX, headerLineY)
-    headerLineY += 4
-  })
-
-  // Receipt badge top-right
-  setFont("bold", 6.5, 80)
-  doc.text("VENDOR PAYMENT RECEIPT", badgeX + 29, 6.5, { align: "center" })
-  setFont("bold", 7.5, 0)
-  doc.text(data.receiptNumber, badgeX + 29, 11, { align: "center" })
-  setFont("normal", 6, 100)
-  doc.text(data.receiptDate, badgeX + 29, 14.5, { align: "center" })
-
-  y = headerHeight + 4
-
-  // ─── AMOUNT HERO STRIP ────────────────────────────────────────────────────
-  doc.setFillColor(248, 248, 248)
-  doc.rect(0, y, pageWidth, 16, "F")
-  doc.setDrawColor(220, 220, 220)
-  doc.setLineWidth(0.3)
-  doc.line(0, y, pageWidth, y)
-
-  setFont("bold", 6.5, 120)
-  doc.text("AMOUNT PAID", ml, y + 4.5)
-  setFont("bold", 14, 0)
-  doc.text(formatINR(data.paymentAmount), ml, y + 11)
-  setFont("normal", 6.5, 100)
-  doc.text(data.paymentAmountWords, ml, y + 14.5)
-
-  // Mode pill - only show if payment mode exists
-  if (data.paymentMode) {
-    const modeW = 28
-    const modeX = pageWidth - mr - modeW
-    doc.setFillColor(240, 240, 240)
-    doc.setDrawColor(200, 200, 200)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(modeX, y + 3.5, modeW, 8, 1.5, 1.5, "FD")
-    setFont("bold", 7, 0)
-    doc.text(data.paymentMode.toUpperCase(), modeX + modeW / 2, y + 9, { align: "center" })
-  }
-
-  // Status badge
-  const modeW = 28
-  const modeX = pageWidth - mr - modeW
-  const statusColor = data.status === "VOIDED" ? [220, 38, 38] : [21, 128, 61]
-  doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
-  doc.roundedRect(modeX - 32, y + 3.5, 28, 8, 1.5, 1.5, "F")
-  setFont("bold", 7, 255)
-  doc.text(data.status.toUpperCase(), modeX - 32 + 14, y + 9, { align: "center" })
-
-  y += 17
-  doc.setFillColor(210, 210, 210)
-  doc.rect(0, y, pageWidth, 0.3, "F")
-  y += 5
-
-  // ─── 3-COLUMN INFO GRID ───────────────────────────────────────────────────
-  const col = cw / 3
-  const c1 = ml
-  const c2 = ml + col + 3
-  const c3 = ml + col * 2 + 6
-  const colInnerW = col - 6
-
-  const sectionLabel = (label: string, x: number, sy: number) => {
-    setFont("bold", 6, 130)
-    doc.text(label, x, sy)
-    doc.setLineWidth(0.15)
-    doc.setDrawColor(200, 200, 200)
-    doc.line(x, sy + 1, x + col - 4, sy + 1)
-  }
-
-  const gridY = y
-  let lh1 = 0, lh2 = 0, lh3 = 0
-
-  // Col 1 — Vendor
-  sectionLabel("VENDOR", c1, gridY)
-  lh1 += 4
-  lh1 += infoRow("NAME", data.vendorName, c1, gridY + lh1, colInnerW)
-  lh1 += infoRow("TYPE", data.vendorType, c1, gridY + lh1, colInnerW)
-  lh1 += infoRow("CONTACT", data.contactPersonName, c1, gridY + lh1, colInnerW)
-  lh1 += infoRow("PHONE", data.vendorPhone, c1, gridY + lh1, colInnerW)
-  lh1 += infoRow("GSTIN", data.vendorGstin, c1, gridY + lh1, colInnerW)
-  lh1 += infoRow("PAN", data.vendorPan, c1, gridY + lh1, colInnerW)
-
-  // Col 2 — Bill / Work
-  sectionLabel("BILL DETAILS", c2, gridY)
-  lh2 += 4
-  lh2 += infoRow("BILL NO.", data.billNumber, c2, gridY + lh2, colInnerW)
-  lh2 += infoRow("BILL AMOUNT", data.billAmount !== undefined ? formatINR(data.billAmount) : undefined, c2, gridY + lh2, colInnerW)
-  lh2 += infoRow("SITE", data.siteName, c2, gridY + lh2, colInnerW)
-  lh2 += infoRow("DESCRIPTION", data.description, c2, gridY + lh2, colInnerW)
-  lh2 += infoRow("REASON", data.reason, c2, gridY + lh2, colInnerW)
-
-  // Col 3 — Transaction
-  sectionLabel("TRANSACTION", c3, gridY)
-  lh3 += 4
-  lh3 += infoRow("DATE", data.receiptDate, c3, gridY + lh3, colInnerW)
-  lh3 += infoRow("MODE", data.paymentMode, c3, gridY + lh3, colInnerW)
-  lh3 += infoRow("REFERENCE", data.referenceNumber || undefined, c3, gridY + lh3, colInnerW)
-  lh3 += infoRow("NOTE", data.note, c3, gridY + lh3, colInnerW)
-
-  const maxLH = Math.max(lh1, lh2, lh3) + 2
-
-  // Vertical dividers
-  doc.setDrawColor(215, 215, 215)
-  doc.setLineWidth(0.15)
-  doc.line(c2 - 2, gridY - 1, c2 - 2, gridY + maxLH)
-  doc.line(c3 - 2, gridY - 1, c3 - 2, gridY + maxLH)
-
-  y = gridY + maxLH + 4
-
-  // ─── SIGNATURE + FOOTER ───────────────────────────────────────────────────
-  y += 8
-  doc.setDrawColor(180, 180, 180)
-  doc.setLineWidth(0.3)
-  doc.line(ml, y, ml + 45, y)
-  doc.line(pageWidth - mr - 45, y, pageWidth - mr, y)
-  setFont("normal", 6.5, 140)
-  doc.text("Vendor Acknowledgement", ml, y + 5.5)
-  doc.text("Authorised Signatory", pageWidth - mr, y + 5.5, { align: "right" })
-
-  doc.setFillColor(255, 255, 255)
-  doc.rect(0, pageHeight - 8, pageWidth, 8, "F")
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.line(0, pageHeight - 8, pageWidth, pageHeight - 8)
-  setFont("normal", 6, 100)
-  doc.text(
-    `Generated on ${data.postedAt}  •  ${data.receiptNumber}  •  ${data.companyName}`,
-    pageWidth / 2,
-    pageHeight - 3,
-    { align: "center" },
-  )
-
-  doc.save(filename)
-}
-
 async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, filename: string) {
   const { jsPDF } = await import("jspdf")
   const doc = new jsPDF("p", "mm", "a4")
@@ -1816,7 +1615,11 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
   const ml = 15
   const mr = 15
   const cw = pageWidth - ml - mr
-  const pendingAgainstBill = Math.max((data.billAmount ?? data.paymentAmount) - data.paymentAmount, 0)
+  const billAmount = data.billAmount ?? data.paymentAmount
+  // Cumulative as of this payment, not "bill minus this single payment".
+  const amountPaidToDate = data.amountPaidToDate ?? data.paymentAmount
+  const previouslyPaid = Math.max(amountPaidToDate - data.paymentAmount, 0)
+  const pendingAgainstBill = data.balanceDue ?? Math.max(billAmount - amountPaidToDate, 0)
   let y = 0
 
   const setFont = (style: "bold" | "normal" | "italic", size: number, color: number = 0) => {
@@ -1979,8 +1782,8 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
   const tileW = (cw - 4) / 3
   const tileH = 14
   ;[
-    { label: "BILL AMOUNT", value: formatINR(data.billAmount ?? data.paymentAmount) },
-    { label: "TOTAL PAID", value: formatINR(data.paymentAmount) },
+    { label: "BILL AMOUNT", value: formatINR(billAmount) },
+    { label: "TOTAL PAID", value: formatINR(amountPaidToDate) },
     { label: "BALANCE DUE", value: formatINR(pendingAgainstBill) },
   ].forEach((tile, index) => {
     const tx = ml + index * (tileW + 2)
@@ -2013,8 +1816,16 @@ async function generateEnhancedVendorReceiptPDF(data: VendorReceiptPdfData, file
       date: data.billDate || data.receiptDate,
       type: "Bill",
       label: billParticulars || "Vendor bill",
-      signedAmount: data.billAmount ?? data.paymentAmount,
+      signedAmount: billAmount,
     },
+    ...(previouslyPaid > 0
+      ? [{
+          date: "—",
+          type: "Payment",
+          label: "Earlier payments against this bill",
+          signedAmount: -previouslyPaid,
+        }]
+      : []),
     {
       date: data.receiptDate,
       type: "Payment",
@@ -2090,6 +1901,8 @@ export async function downloadVendorReceiptPDF(
     date: string
     status: string
     amount: number
+    amountPaidToDate?: number
+    balanceDue?: number
     paymentMode: string | null
     referenceNumber: string | null
     note: string | null
@@ -2120,6 +1933,8 @@ export async function downloadVendorReceiptPDF(
     paymentMode: getPaymentModeLabel(receipt.paymentMode),
     paymentAmount: receipt.amount,
     paymentAmountWords: convertToIndianWords(receipt.amount),
+    amountPaidToDate: receipt.amountPaidToDate,
+    balanceDue: receipt.balanceDue,
     referenceNumber: receipt.referenceNumber ?? undefined,
     note: receipt.note ?? undefined,
 

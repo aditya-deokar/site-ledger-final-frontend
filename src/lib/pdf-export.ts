@@ -2,9 +2,6 @@
  * Renders a DOM node to a multi-page A4 PDF using html2canvas + jsPDF.
  * Applies safe hex colors to avoid unsupported oklch/oklab color function errors.
  */
-import html2canvas from "html2canvas-pro"
-import { jsPDF } from "jspdf"
-
 const PDF_SAFE_COLORS_CSS = `
 :root,
 .dark,
@@ -178,6 +175,10 @@ export async function exportElementToPdf(element: HTMLElement, filename: string)
   element.style.maxHeight = "none"
 
   try {
+    // Lazy-load heavy PDF libraries only when an export actually happens.
+    const { jsPDF } = await import("jspdf")
+    const html2canvas = (await import("html2canvas-pro")).default
+
     // Wait for styles to apply
     await new Promise(resolve => setTimeout(resolve, 200))
 

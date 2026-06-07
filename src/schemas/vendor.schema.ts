@@ -220,6 +220,8 @@ export interface VendorReceipt {
   description: string | null;
   reason: string | null;
   amount: number;
+  amountPaidToDate: number;
+  balanceDue: number;
   paymentMode: VendorPaymentMode | null;
   referenceNumber: string | null;
   note: string | null;

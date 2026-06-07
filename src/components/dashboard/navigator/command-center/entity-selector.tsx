@@ -1,6 +1,7 @@
 import { ChevronLeft, Loader2 } from 'lucide-react';
 
 import { formatFixedRateTerms } from '@/lib/investors';
+import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
 
 import { SearchableSelect } from '@/components/dashboard/navigator/form-primitives';
@@ -90,7 +91,7 @@ function getInvestorMeta(item: EntityRecord) {
 function getVendorMeta(item: EntityRecord) {
   const contact = [item.contactPersonName, item.phone, item.email].filter(Boolean).join(' / ');
   const siteInfo = item.siteCount !== null && item.siteCount !== undefined ? `${item.siteCount} site${item.siteCount === 1 ? '' : 's'}` : null;
-  const outstanding = item.totalOutstanding !== null && item.totalOutstanding !== undefined ? `Due: Rs. ${Number(item.totalOutstanding).toLocaleString('en-IN')}` : null;
+  const outstanding = item.totalOutstanding !== null && item.totalOutstanding !== undefined ? `Due: ${formatMoney(item.totalOutstanding)}` : null;
   const overdue = item.overdueBillCount ? `${item.overdueBillCount} overdue` : null;
   return [contact, item.type, item.status, siteInfo, outstanding, overdue].filter(Boolean);
 }

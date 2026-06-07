@@ -18,8 +18,9 @@ import {
   DashboardStatCard,
   DashboardStatsGrid,
 } from '@/components/dashboard/dashboard-primitives';
+import { formatMoney } from '@/lib/money';
 
-function formatINR(n: number) { return '\u20B9' + n.toLocaleString('en-IN'); }
+function formatINR(n: number) { return formatMoney(n); }
 
 const COLORS = ['bg-teal-600', 'bg-blue-600', 'bg-amber-500', 'bg-rose-600', 'bg-violet-600', 'bg-emerald-600'];
 function ac(n: string) { return COLORS[(n.charCodeAt(0) + (n.charCodeAt(1) || 0)) % COLORS.length]; }
@@ -51,7 +52,8 @@ function CustomersListSkeleton() {
 export default function CustomersPage() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(undefined);
-  const { data, isLoading } = useAllCustomers(statusFilter);
+  // Fetch the full customer list once; status tabs filter client-side instead of refetching.
+  const { data, isLoading } = useAllCustomers();
   const [search, setSearch] = useState('');
 
   const allCustomers = useMemo(() => {
@@ -59,7 +61,12 @@ export default function CustomersPage() {
     return raw;
   }, [data]);
 
-  const groupedCustomers = useMemo(() => groupCustomerDeals(allCustomers), [allCustomers]);
+  const statusFilteredCustomers = useMemo(() => {
+    if (!statusFilter) return allCustomers;
+    return allCustomers.filter((customer) => customer.flatStatus === statusFilter);
+  }, [allCustomers, statusFilter]);
+
+  const groupedCustomers = useMemo(() => groupCustomerDeals(statusFilteredCustomers), [statusFilteredCustomers]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return groupedCustomers;

@@ -32,9 +32,10 @@ import {
   type CustomerAgreementLineType,
   customerAgreementLineSchema,
 } from "@/schemas/customer.schema"
+import { formatMoney } from "@/lib/money"
 
 function formatINR(value: number) {
-  return "\u20B9" + value.toLocaleString("en-IN")
+  return formatMoney(value)
 }
 
 function formatSignedINR(value: number) {

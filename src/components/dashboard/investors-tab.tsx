@@ -14,8 +14,9 @@ import { Label } from "@/components/ui/label"
 import { getApiErrorMessage } from "@/lib/api-error"
 import { cn } from "@/lib/utils"
 import { Loader2, Plus, X, Phone, ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { formatMoney } from "@/lib/money"
 
-function formatINR(n: number) { return "₹" + n.toLocaleString("en-IN") }
+function formatINR(n: number) { return formatMoney(n) }
 function formatDate(iso: string) { return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase() }
 function getCurrentDateTimeLocalInput() {
   const now = new Date()
@@ -386,7 +387,7 @@ paymentDate: data.paymentDate ? `${data.paymentDate}T00:00:00` : `${getTodayDate
           });
         });
 
-        toast.success(`Investor added and ₹${formatINR(data.amountPaidNow)} recorded immediately`);
+        toast.success(`Investor added and ${formatINR(data.amountPaidNow)} recorded immediately`);
       } else {
         toast.success('Investor added successfully');
       }
@@ -513,8 +514,8 @@ paymentDate: data.paymentDate ? `${data.paymentDate}T00:00:00` : `${getTodayDate
               {amountPaidNow > 0 && (
                 <div className="border border-amber-500/20 bg-amber-500/5 p-3">
                   <p className="text-[10px] text-amber-700">
-                    ₹{formatINR(amountPaidNow)} will be recorded immediately as principal investment.
-                    Remaining ₹{formatINR(investmentAmount - amountPaidNow)} will be pending.
+                    {formatINR(amountPaidNow)} will be recorded immediately as principal investment.
+                    Remaining {formatINR(investmentAmount - amountPaidNow)} will be pending.
                   </p>
                 </div>
               )}

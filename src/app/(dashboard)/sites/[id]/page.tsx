@@ -3,7 +3,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import dynamic from 'next/dynamic';
 import { useSite, useAddFund, useWithdrawFund, useFundHistory } from '@/hooks/api/site.hooks';
 import { useSiteCustomers } from '@/hooks/api/customer.hooks';
 import { useCompany } from '@/hooks/api/company.hooks';
@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Plus, ArrowUpRight, History, ArrowDownLeft, Phone, Building2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { DocumentManager } from '@/components/documents/DocumentManager';
 import { cn } from '@/lib/utils';
+import { formatMoney } from '@/lib/money';
 
 // Lazy load tab components
 const FloorsFlatsTab = lazy(() => import('@/components/dashboard/floors-flats-tab').then(mod => ({ default: mod.FloorsFlatsTab })));
@@ -42,7 +43,7 @@ function isSiteTabKey(value: string | null): value is TabKey {
 }
 
 function formatINR(n: number) {
-  return n.toLocaleString('en-IN');
+  return formatMoney(n, { symbol: false });
 }
 
 function AddFundDialog({ siteId, onClose, defaultAmount }: { siteId: string; onClose: () => void; defaultAmount?: number }) {
@@ -295,38 +296,11 @@ function FundHistoryPanel({ siteId }: { siteId: string }) {
     </div>
   );
 }
-function FundDeploymentChart({ allocated, expenses }: { allocated: number; expenses: number }) {
-  const pct = allocated > 0 ? Math.min(100, (expenses / allocated) * 100) : 0;
-  const data = [
-    { value: pct, color: 'var(--primary)' },
-    { value: 100 - pct, color: 'var(--muted)' },
-  ];
-
-  return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative w-48 h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} innerRadius={60} outerRadius={80} startAngle={90} endAngle={-270} dataKey="value" paddingAngle={2}>
-              {data.map((entry, i) => (
-                <Cell key={i} fill={entry.color} strokeWidth={0} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-sans font-bold text-foreground">{pct.toFixed(0)}%</span>
-          <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground/50 mt-1">Deployed</span>
-        </div>
-      </div>
-      <p className="text-[10px] text-center text-muted-foreground/50 font-medium max-w-32">
-        {allocated === 0
-          ? 'No funds allocated yet.'
-          : `${(100 - pct).toFixed(1)}% of budget remaining.`}
-      </p>
-    </div>
-  );
-}
+// Lazy-loaded recharts chart (keeps recharts out of the initial bundle)
+const FundDeploymentChart = dynamic(
+  () => import('@/components/dashboard/charts/site-charts').then((mod) => mod.FundDeploymentChart),
+  { ssr: false, loading: () => <div className="w-48 h-48" /> },
+);
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Inventory Bar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function InventoryBar({ available, booked, sold, total }: { available: number; booked: number; sold: number; total: number }) {

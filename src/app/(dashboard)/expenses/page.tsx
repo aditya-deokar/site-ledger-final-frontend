@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Receipt, ChevronLeft, ChevronRight, Building2, User } from 'lucide-react';
+import { formatMoney } from '@/lib/money';
 
-function formatINR(n: number) { return '₹' + n.toLocaleString('en-IN'); }
+function formatINR(n: number) { return formatMoney(n); }
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
 }

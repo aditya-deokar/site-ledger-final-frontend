@@ -5,6 +5,7 @@ import {
   type Employee,
   type EmployeeTransaction,
 } from '@/schemas/employee.schema';
+import { formatMoney } from '@/lib/money';
 
 export const DEFAULT_SHIFT_START_MINUTES = 10 * 60;
 export const DEFAULT_SHIFT_END_MINUTES = 18 * 60;
@@ -27,7 +28,7 @@ export function getWorkspaceYearOptions(referenceYear = new Date().getFullYear()
 }
 
 export function formatCurrency(value: number) {
-  return `Rs ${value.toLocaleString('en-IN')}`;
+  return formatMoney(value);
 }
 
 export function formatDate(value?: string | null) {

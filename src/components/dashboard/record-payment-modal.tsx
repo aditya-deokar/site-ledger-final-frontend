@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label"
 import api from "@/lib/axios"
 import { cn } from "@/lib/utils"
 import { type PaymentMode, type RecordPaymentInput, recordPaymentSchema } from "@/schemas/customer.schema"
+import { formatMoney } from "@/lib/money"
 
 function formatINR(value: number) {
-  return "\u20B9" + value.toLocaleString("en-IN")
+  return formatMoney(value)
 }
 
 function formatDate(iso: string) {

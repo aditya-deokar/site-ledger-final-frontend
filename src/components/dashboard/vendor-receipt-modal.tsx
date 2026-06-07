@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useCompany } from '@/hooks/api/company.hooks';
 import { resolveCompanyLogoUrl } from '@/lib/company-logo';
 import type { VendorReceipt } from '@/schemas/vendor.schema';
+import { formatMoney } from '@/lib/money';
 
 function escapeHtml(value: string) {
   return value
@@ -17,7 +18,7 @@ function escapeHtml(value: string) {
 }
 
 function formatINR(value: number) {
-  return `Rs. ${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatMoney(value, { decimals: 2 });
 }
 
 function formatDate(value: string) {
@@ -104,7 +105,10 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
   const complianceLine = [companyGstin ? `GSTIN: ${companyGstin}` : null, companyPan ? `PAN: ${companyPan}` : null, companyRera ? `RERA: ${companyRera}` : null]
     .filter(Boolean)
     .join(' • ');
-  const pendingAgainstBill = Math.max(receipt.billAmount - receipt.amount, 0);
+  // Cumulative figures as of this payment (falls back gracefully for older API payloads).
+  const amountPaidToDate = receipt.amountPaidToDate ?? receipt.amount;
+  const balanceDue = receipt.balanceDue ?? Math.max(receipt.billAmount - amountPaidToDate, 0);
+  const previouslyPaid = Math.max(amountPaidToDate - receipt.amount, 0);
   const billParticulars = [
     receipt.billNumber ? `Bill ${receipt.billNumber}` : null,
     receipt.description,
@@ -184,8 +188,8 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
         <p style="margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;color:#4b5563;">Account Position</p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
           ${buildSummaryCard('Bill Amount', formatINR(receipt.billAmount))}
-          ${buildSummaryCard('Total Paid', formatINR(receipt.amount))}
-          ${buildSummaryCard('Balance Due', formatINR(pendingAgainstBill))}
+          ${buildSummaryCard('Total Paid', formatINR(amountPaidToDate))}
+          ${buildSummaryCard('Balance Due', formatINR(balanceDue))}
         </div>
       </div>
 
@@ -207,11 +211,21 @@ function buildVendorReceiptInnerHtml(receipt: VendorReceipt, companyData?: any) 
               <td style="padding:10px;font-size:12px;">${escapeHtml(billParticulars || 'Vendor bill')}</td>
               <td style="padding:10px;font-size:12px;text-align:right;">${escapeHtml(formatINR(receipt.billAmount))}</td>
             </tr>
+            ${
+              previouslyPaid > 0
+                ? `<tr style="border-bottom:1px solid #e5e7eb;">
+              <td style="padding:10px;font-size:12px;">—</td>
+              <td style="padding:10px;font-size:12px;">Payment</td>
+              <td style="padding:10px;font-size:12px;">Earlier payments against this bill</td>
+              <td style="padding:10px;font-size:12px;text-align:right;">- ${escapeHtml(formatINR(previouslyPaid))}</td>
+            </tr>`
+                : ''
+            }
             <tr style="border-bottom:1px solid #e5e7eb;background:#fafafa;">
               <td style="padding:10px;font-size:12px;">${escapeHtml(formatShortDate(receipt.date))}</td>
               <td style="padding:10px;font-size:12px;">Payment</td>
               <td style="padding:10px;font-size:12px;">${escapeHtml(paymentParticulars || 'Vendor payment')}</td>
-              <td style="padding:10px;font-size:12px;text-align:right;">${escapeHtml(formatINR(receipt.amount))}</td>
+              <td style="padding:10px;font-size:12px;text-align:right;">- ${escapeHtml(formatINR(receipt.amount))}</td>
             </tr>
           </tbody>
         </table>

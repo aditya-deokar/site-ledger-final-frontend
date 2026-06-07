@@ -58,6 +58,7 @@ import {
   DashboardStatusBadge,
 } from '@/components/dashboard/dashboard-primitives';
 import { cn } from '@/lib/utils';
+import { formatMoney } from '@/lib/money';
 
 type ViewMode = 'active' | 'closed';
 type ProjectFilter = 'all' | 'NEW_CONSTRUCTION' | 'REDEVELOPMENT';
@@ -66,7 +67,7 @@ type FundFilter = 'all' | 'POSITIVE' | 'DEPLETED';
 const SITES_BATCH_SIZE = 8;
 
 function formatINR(n: number) {
-  return '\u20B9' + n.toLocaleString('en-IN');
+  return formatMoney(n);
 }
 
 function formatDate(iso: string) {

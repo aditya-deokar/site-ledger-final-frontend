@@ -47,9 +47,10 @@ import {
   type VendorStatus,
 } from '@/schemas/vendor.schema';
 import { buildVendorWorkspacePath } from '@/lib/vendor-workspace';
+import { formatMoney } from '@/lib/money';
 
 function formatINR(value: number) {
-  return `₹${value.toLocaleString('en-IN')}`;
+  return formatMoney(value);
 }
 
 function formatPhone(phone?: string | null) {
@@ -355,7 +356,7 @@ export default function VendorsPage() {
     <DashboardPage className="space-y-4 px-3 py-4 lg:px-6">
       <DashboardPageHeader
         eyebrow="Vendor Management"
-        title="vendor"
+        title="Vendors"
         subtitle="Manage vendor profiles, site assignments, bills, payments, receipts, documents, and due tracking in one place."
         action={(
           <Button
@@ -410,98 +411,137 @@ export default function VendorsPage() {
           </Button>
         ) : undefined}
       >
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_13rem_13rem]">
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_12rem_12rem]">
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Search</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 className="h-9 rounded-none pl-9"
                 placeholder="Search vendor, category, contact, tax details"
               />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Status</Label>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as VendorStatus | 'ALL')} className="h-9 w-full border border-border bg-background px-3 text-sm text-foreground">
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="BLOCKED">Blocked</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Assigned Site</Label>
+            <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="h-9 w-full border border-border bg-background px-3 text-sm text-foreground">
+              <option value="ALL">All sites</option>
+              {sites.map((site) => (
+                <option key={site.id} value={site.id}>{site.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Status</Label>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as VendorStatus | 'ALL')} className="h-10 w-full border border-border bg-background px-3 text-sm text-foreground">
-            <option value="ALL">All statuses</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="INACTIVE">INACTIVE</option>
-            <option value="BLOCKED">BLOCKED</option>
-            <option value="ARCHIVED">ARCHIVED</option>
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Assigned Site</Label>
-          <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="h-10 w-full border border-border bg-background px-3 text-sm text-foreground">
-            <option value="ALL">All sites</option>
-            {sites.map((site) => (
-              <option key={site.id} value={site.id}>{site.name}</option>
-            ))}
-          </select>
-        </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[12rem_12rem_auto]">
           <div className="space-y-2">
-            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Billing and Documents</Label>
-            <div className="grid grid-cols-2 gap-2">
-            <select value={outstandingFilter} onChange={(event) => setOutstandingFilter(event.target.value as typeof outstandingFilter)} className="h-10 border border-border bg-background px-3 text-sm text-foreground">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Outstanding</Label>
+            <select value={outstandingFilter} onChange={(event) => setOutstandingFilter(event.target.value as typeof outstandingFilter)} className="h-9 w-full border border-border bg-background px-3 text-sm text-foreground">
               <option value="ALL">All dues</option>
-              <option value="OUTSTANDING_ONLY">Outstanding</option>
+              <option value="OUTSTANDING_ONLY">Has outstanding</option>
               <option value="CLEAR_ONLY">Cleared</option>
             </select>
-            <select value={documentFilter} onChange={(event) => setDocumentFilter(event.target.value as typeof documentFilter)} className="h-10 border border-border bg-background px-3 text-sm text-foreground">
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Documents</Label>
+            <select value={documentFilter} onChange={(event) => setDocumentFilter(event.target.value as typeof documentFilter)} className="h-9 w-full border border-border bg-background px-3 text-sm text-foreground">
               <option value="ALL">All docs</option>
-              <option value="HAS_DOCS">Has docs</option>
-              <option value="MISSING_DOCS">Missing docs</option>
+              <option value="HAS_DOCS">Has documents</option>
+              <option value="MISSING_DOCS">Missing documents</option>
             </select>
           </div>
+
+          <div className="flex items-end">
+            <label className={cn(
+              'flex h-9 cursor-pointer items-center gap-3 border px-4 text-sm transition-colors',
+              includeArchived
+                ? 'border-primary/30 bg-primary/5 text-primary'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+            )}>
+              <Checkbox checked={includeArchived} onCheckedChange={(checked) => setIncludeArchived(Boolean(checked))} aria-label="Include archived vendors" />
+              Include archived
+            </label>
+          </div>
         </div>
-          <div className="flex items-end justify-start lg:justify-end">
-          <label className="flex h-9 items-center gap-3 border border-border px-3 text-sm text-foreground">
-            <Checkbox checked={includeArchived} onCheckedChange={(checked) => setIncludeArchived(Boolean(checked))} aria-label="Include archived vendors" />
-            Include archived
-          </label>
-        </div>
-      </div>
       </DashboardFilterBar>
 
-      <div className="flex flex-wrap gap-2">
-        {categoryOptions.map((category) => (
+      {categoryOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">Category</span>
           <button
-            key={category}
             type="button"
-            onClick={() => setSearch(category)}
+            onClick={() => setSearch('')}
             className={cn(
               'border px-3 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors',
-              search.trim().toLowerCase() === category.toLowerCase()
+              search.trim() === ''
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
-            {category}
+            All
           </button>
-        ))}
-      </div>
+          {categoryOptions.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setSearch(search.trim().toLowerCase() === category.toLowerCase() ? '' : category)}
+              className={cn(
+                'border px-3 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors',
+                search.trim().toLowerCase() === category.toLowerCase()
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="overflow-hidden border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-2.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            {isLoading ? 'Loading…' : `${vendors.length} vendor${vendors.length !== 1 ? 's' : ''}`}
+            {hasActiveFilters && !isLoading && ' (filtered)'}
+          </p>
+          <Button
+            type="button"
+            size="control"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => { setEditorVendor(null); setEditorOpen(true); }}
+          >
+            <Plus className="h-3 w-3" />
+            Add Vendor
+          </Button>
+        </div>
         <Table className="text-sm">
           <TableHeader>
             <TableRow className="border-b-2">
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">VENDOR</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">CATEGORY</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">STATUS</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">CONTACT</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">SITES</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">OUTSTANDING</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">OVERDUE</TableHead>
-              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">LAST PAYMENT</TableHead>
-              <TableHead className="text-right text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">ACTIONS</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Vendor</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Category</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Status</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Contact</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Sites</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Outstanding</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Overdue Bills</TableHead>
+              <TableHead className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Last Payment</TableHead>
+              <TableHead className="text-right text-[10px] font-bold tracking-[0.2em] text-muted-foreground/70">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -548,7 +588,9 @@ export default function VendorsPage() {
                   <TableCell className={cn('text-sm', vendor.totalOutstanding > 0 ? 'font-semibold text-rose-600' : 'font-semibold text-emerald-700')}>
                     {formatINR(vendor.totalOutstanding)}
                   </TableCell>
-                  <TableCell className="text-sm">{vendor.overdueBillCount}</TableCell>
+                  <TableCell className={cn('text-sm font-medium', vendor.overdueBillCount > 0 ? 'text-rose-600 font-semibold' : 'text-muted-foreground')}>
+                    {vendor.overdueBillCount > 0 ? vendor.overdueBillCount : '-'}
+                  </TableCell>
                   <TableCell className="text-sm">
                     <div className="space-y-0.5">
                       <p className="font-medium text-foreground">{formatDate(vendor.lastPaymentDate)}</p>
@@ -568,19 +610,21 @@ export default function VendorsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
-                      <Button 
-                        type="button" 
-                        size="control" 
+                      <Button
+                        type="button"
+                        size="control"
                         variant="ghost"
+                        title="View vendor profile"
                         onClick={() => router.push(buildVendorWorkspacePath(vendor.id))}
                         className="h-8 px-3"
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
-                      <Button 
-                        type="button" 
-                        size="control" 
+                      <Button
+                        type="button"
+                        size="control"
                         variant="ghost"
+                        title="Edit vendor"
                         onClick={() => { setEditorVendor(vendor); setEditorOpen(true); }}
                         className="h-8 px-3"
                       >

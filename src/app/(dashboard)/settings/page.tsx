@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Settings2, Save } from 'lucide-react';
@@ -119,7 +120,7 @@ export default function SettingsPage() {
           </DialogHeader>
           {resolvedLogo ? (
             <div className="relative mx-auto h-[65vh] w-full overflow-hidden border border-border bg-muted/10">
-              <img src={resolvedLogo} alt="Company logo full preview" className="h-full w-full object-contain" />
+              <Image src={resolvedLogo} alt="Company logo full preview" fill sizes="100vw" className="object-contain" unoptimized />
             </div>
           ) : null}
         </DialogContent>
@@ -154,7 +155,7 @@ export default function SettingsPage() {
                   title="View logo"
                 >
                   {resolvedLogo ? (
-                    <img src={resolvedLogo} alt="Company logo" className="h-full w-full object-cover" />
+                    <Image src={resolvedLogo} alt="Company logo" fill sizes="64px" className="object-cover" unoptimized />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       <Settings2 className="h-6 w-6" />
@@ -216,7 +217,7 @@ export default function SettingsPage() {
                   </div>
                   {watchedReceipt.showCompanyLogo && resolvedLogo && (
                     <div className="relative h-12 w-12 overflow-hidden border border-border bg-background">
-                      <img src={resolvedLogo} alt="Logo preview" className="h-full w-full object-contain" />
+                      <Image src={resolvedLogo} alt="Logo preview" fill sizes="48px" className="object-contain" unoptimized />
                     </div>
                   )}
                 </div>

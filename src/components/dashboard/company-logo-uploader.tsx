@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent } from 'react';
+import Image from 'next/image';
 import { Loader2, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { companyService } from '@/services/company.service';
@@ -49,7 +50,7 @@ export function CompanyLogoUploader({ value, onChange }: Props) {
         <div className="border border-border bg-muted/10 p-3">
           <div className="flex items-center gap-3">
             <div className="relative h-14 w-14 overflow-hidden border border-border bg-background">
-              <img src={resolvedLogo} alt="Company logo" className="h-full w-full object-contain" />
+              <Image src={resolvedLogo} alt="Company logo" fill sizes="56px" className="object-contain" unoptimized />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" onClick={handlePick} className="h-9 rounded-none text-[10px] font-bold uppercase tracking-widest">

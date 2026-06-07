@@ -50,9 +50,10 @@ import { downloadReceiptPDF, downloadStatementPDF } from "@/lib/pdf-generator"
 import { cn } from "@/lib/utils"
 import { customerService } from "@/services/customer.service"
 import { toast } from "sonner"
+import { formatMoney } from "@/lib/money"
 
 function formatINR(value: number) {
-  return "\u20B9" + value.toLocaleString("en-IN")
+  return formatMoney(value)
 }
 
 function formatDate(iso?: string | null) {

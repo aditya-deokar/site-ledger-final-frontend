@@ -1,5 +1,7 @@
 import type { AttendanceStatus } from '@/schemas/attendance.schema';
 
+import { formatMoney } from '@/lib/money';
+
 import type { EmployeeStatus, EmployeesSection } from './types';
 
 export const employeeSectionOptions: Array<{
@@ -18,7 +20,7 @@ export function getEmployeesSectionFromParam(sectionParam: string | null): Emplo
 }
 
 export function formatCurrency(value: number) {
-  return `Rs ${value.toLocaleString('en-IN')}`;
+  return formatMoney(value);
 }
 
 export function formatDate(value: string) {

@@ -6,9 +6,10 @@ import {
   UNIT_TYPE_PICK_OPTIONS,
 } from './constants';
 import type { WingOption } from './types';
+import { formatMoney } from '@/lib/money';
 
 export function formatINR(value: number) {
-  return '\u20B9' + value.toLocaleString('en-IN');
+  return formatMoney(value);
 }
 
 export function getBookingReferenceLabel(paymentMode?: BookFlatInput['paymentMode']) {

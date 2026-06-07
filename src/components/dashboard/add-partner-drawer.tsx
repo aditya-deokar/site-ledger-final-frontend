@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { partnerInputSchema, PartnerInput } from "@/schemas/company.schema"
 import { useAddPartner } from "@/hooks/api/company.hooks"
+import { formatMoney } from "@/lib/money"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -140,7 +141,7 @@ export function AddPartnerDrawer({ open, onOpenChange, existingPartners = [] }: 
                 <div className="flex flex-col gap-1">
                   <h4 className="text-2xl font-serif text-foreground tracking-tight">{watchedName || '—'}</h4>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                    ₹{Number(watchedAmount).toLocaleString('en-IN')} &middot; {watchedStake}%
+                    {formatMoney(watchedAmount)} &middot; {watchedStake}%
                   </p>
                 </div>
               </div>

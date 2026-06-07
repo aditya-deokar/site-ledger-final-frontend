@@ -4,6 +4,8 @@ import type {
   Transaction,
 } from '@/schemas/investor.schema';
 
+import { formatMoney } from '@/lib/money';
+
 import type { InvestorTypeFilter } from './types';
 
 const AVATAR_COLORS = [
@@ -25,7 +27,7 @@ export const investorTypeTabs: Array<{
 ];
 
 export function formatINR(value: number) {
-  return '\u20B9' + value.toLocaleString('en-IN');
+  return formatMoney(value);
 }
 
 export function formatDate(iso: string) {

@@ -20,9 +20,10 @@ import { buildVendorWorkspacePath } from "@/lib/vendor-workspace"
 import { vendorService } from "@/services/vendor.service"
 import { toast } from "sonner"
 import { Loader2, Plus, X, FileText, Users2, FileSpreadsheet, Eye, Search, Upload } from "lucide-react"
+import { formatMoney } from "@/lib/money"
 
 function formatINR(n: number) {
-  return "₹" + n.toLocaleString("en-IN")
+  return formatMoney(n)
 }
 
 function formatDate(iso: string) {

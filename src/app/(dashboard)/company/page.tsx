@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { BarChart, Bar, ResponsiveContainer, Tooltip, Cell, PieChart, Pie } from 'recharts';
+import dynamic from 'next/dynamic';
 import { useCompany, useUpdateCompany, useWithdrawFund, useWithdrawals, useRecordWithdrawalPayment, useUpdateWithdrawalNote, useDeleteWithdrawal, usePartnerLedger } from '@/hooks/api/company.hooks';
 import { AddPartnerDrawer } from '@/components/dashboard/add-partner-drawer';
 import { EditPartnerDrawer } from '@/components/dashboard/edit-partner-drawer';
@@ -20,6 +20,17 @@ import { cn } from '@/lib/utils';
 import { getApiErrorMessage, getApiErrorStatus } from '@/lib/api-error';
 import { CompanyWithdrawal, Partner, PartnerLedgerEntry } from '@/schemas/company.schema';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatMoney } from '@/lib/money';
+
+// ── Lazy-loaded recharts charts (keeps recharts out of the initial bundle) ──
+const EquityDonut = dynamic(
+  () => import('@/components/dashboard/charts/company-charts').then((mod) => mod.EquityDonut),
+  { ssr: false, loading: () => <div className="h-full w-full" /> },
+);
+const WithdrawalTrendsChart = dynamic(
+  () => import('@/components/dashboard/charts/company-charts').then((mod) => mod.WithdrawalTrendsChart),
+  { ssr: false, loading: () => <div className="h-full w-full" /> },
+);
 
 // ── Constants & helpers ───────────────────────────
 const AVATAR_COLORS = [
@@ -38,7 +49,7 @@ function getInitials(name: string) {
 }
 
 function formatINR(amount: number) {
-  return '₹' + amount.toLocaleString('en-IN');
+  return formatMoney(amount);
 }
 
 function formatDate(iso?: string | null) {
@@ -236,23 +247,7 @@ function EquityPanel({
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr]">
         <div className="relative h-56 border border-border bg-muted/10">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={donutRows}
-                dataKey="value"
-                nameKey="label"
-                innerRadius={58}
-                outerRadius={86}
-                stroke="var(--card)"
-                strokeWidth={2}
-              >
-                {donutRows.map((entry) => (
-                  <Cell key={entry.key} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <EquityDonut donutRows={donutRows} />
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
               Total Stake
@@ -342,30 +337,7 @@ function WithdrawalTrendsPanel({ withdrawals }: { withdrawals: CompanyWithdrawal
     <div className="border border-border bg-card p-5 flex flex-col gap-4">
       <h3 className="text-lg font-semibold text-foreground">Withdrawal Trends</h3>
       <div className="h-32">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} barCategoryGap="4%" barGap={1}>
-            <Tooltip
-              cursor={false}
-              contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 0, fontSize: 11 }}
-              formatter={(v: number) => v > 0 ? [formatINR(v), 'Withdrawn'] : null}
-              labelFormatter={(label) => label}
-            />
-            <Bar dataKey="amount" radius={0} minPointSize={0}>
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={index}
-                  fill={
-                    entry.amount === maxAmount && entry.amount > 0
-                      ? 'var(--primary)'
-                      : entry.amount > 0
-                        ? 'color-mix(in oklch, var(--primary) 35%, transparent)'
-                        : 'var(--muted)'
-                  }
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <WithdrawalTrendsChart chartData={chartData} maxAmount={maxAmount} formatINR={formatINR} />
       </div>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Last 30 Days</span>

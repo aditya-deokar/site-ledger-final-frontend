@@ -49,9 +49,10 @@ import { InfoPill, SummaryCard, ProfileSection, DetailPair } from '@/components/
 import { Textarea } from '@/components/ui/textarea';
 import type { VendorWorkspaceTab } from '@/lib/vendor-workspace';
 import { cn } from '@/lib/utils';
+import { formatMoney } from '@/lib/money';
 
 function formatINR(value: number) {
-  return `Rs. ${value.toLocaleString('en-IN')}`;
+  return formatMoney(value);
 }
 
 function formatDate(value?: string | null) {
